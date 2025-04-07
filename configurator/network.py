@@ -229,6 +229,7 @@ def configure_dhcp(interface: str) -> bool:
     # Check if NetworkManager is available and running
     try:
         cmd = ['systemctl', 'is-active', 'NetworkManager']
+        logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             logger.error("NetworkManager is not running")
@@ -248,6 +249,7 @@ def configure_dhcp(interface: str) -> bool:
     connection_name = None
     try:
         cmd = ['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active']
+        logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             for line in result.stdout.splitlines():
@@ -267,6 +269,7 @@ def configure_dhcp(interface: str) -> bool:
             logger.debug(f"Modifying existing connection {connection_name}")
             cmd = ['nmcli', 'connection', 'modify', connection_name, 
                    'ipv4.method', 'auto', 'ipv4.addresses', '', 'ipv4.gateway', '']
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 logger.error(f"Failed to modify connection: {result.stderr}")
@@ -275,6 +278,7 @@ def configure_dhcp(interface: str) -> bool:
             # Apply changes by reactivating the connection
             logger.debug(f"Reactivating connection {connection_name}")
             cmd = ['nmcli', 'connection', 'up', connection_name]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 logger.error(f"Failed to reactivate connection: {result.stderr}")
@@ -285,6 +289,7 @@ def configure_dhcp(interface: str) -> bool:
             connection_name = f"dhcp-{interface}"
             cmd = ['nmcli', 'connection', 'add', 'type', 'ethernet', 'con-name', connection_name,
                    'ifname', interface, 'ipv4.method', 'auto']
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 logger.error(f"Failed to create connection: {result.stderr}")
@@ -293,6 +298,7 @@ def configure_dhcp(interface: str) -> bool:
             # Activate the new connection
             logger.debug(f"Activating new connection {connection_name}")
             cmd = ['nmcli', 'connection', 'up', connection_name]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 logger.error(f"Failed to activate connection: {result.stderr}")
@@ -320,6 +326,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
     # Check if NetworkManager is available and running
     try:
         cmd = ['systemctl', 'is-active', 'NetworkManager']
+        logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
             logger.error("NetworkManager is not running")
@@ -349,6 +356,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
     connection_name = None
     try:
         cmd = ['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active']
+        logger.debug(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             for line in result.stdout.splitlines():
@@ -369,6 +377,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
             cmd = ['nmcli', 'connection', 'modify', connection_name, 
                    'ipv4.method', 'manual', 'ipv4.addresses', ip_with_mask, 
                    'ipv4.gateway', router]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 logger.error(f"Failed to modify connection: {result.stderr}")
@@ -377,6 +386,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
             # Apply changes by reactivating the connection
             logger.debug(f"Reactivating connection {connection_name}")
             cmd = ['nmcli', 'connection', 'up', connection_name]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 logger.error(f"Failed to reactivate connection: {result.stderr}")
@@ -388,6 +398,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
             cmd = ['nmcli', 'connection', 'add', 'type', 'ethernet', 'con-name', connection_name,
                    'ifname', interface, 'ipv4.method', 'manual', 'ipv4.addresses', ip_with_mask,
                    'ipv4.gateway', router]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 logger.error(f"Failed to create connection: {result.stderr}")
@@ -396,6 +407,7 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
             # Activate the new connection
             logger.debug(f"Activating new connection {connection_name}")
             cmd = ['nmcli', 'connection', 'up', connection_name]
+            logger.debug(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 logger.error(f"Failed to activate connection: {result.stderr}")
