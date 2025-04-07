@@ -5,10 +5,11 @@ import shutil
 import hashlib
 import logging
 import argparse
+from typing import Optional
 
 
 class ConfigTxt:
-    def __init__(self, file_path="/boot/firmware/config.txt"):
+    def __init__(self, file_path = "/boot/firmware/config.txt"):
         self.file_path = file_path
         self.lines = []
         self.changes_made = False
@@ -141,7 +142,6 @@ class ConfigTxt:
         self._update_line("dtoverlay=disable-bt", "dtoverlay=disable-bt\n")
         logging.info("UPDI settings applied. Reboot may be required.")
 
-    # New methods for hat I2C overlay
     def enable_hat_i2c(self):
         overlay_line = "dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1\n"
         # Prevent duplicates if the line already exists
@@ -224,7 +224,6 @@ def main():
         if args.enable_updi:
             config.enable_updi()
 
-        # New hat I2C overlay handling
         if args.enable_hat_i2c:
             config.enable_hat_i2c()
 

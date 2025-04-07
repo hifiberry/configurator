@@ -6,13 +6,14 @@ import shutil
 import logging
 import argparse
 
+
 class CmdlineTxt:
-    def __init__(self):
+    def __init__(self) -> None:
         self.file_path = self._find_cmdline_file()
         self.content = self._read_file()
         self.original_content = self.content
 
-    def _find_cmdline_file(self):
+    def _find_cmdline_file(self) -> str:
         # Check for the file in /boot/firmware first, then /boot
         possible_paths = ["/boot/firmware/cmdline.txt", "/boot/cmdline.txt"]
         for path in possible_paths:
@@ -22,18 +23,18 @@ class CmdlineTxt:
         logging.error("cmdline.txt not found in /boot/firmware or /boot.")
         raise FileNotFoundError("cmdline.txt not found in /boot/firmware or /boot.")
 
-    def _read_file(self):
+    def _read_file(self) -> str:
         with open(self.file_path, "r") as f:
             # The file is expected to be a single line
             content = f.read().strip()
         return content
 
-    def _create_backup(self):
+    def _create_backup(self) -> None:
         backup_path = self.file_path + ".backup"
         shutil.copy(self.file_path, backup_path)
         logging.info(f"Backup created at: {backup_path}")
 
-    def save(self):
+    def save(self) -> None:
         if self.content != self.original_content:
             self._create_backup()
             with open(self.file_path, "w") as f:
@@ -43,7 +44,7 @@ class CmdlineTxt:
         else:
             logging.info("No changes made to cmdline.txt.")
 
-    def enable_serial_console(self):
+    def enable_serial_console(self) -> None:
         tokens = self.content.split()
         token = "console=serial0,115200"
         if token not in tokens:
@@ -54,7 +55,7 @@ class CmdlineTxt:
         else:
             logging.info("Serial console already enabled.")
 
-    def disable_serial_console(self):
+    def disable_serial_console(self) -> None:
         tokens = self.content.split()
         token = "console=serial0,115200"
         new_tokens = [t for t in tokens if t != token]
@@ -64,7 +65,8 @@ class CmdlineTxt:
         else:
             logging.info("Serial console already disabled.")
 
-def main():
+
+def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     parser = argparse.ArgumentParser(description="Manage /boot(*/firmware) cmdline.txt serial console setting.")
@@ -87,6 +89,7 @@ def main():
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

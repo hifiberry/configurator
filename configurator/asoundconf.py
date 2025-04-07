@@ -3,6 +3,7 @@
 import hashlib
 import os
 import argparse
+from typing import Optional, Dict, Any
 
 # Define the simple ALSA configuration template as a constant
 SIMPLE_CONFIG_TEMPLATE = """pcm.!default {{
@@ -22,6 +23,7 @@ class ALSAConfig:
     def __init__(self, filename='/etc/asound.conf'):
         self.filename = filename
         self.config = ""
+        self.original_checksum = ""
         self.load_config()
 
     def load_config(self):

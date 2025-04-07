@@ -4,8 +4,9 @@ import os
 import sys
 import subprocess
 import re
+from typing import Dict, Optional
 
-def read_file_strip_null(path):
+def read_file_strip_null(path: str) -> str:
     """Read a file in binary mode, decode as UTF-8, and remove any null bytes."""
     try:
         with open(path, "rb") as f:
@@ -14,7 +15,7 @@ def read_file_strip_null(path):
     except Exception:
         return ""
 
-def get_hat_info():
+def get_hat_info() -> Dict[str, Optional[str]]:
     """
     Return a dictionary with keys 'vendor', 'product', and 'uuid'.
     If a value is not found, its value is set to None.
