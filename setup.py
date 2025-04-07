@@ -21,6 +21,8 @@ setup(
             "config-cmdline=configurator.cmdline:main"
             "config-sambamount=configurator.sambamount:main",
             "config-sambashare=configurator.sambashare:main",
+            "config-wifi=configurator.wifi:main",
+            "config-network=configurator.network:main"
         ],
     },
     classifiers=[
