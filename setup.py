@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="configurator",
-    version="1.3.0",
+    version="1.4.0",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",
@@ -18,7 +18,7 @@ setup(
             "config-detect=configurator.soundcard_detector:main",
             "config-detectpi=configurator.pimodel:main",
             "config-soundcard=configurator.soundcard:main",
-            "config-cmdline=configurator.cmdline:main"
+            "config-cmdline=configurator.cmdline:main",
             "config-sambamount=configurator.sambamount:main",
             "config-sambashare=configurator.sambashare:main",
             "config-wifi=configurator.wifi:main",
