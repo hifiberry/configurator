@@ -2,7 +2,8 @@
 
 # Define variables
 PACKAGE_NAME="configurator"
-VERSION="1.3.0"
+# Read version from setup.py instead of hardcoding it
+VERSION=$(grep -oP "version=\"\K[^\"]+" setup.py)
 OUTPUT_DIR="$HOME/packages"
 BUILD_DIR="deb_dist"
 PACKAGEFILE="./PACKAGEFILE" # File to store the package name
@@ -21,7 +22,7 @@ clean() {
 
 # Function to build the package
 build_package() {
-    echo "Building the Debian package..."
+    echo "Building the Debian package (version: $VERSION)..."
     python3 setup.py --command-packages=stdeb.command bdist_deb
 
     if [ ! -d "$BUILD_DIR" ]; then
