@@ -1,7 +1,9 @@
 import subprocess
 import logging
 import argparse
-from configurator.hattools import HatReader
+
+# Import the get_hat_info function from hattools
+from configurator.hattools import get_hat_info
 
 # Sound card definitions as a constant dictionary
 SOUND_CARD_DEFINITIONS = {
@@ -24,7 +26,6 @@ SOUND_CARD_DEFINITIONS = {
         "supports_dsp": False,
     },
     "Digi2 Pro": {
-        "aplay_contains": "Digi2 Pro",
         "hat_name": "Digi2 Pro",
         "volume_control": "Softvol",
         "output_channels": 2,
@@ -33,7 +34,6 @@ SOUND_CARD_DEFINITIONS = {
         "supports_dsp": True,
     },
     "Amp100": {
-        "aplay_contains": "Amp100",
         "hat_name": "Amp100",
         "volume_control": "Digital",
         "output_channels": 2,
@@ -51,7 +51,6 @@ SOUND_CARD_DEFINITIONS = {
         "supports_dsp": False,
     },
     "Amp4": {
-        "aplay_contains": "Amp4",
         "hat_name": "Amp4",
         "volume_control": "Digital",
         "output_channels": 2,
@@ -80,7 +79,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ ADC Pro": {
         "aplay_contains": "DAC+ ADC Pro",
         "hat_name": "DAC+ ADC Pro",
-        "volume_control": None,
+        "volume_control": "Digital",
         "output_channels": 2,
         "input_channels": 2,
         "features": ["analoginput"],
@@ -89,7 +88,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ ADC": {
         "aplay_contains": "DAC+ ADC",
         "hat_name": "DAC+ ADC",
-        "volume_control": None,
+        "volume_control": "Digital",
         "output_channels": 2,
         "input_channels": 2,
         "features": ["analoginput"],
@@ -125,7 +124,15 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+/Amp2": {
         "aplay_contains": "DAC+",
         "hat_name": None,
-        "volume_control": None,
+        "volume_control": "Digital",
+        "output_channels": 2,
+        "input_channels": 0,
+        "features": [],
+        "supports_dsp": False,
+    },
+    "DAC2 Pro": {
+        "hat_name": "DAC2 Pro",
+        "volume_control": "Digital",
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -226,22 +233,28 @@ class Soundcard:
 
     def _detect_card(self):
         try:
-            hat_reader = HatReader()
+            # Use get_hat_info function to get HAT information
             try:
-                vendor, product = hat_reader.read_hat_product()
-                potential_matches = [
-                    (card_name, attributes)
-                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items()
-                    if attributes.get("hat_name") == product
-                ]
-                if len(potential_matches) == 1:
-                    return {"name": potential_matches[0][0], **potential_matches[0][1]}
-                elif len(potential_matches) > 1:
-                    logging.info(f"Multiple matches for HAT {product}. Using `aplay -l` to distinguish.")
+                hat_info = get_hat_info()
+                vendor = hat_info.get("vendor")
+                product = hat_info.get("product")
+                
+                if product:
+                    potential_matches = [
+                        (card_name, attributes)
+                        for card_name, attributes in SOUND_CARD_DEFINITIONS.items()
+                        if attributes.get("hat_name") == product
+                    ]
+                    if len(potential_matches) == 1:
+                        return {"name": potential_matches[0][0], **potential_matches[0][1]}
+                    elif len(potential_matches) > 1:
+                        logging.info(f"Multiple matches for HAT {product}. Using `aplay -l` to distinguish.")
+                    else:
+                        logging.warning(f"No matching HAT found for {product}. Falling back to `aplay -l`.")
                 else:
-                    logging.warning(f"No matching HAT found for {product}. Falling back to `aplay -l`.")
-            except Exception:
-                logging.warning("HatReader detection failed.")
+                    logging.warning("No product information found in HAT. Falling back to `aplay -l`.")
+            except Exception as e:
+                logging.warning(f"HAT detection failed: {str(e)}")
 
             output = subprocess.check_output("aplay -l", shell=True, text=True).strip()
             if "hifiberry" not in output.lower():
@@ -272,6 +285,36 @@ def main():
         action="store_true",
         help="Enable very verbose logging (DEBUG level).",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output in JSON format.",
+    )
+    parser.add_argument(
+        "--name",
+        action="store_true",
+        help="Print only the name of the detected sound card.",
+    )
+    parser.add_argument(
+        "--volume-control",
+        action="store_true",
+        help="Print only the volume control of the detected sound card.",
+    )
+    parser.add_argument(
+        "--output-channels",
+        action="store_true",
+        help="Print only the number of output channels.",
+    )
+    parser.add_argument(
+        "--input-channels",
+        action="store_true",
+        help="Print only the number of input channels.",
+    )
+    parser.add_argument(
+        "--features",
+        action="store_true",
+        help="Print only the features of the detected sound card.",
+    )
     args = parser.parse_args()
 
     if args.very_verbose:
@@ -283,14 +326,48 @@ def main():
 
     card = Soundcard()
 
-    print("Sound card details:")
-    print(f"Name: {card.name}")
-    print(f"Volume Control: {card.volume_control}")
-    print(f"Output Channels: {card.output_channels}")
-    print(f"Input Channels: {card.input_channels}")
-    print(f"Features: {', '.join(card.features) if card.features else 'None'}")
-    print(f"HAT Name: {card.hat_name or 'None'}")
-    print(f"Supports DSP: {'Yes' if card.supports_dsp else 'No'}")
+    # Check if any specific output option is selected
+    specific_output = any([
+        args.name, 
+        args.volume_control, 
+        args.output_channels, 
+        args.input_channels, 
+        args.features,
+        args.json
+    ])
+
+    if args.json:
+        import json
+        card_data = {
+            "name": card.name,
+            "volume_control": card.volume_control,
+            "output_channels": card.output_channels,
+            "input_channels": card.input_channels,
+            "features": card.features,
+            "hat_name": card.hat_name,
+            "supports_dsp": card.supports_dsp
+        }
+        print(json.dumps(card_data, indent=2))
+    elif args.name:
+        print(card.name)
+    elif args.volume_control:
+        print(card.volume_control if card.volume_control else "")
+    elif args.output_channels:
+        print(card.output_channels)
+    elif args.input_channels:
+        print(card.input_channels)
+    elif args.features:
+        print(','.join(card.features) if card.features else "")
+    else:
+        # Default output format when no specific option is selected
+        print("Sound card details:")
+        print(f"Name: {card.name}")
+        print(f"Volume Control: {card.volume_control}")
+        print(f"Output Channels: {card.output_channels}")
+        print(f"Input Channels: {card.input_channels}")
+        print(f"Features: {', '.join(card.features) if card.features else 'None'}")
+        print(f"HAT Name: {card.hat_name or 'None'}")
+        print(f"Supports DSP: {'Yes' if card.supports_dsp else 'No'}")
 
 
 if __name__ == "__main__":
