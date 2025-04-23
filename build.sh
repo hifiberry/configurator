@@ -1,10 +1,16 @@
 #!/bin/bash
 
+cd `dirname $0`
+MYDIR=$(pwd)
+
 # Define variables
 PACKAGE_NAME="configurator"
 # Read version from setup.py instead of hardcoding it
 VERSION=$(grep -oP "version=\"\K[^\"]+" setup.py)
-OUTPUT_DIR="$HOME/packages"
+OUTPUT_DIR="$MYDIR/out"
+if [! -d "$OUTPUT_DIR"]; then
+    mkdir -p "$OUTPUT_DIR"
+fi
 BUILD_DIR="deb_dist"
 PACKAGEFILE="./PACKAGEFILE" # File to store the package name
 
@@ -48,42 +54,13 @@ build_package() {
     fi
 }
 
-# Function to install the package
-install_package() {
-    # Build the package first
-    build_package
-
-    # Read the package name from PACKAGEFILE
-    if [ -f "$PACKAGEFILE" ]; then
-        DEB_PACKAGE=$(cat "$PACKAGEFILE")
-    else
-        echo "PACKAGEFILE not found. Build the package first."
-        exit 1
-    fi
-
-    FULL_PATH="$OUTPUT_DIR/$DEB_PACKAGE"
-
-    # Install the package
-    if [ -f "$FULL_PATH" ]; then
-        echo "Installing the package: $FULL_PATH"
-        sudo apt install -y --reinstall "$FULL_PATH"
-        echo "Package installed successfully."
-    else
-        echo "Failed to find the package at $FULL_PATH for installation."
-        exit 1
-    fi
-}
-
 # Check script options
 if [ "$1" == "--clean" ]; then
     clean
-    exit 0
-elif [ "$1" == "--install" ]; then
-    install_package
     exit 0
 fi
 
 # Default behavior: Build the package
 clean
 build_package
-
+clean
