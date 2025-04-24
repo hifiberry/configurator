@@ -8,7 +8,7 @@ PACKAGE_NAME="configurator"
 # Read version from setup.py instead of hardcoding it
 VERSION=$(grep -oP "version=\"\K[^\"]+" setup.py)
 OUTPUT_DIR="$MYDIR/out"
-if [! -d "$OUTPUT_DIR"]; then
+if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
 BUILD_DIR="deb_dist"
@@ -29,6 +29,10 @@ clean() {
 # Function to build the package
 build_package() {
     echo "Building the Debian package (version: $VERSION)..."
+    
+    # Create a manifest template that includes requirements.txt
+    echo "include requirements.txt" > MANIFEST.in
+    
     python3 setup.py --command-packages=stdeb.command bdist_deb
 
     if [ ! -d "$BUILD_DIR" ]; then

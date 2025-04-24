@@ -1,14 +1,20 @@
 from setuptools import setup
+import os
+
+# Read requirements from requirements.txt
+with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
+    requirements = [line.strip() for line in f.readlines() if line.strip() and not line.startswith("#")]
 
 setup(
     name="configurator",
-    version="1.4.1",
+    version="1.4.2",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",
     author_email="support@hifiberry.com",
     license="MIT",
     packages=["configurator"],
+    install_requires=requirements,
     entry_points={
         "console_scripts": [
             "config-asoundconf=configurator.asoundconf:main",

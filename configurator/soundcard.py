@@ -271,6 +271,101 @@ class Soundcard:
         logging.warning("No matching sound card detected.")
         return None
 
+    def get_mixer_control_name(self, use_softvol_fallback=False):
+        """
+        Returns the name of the mixer control for the detected sound card.
+        If no mixer control is defined and use_softvol_fallback is True, returns "Softvol".
+        Otherwise returns None if no mixer control is defined.
+        """
+        if self.volume_control:
+            return self.volume_control
+        elif use_softvol_fallback:
+            return "Softvol"
+        else:
+            return None
+
+    def get_hardware_index(self):
+        """
+        Returns the hardware index of the detected sound card.
+        Uses alsaaudio if available, falls back to parsing aplay -l output.
+        Compatible with both pyalsaaudio 0.8 and 0.9+.
+        """
+        try:
+            import alsaaudio
+            
+            # Check pyalsaaudio version by checking available methods
+            # Version 0.9+ uses card_indexes() while 0.8 uses cards()
+            if hasattr(alsaaudio, 'card_indexes'):
+                # pyalsaaudio 0.9+
+                cards = alsaaudio.card_indexes()
+                
+                # Loop through each card and check if it's a HiFiBerry
+                for card_index in cards:
+                    try:
+                        card_name_result = alsaaudio.card_name(card_index)
+                        
+                        # Handle different return types from card_name()
+                        if isinstance(card_name_result, tuple):
+                            # Some versions return a tuple (long_name, short_name)
+                            # Use the first element (long name) which is more descriptive
+                            card_name = card_name_result[0].lower()
+                            logging.debug(f"Card name returned as tuple: {card_name_result}")
+                        elif isinstance(card_name_result, str):
+                            # Normal case - card_name returns a string
+                            card_name = card_name_result.lower()
+                        else:
+                            # Unknown return type, convert to string first
+                            logging.warning(f"Unexpected type from card_name(): {type(card_name_result)}")
+                            card_name = str(card_name_result).lower()
+                        
+                        if 'hifiberry' in card_name:
+                            logging.info(f"Found HiFiBerry card at index {card_index}: {card_name}")
+                            return card_index
+                    except Exception as e:
+                        logging.warning(f"Error getting name for card index {card_index}: {str(e)}")
+                        continue
+            else:
+                # pyalsaaudio 0.8
+                cards = alsaaudio.cards()
+                
+                # In 0.8, cards() returns a list of card names
+                for i, card_name in enumerate(cards):
+                    if 'hifiberry' in card_name.lower():
+                        logging.info(f"Found HiFiBerry card at index {i}: {card_name}")
+                        return i
+            
+            # Fall back to shell command if no card was found via alsaaudio
+            return self._get_hardware_index_fallback()
+        except ImportError:
+            logging.warning("alsaaudio module not available, falling back to shell command")
+            return self._get_hardware_index_fallback()
+    
+    def _get_hardware_index_fallback(self):
+        """
+        Fallback method to get hardware index using shell commands.
+        """
+        try:
+            result = subprocess.check_output("aplay -l", shell=True, text=True)
+            lines = result.strip().split('\n')
+            for line in lines:
+                if 'hifiberry' in line.lower():
+                    parts = line.split(':')
+                    if len(parts) > 0:
+                        card_info = parts[0].strip()
+                        if card_info.startswith('card '):
+                            try:
+                                card_index = int(card_info.split()[1])
+                                logging.info(f"Found HiFiBerry card at index {card_index} (fallback method)")
+                                return card_index
+                            except (ValueError, IndexError):
+                                logging.warning(f"Could not parse card index from: {line}")
+            
+            return None
+        except subprocess.CalledProcessError:
+            logging.error("Error running aplay -l command")
+            return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Detect and display sound card details.")
     parser.add_argument(
@@ -301,6 +396,16 @@ def main():
         help="Print only the volume control of the detected sound card.",
     )
     parser.add_argument(
+        "--volume-control-softvol",
+        action="store_true",
+        help="Print the volume control of the detected sound card, falling back to 'Softvol' if none defined.",
+    )
+    parser.add_argument(
+        "--hw",
+        action="store_true",
+        help="Print only the hardware index of the detected sound card.",
+    )
+    parser.add_argument(
         "--output-channels",
         action="store_true",
         help="Print only the number of output channels.",
@@ -329,7 +434,9 @@ def main():
     # Check if any specific output option is selected
     specific_output = any([
         args.name, 
-        args.volume_control, 
+        args.volume_control,
+        args.volume_control_softvol,
+        args.hw,
         args.output_channels, 
         args.input_channels, 
         args.features,
@@ -341,6 +448,7 @@ def main():
         card_data = {
             "name": card.name,
             "volume_control": card.volume_control,
+            "hardware_index": card.get_hardware_index(),
             "output_channels": card.output_channels,
             "input_channels": card.input_channels,
             "features": card.features,
@@ -352,6 +460,11 @@ def main():
         print(card.name)
     elif args.volume_control:
         print(card.volume_control if card.volume_control else "")
+    elif args.volume_control_softvol:
+        print(card.get_mixer_control_name(use_softvol_fallback=True))
+    elif args.hw:
+        hw_index = card.get_hardware_index()
+        print(hw_index if hw_index is not None else "")
     elif args.output_channels:
         print(card.output_channels)
     elif args.input_channels:
@@ -363,6 +476,7 @@ def main():
         print("Sound card details:")
         print(f"Name: {card.name}")
         print(f"Volume Control: {card.volume_control}")
+        print(f"Hardware Index: {card.get_hardware_index()}")
         print(f"Output Channels: {card.output_channels}")
         print(f"Input Channels: {card.input_channels}")
         print(f"Features: {', '.join(card.features) if card.features else 'None'}")
