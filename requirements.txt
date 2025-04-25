@@ -1,2 +1,3 @@
 pyalsaaudio>=0.8.0  # Required for ALSA sound card detection in soundcard.py and soundcard_detector.py
+cryptography
 

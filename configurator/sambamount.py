@@ -9,6 +9,7 @@ import shutil
 import subprocess
 from tempfile import NamedTemporaryFile
 from typing import List, Dict, Optional, Tuple, Any
+from configurator.configdb import ConfigDB
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -48,21 +49,19 @@ def setup_logging(verbose=False, quiet=False):
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='SMB Mount Management Tool')
-    
+
     # Command group
     command_group = parser.add_mutually_exclusive_group(required=True)
     command_group.add_argument('--add-mount', action='store_true', 
-                        help='Add a mount configuration to the mount file')
+                        help='Add a mount configuration to the config database')
     command_group.add_argument('--remove-mount', action='store_true',
-                        help='Remove a mount configuration from the mount file and unmount if active')
+                        help='Remove a mount configuration from the config database and unmount if active')
     command_group.add_argument('--mount-all', action='store_true',
-                        help='Mount all shares defined in the mount configuration file')
+                        help='Mount all shares defined in the config database')
     command_group.add_argument('--list-mounts', action='store_true',
                         help='List all configured mounts')
-    
+
     # Mount configuration options
-    parser.add_argument('--config', default='/etc/smbmounts.conf',
-                        help='Path to the mount configuration file (default: /etc/smbmounts.conf)')
     parser.add_argument('--server', help='Server name or IP address (for mount operations)')
     parser.add_argument('--share', help='Share name (for mount operations)')
     parser.add_argument('--user', help='Username for connection')
@@ -72,96 +71,108 @@ def parse_arguments():
                         help='SMB protocol version to use')
     parser.add_argument('--mount-options', default='',
                         help='Additional mount options for CIFS mounts')
-    
+
     # Create mutually exclusive group for verbosity control
     verbosity_group = parser.add_mutually_exclusive_group()
     verbosity_group.add_argument('-v', '--verbose', action='store_true',
                         help='Enable verbose output')
     verbosity_group.add_argument('-q', '--quiet', action='store_true',
                         help='Suppress all output except warnings and errors')
-    
+
     return parser.parse_args()
 
-def read_mount_config(config_file: str) -> List[Dict[str, str]]:
+def read_mount_config(secure: bool = False) -> List[Dict[str, str]]:
     """
-    Read the mount configuration file.
-    
+    Read the mount configurations from the config database.
+
     Args:
-        config_file: Path to the configuration file
-        
+        secure: If True, read the password in secure mode.
+
     Returns:
         List of dictionaries, each containing a mount configuration
     """
+    db = ConfigDB()
     mounts = []
-    
-    # Check if file exists
-    if not os.path.isfile(config_file):
-        logger.debug(f"Mount configuration file {config_file} does not exist")
-        return mounts
-    
-    try:
-        with open(config_file, 'r') as f:
-            reader = csv.DictReader(f, delimiter='|')
-            for row in reader:
-                mounts.append(row)
-        logger.debug(f"Read {len(mounts)} mount configurations from {config_file}")
-    except Exception as e:
-        logger.error(f"Error reading mount configuration file {config_file}: {e}")
-    
+    index = 1
+
+    while True:
+        prefix = f"smbmount.{index}"
+        server = db.get(f"{prefix}.server", None)
+        if not server:
+            break
+
+        share = db.get(f"{prefix}.share", "")
+        mountpoint = db.get(f"{prefix}.mountpoint", "")
+        user = db.get(f"{prefix}.user", "")
+        password = db.get(f"{prefix}.password", secure=secure)  # Use the secure argument here
+        version = db.get(f"{prefix}.version", "")
+        options = db.get(f"{prefix}.options", "")
+
+        mounts.append({
+            'server': server,
+            'share': share,
+            'mountpoint': mountpoint,
+            'user': user,
+            'password': password,
+            'version': version,
+            'options': options
+        })
+
+        index += 1
+
+    logger.debug(f"Read {len(mounts)} mount configurations from configdb")
     return mounts
 
-def write_mount_config(config_file: str, mounts: List[Dict[str, str]]) -> bool:
+def write_mount_config(mounts: List[Dict[str, str]]) -> bool:
     """
-    Write the mount configuration to a file.
-    
+    Write the mount configurations to the config database.
+
     Args:
-        config_file: Path to the configuration file
         mounts: List of dictionaries, each containing a mount configuration
-        
+
     Returns:
         True if successful, False otherwise
     """
-    # Ensure directory exists
-    config_dir = os.path.dirname(config_file)
-    if config_dir and not os.path.exists(config_dir):
-        try:
-            os.makedirs(config_dir, exist_ok=True)
-        except Exception as e:
-            logger.error(f"Error creating directory {config_dir}: {e}")
-            return False
-    
     try:
-        # Write to a temporary file first
-        with NamedTemporaryFile(mode='w', delete=False) as temp_file:
-            # If mounts is empty, create a new file with headers
-            fieldnames = ['server', 'share', 'mountpoint', 'user', 'password', 'version', 'options']
-            writer = csv.DictWriter(temp_file, fieldnames=fieldnames, delimiter='|')
-            writer.writeheader()
-            for mount in mounts:
-                writer.writerow(mount)
-        
-        # Then move the temporary file to the destination
-        shutil.move(temp_file.name, config_file)
-        logger.debug(f"Wrote {len(mounts)} mount configurations to {config_file}")
+        db = ConfigDB()
+
+        # Clear existing configurations
+        index = 1
+        while db.get(f"smbmount.{index}.server", None):
+            prefix = f"smbmount.{index}"
+            db.delete(f"{prefix}.server")
+            db.delete(f"{prefix}.share")
+            db.delete(f"{prefix}.mountpoint")
+            db.delete(f"{prefix}.user")
+            db.delete(f"{prefix}.password", secure=True)
+            db.delete(f"{prefix}.version")
+            db.delete(f"{prefix}.options")
+            index += 1
+
+        # Write new configurations
+        for i, mount in enumerate(mounts, start=1):
+            prefix = f"smbmount.{i}"
+            db.set(f"{prefix}.server", mount['server'])
+            db.set(f"{prefix}.share", mount['share'])
+            db.set(f"{prefix}.mountpoint", mount['mountpoint'])
+            db.set(f"{prefix}.user", mount['user'])
+            db.set(f"{prefix}.password", mount['password'], secure=True)  # Encrypt password
+            db.set(f"{prefix}.version", mount['version'])
+            db.set(f"{prefix}.options", mount['options'])
+
+        logger.debug(f"Wrote {len(mounts)} mount configurations to configdb")
         return True
     except Exception as e:
-        logger.error(f"Error writing mount configuration file {config_file}: {e}")
-        # Clean up temporary file if it exists
-        if 'temp_file' in locals():
-            try:
-                os.unlink(temp_file.name)
-            except Exception:
-                pass
+        logger.error(f"Error writing mount configurations to configdb: {e}")
         return False
 
-def add_mount_config(config_file: str, server: str, share: str, mountpoint: Optional[str] = None,
+def add_mount_config(server: str, share: str, mountpoint: Optional[str] = None,
                     user: Optional[str] = None, password: Optional[str] = None,
                     version: Optional[str] = None, options: Optional[str] = None) -> bool:
     """
-    Add a mount configuration to the configuration file.
+    Add a mount configuration to the configuration database.
     
     Args:
-        config_file: Path to the configuration file
         server: Server name or IP address
         share: Share name
         mountpoint: Mount point (default: /data/server-share)
@@ -174,7 +185,7 @@ def add_mount_config(config_file: str, server: str, share: str, mountpoint: Opti
         True if successful, False otherwise
     """
     # Read existing configurations
-    mounts = read_mount_config(config_file)
+    mounts = read_mount_config(secure=True)
     
     # Generate default mountpoint if not specified
     if not mountpoint:
@@ -200,15 +211,14 @@ def add_mount_config(config_file: str, server: str, share: str, mountpoint: Opti
     # Add to list
     mounts.append(new_mount)
     
-    # Write back to file
-    return write_mount_config(config_file, mounts)
+    # Write back to database
+    return write_mount_config(mounts)
 
-def remove_mount_config(config_file: str, server: str, share: str) -> Tuple[bool, Optional[str]]:
+def remove_mount_config(server: str, share: str) -> Tuple[bool, Optional[str]]:
     """
-    Remove a mount configuration from the configuration file.
+    Remove a mount configuration from the configuration database.
     
     Args:
-        config_file: Path to the configuration file
         server: Server name or IP address
         share: Share name
         
@@ -216,7 +226,7 @@ def remove_mount_config(config_file: str, server: str, share: str) -> Tuple[bool
         Tuple of (True if successful, mountpoint if unmounted, or None)
     """
     # Read existing configurations
-    mounts = read_mount_config(config_file)
+    mounts = read_mount_config(secure=True)
     mountpoint = None
     
     # Find the configuration to remove
@@ -239,8 +249,8 @@ def remove_mount_config(config_file: str, server: str, share: str) -> Tuple[bool
         if not unmount_share(mountpoint):
             logger.warning(f"Failed to unmount {mountpoint}")
     
-    # Write back to file
-    success = write_mount_config(config_file, new_mounts)
+    # Write back to database
+    success = write_mount_config(new_mounts)
     return success, mountpoint
 
 def is_mounted(mountpoint: str) -> bool:
@@ -397,25 +407,22 @@ def unmount_share(mountpoint: str) -> bool:
     
     return False
 
-def mount_all_shares(config_file: str) -> Dict[str, Any]:
+def mount_all_shares() -> Dict[str, Any]:
     """
-    Mount all shares defined in the configuration file.
-    
-    Args:
-        config_file: Path to the configuration file
-        
+    Mount all shares defined in the configuration database.
+
     Returns:
         Dictionary with results: {"succeeded": List[str], "failed": List[str]}
     """
     results = {"succeeded": [], "failed": []}
-    
+
     # Read mount configurations
-    mounts = read_mount_config(config_file)
-    
+    mounts = read_mount_config(secure=True)
+
     if not mounts:
-        logger.warning(f"No mount configurations found in {config_file}")
-        return results
-    
+        logger.info("No mount configurations found in configdb")
+        return results  # Do not treat this as an error
+
     # Mount each share
     for mount in mounts:
         server = mount['server']
@@ -425,30 +432,27 @@ def mount_all_shares(config_file: str) -> Dict[str, Any]:
         password = mount['password'] if 'password' in mount and mount['password'] else None
         version = mount['version'] if 'version' in mount and mount['version'] else None
         options = mount['options'] if 'options' in mount and mount['options'] else None
-        
+
         logger.info(f"Mounting {server}/{share} at {mountpoint}")
         if mount_cifs_share(server, share, mountpoint, user, password, version, options):
             results["succeeded"].append(f"{server}/{share} at {mountpoint}")
         else:
             results["failed"].append(f"{server}/{share} at {mountpoint}")
-    
+
     return results
 
-def list_configured_mounts(config_file: str) -> List[Dict[str, str]]:
+def list_configured_mounts() -> List[Dict[str, str]]:
     """
-    List all mounts from the configuration file.
+    List all mounts from the configuration database.
     
-    Args:
-        config_file: Path to the configuration file
-        
     Returns:
         List of mount configurations
     """
     # Read mount configurations
-    mounts = read_mount_config(config_file)
+    mounts = read_mount_config()
     
     if not mounts:
-        logger.debug(f"No mount configurations found in {config_file}")
+        logger.debug("No mount configurations found in configdb")
     
     return mounts
 
@@ -467,7 +471,6 @@ def main():
         
         # Add mount configuration
         success = add_mount_config(
-            args.config, 
             args.server, 
             args.share, 
             args.mountpoint,
@@ -491,7 +494,7 @@ def main():
             sys.exit(1)
         
         # Remove mount configuration
-        success, mountpoint = remove_mount_config(args.config, args.server, args.share)
+        success, mountpoint = remove_mount_config(args.server, args.share)
         
         if success:
             logger.info(f"Successfully removed mount configuration for {args.server}/{args.share}")
@@ -504,7 +507,7 @@ def main():
     
     elif args.mount_all:
         # Mount all shares
-        results = mount_all_shares(args.config)
+        results = mount_all_shares()
         
         # Report results
         if results["succeeded"]:
@@ -524,11 +527,11 @@ def main():
             sys.exit(0)
         else:
             logger.warning("No shares were mounted")
-            sys.exit(1)
+            sys.exit(0)
     
     elif args.list_mounts:
         # List all configured mounts
-        mounts = list_configured_mounts(args.config)
+        mounts = list_configured_mounts()
         
         if mounts:
             for mount in mounts:
@@ -537,12 +540,14 @@ def main():
                 mountpoint = mount['mountpoint']
                 user = mount['user'] if 'user' in mount and mount['user'] else ''
                 version = mount['version'] if 'version' in mount and mount['version'] else 'Auto'
-                
+                password = '***' if 'password' in mount and mount['password'] else ''
+
                 # Format: //user@server/share -> mountpoint (SMB Version)
                 user_prefix = f"{user}@" if user else ""
-                print(f"//{user_prefix}{server}/{share} -> {mountpoint} ({version})")
+                password_suffix = f" (Password: {password})" if password else ""
+                print(f"//{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
         else:
-            logger.warning(f"No mount configurations found in {args.config}")
+            logger.warning("No mount configurations found in configdb")
 
 if __name__ == "__main__":
     main()
