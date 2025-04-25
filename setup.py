@@ -7,7 +7,7 @@ with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
 
 setup(
     name="configurator",
-    version="1.4.2",
+    version="1.5.1",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",
@@ -28,7 +28,8 @@ setup(
             "config-sambamount=configurator.sambamount:main",
             "config-sambashare=configurator.sambashare:main",
             "config-wifi=configurator.wifi:main",
-            "config-network=configurator.network:main"
+            "config-network=configurator.network:main",
+            "config-db=configurator.configdb:main"
         ],
     },
     classifiers=[
