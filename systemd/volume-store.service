@@ -1,0 +1,14 @@
+[Unit]
+Description=Store current volume settings to configuration database
+After=sound.target network.target local-fs.target
+Requires=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/config-volume --store
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

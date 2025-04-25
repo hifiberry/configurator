@@ -1,0 +1,6 @@
+python-configurator (1.5.2-1) unstable; urgency=medium
+
+  * Added automatic activation of volume-store.timer in postinst script
+  * Fixed Debian packaging to properly include postinst scripts
+
+ -- HiFiBerry Support <support@hifiberry.com>  Fri, 25 Apr 2025 10:00:00 +0000

@@ -1,0 +1,14 @@
+[Unit]
+Description=Run volume-store service every minute
+Requires=volume-store.service
+After=sound.target
+
+[Timer]
+Unit=volume-store.service
+OnBootSec=60
+OnUnitActiveSec=60
+AccuracySec=1
+RandomizedDelaySec=5
+
+[Install]
+WantedBy=timers.target

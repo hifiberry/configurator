@@ -15,6 +15,9 @@ setup(
     license="MIT",
     packages=["configurator"],
     install_requires=requirements,
+    data_files=[
+        ('/usr/lib/systemd/system', ['systemd/volume-store.service', 'systemd/volume-store.timer']),
+    ],
     entry_points={
         "console_scripts": [
             "config-asoundconf=configurator.asoundconf:main",

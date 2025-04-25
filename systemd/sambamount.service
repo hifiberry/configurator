@@ -1,0 +1,13 @@
+[Unit]
+Description=Mount Samba/CIFS shares
+Wants=network-online.target
+After=network-online.target
+Before=mpd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/config-sambamount --mount-all
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
