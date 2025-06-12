@@ -8,7 +8,7 @@ from configurator.configtxt import ConfigTxt
 from configurator.hattools import get_hat_info  # Import the get_hat_info module
 
 class SoundcardDetector:
-    def __init__(self, config_file="/boot/config.txt", reboot_file="/tmp/reboot"):
+    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot"):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
         self.detected_card = None
