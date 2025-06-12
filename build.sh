@@ -89,14 +89,34 @@ build_package() {
     HOST_GROUP_ID=$(id -g)
     echo "Building as user ID: ${HOST_USER_ID}, group ID: ${HOST_GROUP_ID}"
     
-    # Run the Docker container to build the package and generate compile script on the fly
-    # Use the same user ID as the host to avoid permission issues
+    # Set up sudoers for the non-root user in Docker
+    echo "Creating init script for Docker..."
+    INIT_SCRIPT=$(mktemp)
+    cat > ${INIT_SCRIPT} << 'EOF'
+#!/bin/bash
+# Configure non-root user to have sudo access without password
+echo "www-data ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/www-data
+chmod 0440 /etc/sudoers.d/www-data
+
+# Make sure our user can sudo without tty
+echo "Defaults !requiretty" >> /etc/sudoers
+
+# Create the compile script
+cat > /tmp/compile.sh << 'EOL'
+EOF
+    
+    # Run the Docker container to build the package with root for setup and non-root for compilation
     docker run --rm \
-        --user ${HOST_USER_ID}:${HOST_GROUP_ID} \
         --mount type=bind,source="${DOCKER_SCRIPT_DIR}",target=/build \
         --mount type=bind,source="${DOCKER_OUTPUT_DIR}",target=/out \
+        --mount type=bind,source="${INIT_SCRIPT}",target=/init.sh \
         -e PACKAGE_VERSION="${VERSION}" \
-        "${DOCKER_TAG}" bash -c "cat > /tmp/compile.sh << 'EOL'
+        "${DOCKER_TAG}" bash -c "chmod +x /init.sh && /init.sh && adduser --disabled-password --gecos '' --uid ${HOST_USER_ID} build_user 2>/dev/null || true && chown -R build_user:build_user /build /out /tmp && su build_user -c 'bash /tmp/compile.sh'"
+    
+    rm -f ${INIT_SCRIPT}
+    
+    # This is the actual compile script content that will run as the non-root user
+    cat > /dev/null << 'EOL'
 #!/bin/bash
 set -e
 
