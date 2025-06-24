@@ -2,8 +2,8 @@ Source: python-configurator
 Section: python
 Priority: optional
 Maintainer: HiFiBerry <support@hifiberry.com>
-Build-Depends: debhelper (>= 11), 
-               dh-python,
+Build-Depends: debhelper-compat (= 13), 
+               dh-sequence-python3,
                python3-all,
                python3-setuptools
 Standards-Version: 4.1.4
