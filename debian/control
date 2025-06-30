@@ -1,4 +1,4 @@
-Source: python-configurator
+Source: hifiberry-configurator
 Section: python
 Priority: optional
 Maintainer: HiFiBerry <support@hifiberry.com>
@@ -9,7 +9,7 @@ Build-Depends: debhelper-compat (= 13),
 Standards-Version: 4.1.4
 Homepage: https://www.hifiberry.com/
 
-Package: python3-configurator
+Package: hifiberry-configurator
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, systemd
 Description: HiFiBerry system configuration scripts

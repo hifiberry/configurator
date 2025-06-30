@@ -1,4 +1,10 @@
-python-configurator (1.6.1) unstable; urgency=medium
+hifiberry-configurator (1.6.2) unstable; urgency=medium
+
+  * Package renamed from python-configurator to hifiberry-configurator
+
+ -- HiFiBerry Support <support@hifiberry.com>  Mon, 30 Jun 2025 12:00:00 +0000
+
+hifiberry-configurator (1.6.1) unstable; urgency=medium
 
   * Updated build system to use GitHub checkout instead of submodule
   * Improved Docker container isolation and reproducibility
@@ -6,14 +12,14 @@ python-configurator (1.6.1) unstable; urgency=medium
 
  -- HiFiBerry Support <support@hifiberry.com>  Thu, 13 Jun 2025 12:00:00 +0000
 
-python-configurator (1.6.0) unstable; urgency=medium
+hifiberry-configurator (1.6.0) unstable; urgency=medium
 
   * Added Docker-based build system for reproducible builds
   * Fixed location of config.txt
 
  -- HiFiBerry Support <support@hifiberry.com>  Thu, 13 Jun 2025 10:00:00 +0000
 
-python-configurator (1.5.2) unstable; urgency=medium
+hifiberry-configurator (1.5.2) unstable; urgency=medium
 
   * Added automatic activation of volume-store.timer in postinst script
   * Fixed Debian packaging to properly include postinst scripts
