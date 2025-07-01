@@ -179,9 +179,10 @@ def restore_volume():
         return False
 
 def main():
-    # Configure logging
+    # Configure logging to send messages to stderr
     logging.basicConfig(level=logging.INFO,
-                        format='%(levelname)s: %(message)s')
+                        format='%(levelname)s: %(message)s',
+                        stream=sys.stderr)
 
     # Create the parser
     parser = argparse.ArgumentParser(
