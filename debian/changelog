@@ -1,10 +1,10 @@
 hifiberry-configurator (1.6.4) stable; urgency=medium
 
   * Added missing netifaces dependency for sambaclient functionality
-  * Added missing samba-common-bin dependency for nmblookup command
-  * Added missing smbclient dependency for SMB share listing
+  * Added samba-common-bin and smbclient as recommended dependencies
   * Fixed ModuleNotFoundError in config-sambaclient command
   * Fixed FileNotFoundError for nmblookup and smbclient commands
+  * SMB functionality now gracefully handles missing samba tools
 
  -- HiFiBerry Support <support@hifiberry.com>  Tue, 01 Jul 2025 15:00:00 +0000
 

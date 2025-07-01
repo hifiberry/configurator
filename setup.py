@@ -29,7 +29,7 @@ setup(
             "config-soundcard=configurator.soundcard:main",
             "config-cmdline=configurator.cmdline:main",
             "config-sambaclient=configurator.sambaclient:main",
-            "config-sambashare=configurator.sambashare:main",
+            "config-sambamount=configurator.sambamount:main",
             "config-wifi=configurator.wifi:main",
             "config-network=configurator.network:main",
             "config-db=configurator.configdb:main",
