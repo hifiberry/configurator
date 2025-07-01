@@ -15,6 +15,72 @@ from tempfile import NamedTemporaryFile
 # Set up logging
 logger = logging.getLogger(__name__)
 
+def setup_logging(verbose=False, quiet=False):
+    """Configure logging based on verbosity level."""
+    if quiet:
+        log_level = logging.WARNING
+    elif verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Remove existing handlers if any
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Create console handler that sends to stderr
+    console_handler = logging.StreamHandler(stream=sys.stderr)
+    console_handler.setLevel(log_level)
+    
+    # Create formatter and add it to the handler
+    if verbose:
+        formatter = logging.Formatter('%(levelname)s: %(message)s')
+    else:
+        formatter = logging.Formatter('%(message)s')
+    
+    console_handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    root_logger.addHandler(console_handler)
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='SMB/CIFS client tools')
+    
+    # Add common authentication arguments
+    parser.add_argument('-u', '--user', help='Username for authentication')
+    parser.add_argument('-p', '--password', help='Password for authentication')
+    parser.add_argument('-c', '--credentials', help='Path to credentials file')
+    
+    # Add SMB version argument
+    parser.add_argument('--smbversion', choices=['SMB1', 'SMB2', 'SMB3'], 
+                        help='Specify SMB version to use')
+    
+    # Add verbosity arguments
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('-q', '--quiet', action='store_true', help='Suppress non-essential output')
+    
+    # Add mutually exclusive command arguments
+    command_group = parser.add_mutually_exclusive_group(required=True)
+    command_group.add_argument('--list-file-servers', action='store_true',
+                              help='List all SMB file servers on the network')
+    command_group.add_argument('--check-connect', metavar='SERVER',
+                              help='Test connection to specified server')
+    command_group.add_argument('--detect-version', metavar='SERVER',
+                              help='Detect SMB version of specified server')
+    command_group.add_argument('--list-shares', metavar='SERVER',
+                              help='List shares on specified server')
+    
+    # Add format argument for list-shares
+    parser.add_argument('--long', action='store_true',
+                        help='Use detailed format when listing shares')
+    
+    return parser.parse_args()
+
 def get_broadcast_addresses() -> List[str]:
     """Get broadcast addresses for all active network interfaces."""
     broadcast_addresses = []
@@ -240,79 +306,6 @@ def list_all_servers() -> List[Dict[str, str]]:
     
     logger.info(f"Found {len(unique_servers)} unique SMB servers on local networks.")
     return unique_servers
-
-
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='SMB Server Discovery Tool')
-    
-    # Command group
-    command_group = parser.add_mutually_exclusive_group(required=True)
-    command_group.add_argument('--list-file-servers', action='store_true', 
-                        help='List only IP addresses and hostnames of file servers')
-    command_group.add_argument('--check-connect', metavar='SERVER',
-                        help='Check if connection to SERVER is possible with given credentials')
-    command_group.add_argument('--list-shares', metavar='SERVER',
-                        help='List available shares on the specified SERVER')
-    command_group.add_argument('--detect-version', metavar='SERVER',
-                        help='Detect and display the SMB version of the specified SERVER')
-    
-    # Connection options - create a mutually exclusive group for credentials
-    credentials_group = parser.add_mutually_exclusive_group()
-    credentials_group.add_argument('--credentials', metavar='FILE',
-                        help='File containing credentials (username=user\\npassword=pass)')
-    credentials_group.add_argument('--user', help='Username for connection')
-    
-    # Password is only used with username, not as a standalone option
-    parser.add_argument('--password', help='Password for connection (requires --user)')
-    
-    # Display options
-    parser.add_argument('--long', action='store_true',
-                        help='Display detailed information (e.g., share comments)')
-    parser.add_argument('--smbversion', choices=['SMB1', 'SMB2', 'SMB3'], 
-                        help='Specify SMB protocol version to use (default: auto-detect)')
-    
-    # Create mutually exclusive group for verbosity control
-    verbosity_group = parser.add_mutually_exclusive_group()
-    verbosity_group.add_argument('-v', '--verbose', action='store_true',
-                        help='Enable verbose output')
-    verbosity_group.add_argument('-q', '--quiet', action='store_true',
-                        help='Suppress all output except warnings and errors')
-    
-    return parser.parse_args()
-
-
-def setup_logging(verbose=False, quiet=False):
-    """Configure logging based on verbosity level."""
-    if quiet:
-        log_level = logging.WARNING
-    elif verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    
-    # Remove existing handlers if any
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-    
-    # Create console handler
-    console_handler = logging.StreamHandler(stream=sys.stderr)
-    console_handler.setLevel(log_level)
-    
-    # Create formatter and add it to the handler
-    if verbose:
-        formatter = logging.Formatter('%(levelname)s: %(message)s')
-    else:
-        formatter = logging.Formatter('%(message)s')
-    
-    console_handler.setFormatter(formatter)
-    
-    # Add handler to logger
-    root_logger.addHandler(console_handler)
 
 
 def check_smb_connection(server: str, username: Optional[str] = None, password: Optional[str] = None, 
