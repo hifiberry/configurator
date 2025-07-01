@@ -1,10 +1,20 @@
+hifiberry-configurator (1.6.4) stable; urgency=medium
+
+  * Added missing netifaces dependency for sambaclient functionality
+  * Added missing samba-common-bin dependency for nmblookup command
+  * Added missing smbclient dependency for SMB share listing
+  * Fixed ModuleNotFoundError in config-sambaclient command
+  * Fixed FileNotFoundError for nmblookup and smbclient commands
+
+ -- HiFiBerry Support <support@hifiberry.com>  Tue, 01 Jul 2025 15:00:00 +0000
+
 hifiberry-configurator (1.6.3) stable; urgency=medium
 
   * Refactored hattools.py to use hateeprom module from eeprom package
   * Added hifiberry-eeprom dependency for improved HAT EEPROM handling
   * Simplified HAT detection code and improved reliability
 
- -- HiFiBerry Support <support@hifiberry.com>  Mon, 01 Jul 2025 12:00:00 +0000
+ -- HiFiBerry Support <support@hifiberry.com>  Tue, 01 Jul 2025 12:00:00 +0000
 
 hifiberry-configurator (1.6.2) stable; urgency=medium
 

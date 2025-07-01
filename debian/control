@@ -11,7 +11,7 @@ Homepage: https://www.hifiberry.com/
 
 Package: hifiberry-configurator
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, systemd, hifiberry-eeprom
+Depends: ${python3:Depends}, ${misc:Depends}, systemd, hifiberry-eeprom, python3-netifaces, samba-common-bin, smbclient
 Description: HiFiBerry system configuration scripts
  System configuration scripts for HiFiBerry OS, including
  volume storage and restoration functionality.
