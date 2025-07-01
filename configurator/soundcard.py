@@ -77,7 +77,7 @@ SOUND_CARD_DEFINITIONS = {
         "supports_dsp": False,
     },
     "DAC+ ADC Pro": {
-        "aplay_contains": "DAC+ ADC Pro",
+        "aplay_contains": "DAC+ADC Pro",
         "hat_name": "DAC+ ADC Pro",
         "volume_control": "Digital",
         "output_channels": 2,
