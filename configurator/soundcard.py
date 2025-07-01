@@ -1,6 +1,7 @@
 import subprocess
 import logging
 import argparse
+import sys
 
 # Import the get_hat_info function from hattools
 from configurator.hattools import get_hat_info
@@ -196,9 +197,10 @@ class Soundcard:
         features=None,
         hat_name=None,
         supports_dsp=False,
+        no_eeprom=False,
     ):
         if name is None:
-            detected_card = self._detect_card()
+            detected_card = self._detect_card(no_eeprom=no_eeprom)
             if detected_card:
                 self.name = detected_card["name"]
                 self.volume_control = detected_card.get("volume_control")
@@ -231,30 +233,33 @@ class Soundcard:
             f"features={self.features}, hat_name={self.hat_name}, supports_dsp={self.supports_dsp})"
         )
 
-    def _detect_card(self):
+    def _detect_card(self, no_eeprom=False):
         try:
-            # Use get_hat_info function to get HAT information
-            try:
-                hat_info = get_hat_info()
-                vendor = hat_info.get("vendor")
-                product = hat_info.get("product")
-                
-                if product:
-                    potential_matches = [
-                        (card_name, attributes)
-                        for card_name, attributes in SOUND_CARD_DEFINITIONS.items()
-                        if attributes.get("hat_name") == product
-                    ]
-                    if len(potential_matches) == 1:
-                        return {"name": potential_matches[0][0], **potential_matches[0][1]}
-                    elif len(potential_matches) > 1:
-                        logging.info(f"Multiple matches for HAT {product}. Using `aplay -l` to distinguish.")
+            # Use get_hat_info function to get HAT information (unless disabled)
+            if not no_eeprom:
+                try:
+                    hat_info = get_hat_info()
+                    vendor = hat_info.get("vendor")
+                    product = hat_info.get("product")
+                    
+                    if product:
+                        potential_matches = [
+                            (card_name, attributes)
+                            for card_name, attributes in SOUND_CARD_DEFINITIONS.items()
+                            if attributes.get("hat_name") == product
+                        ]
+                        if len(potential_matches) == 1:
+                            return {"name": potential_matches[0][0], **potential_matches[0][1]}
+                        elif len(potential_matches) > 1:
+                            logging.info(f"Multiple matches for HAT {product}. Using `aplay -l` to distinguish.")
+                        else:
+                            logging.warning(f"No matching HAT found for {product}. Falling back to `aplay -l`.")
                     else:
-                        logging.warning(f"No matching HAT found for {product}. Falling back to `aplay -l`.")
-                else:
-                    logging.warning("No product information found in HAT. Falling back to `aplay -l`.")
-            except Exception as e:
-                logging.warning(f"HAT detection failed: {str(e)}")
+                        logging.warning("No product information found in HAT. Falling back to `aplay -l`.")
+                except Exception as e:
+                    logging.warning(f"HAT detection failed: {str(e)}")
+            else:
+                logging.info("EEPROM check disabled, using aplay -l for detection")
 
             output = subprocess.check_output("aplay -l", shell=True, text=True).strip()
             if "hifiberry" not in output.lower():
@@ -420,16 +425,22 @@ def main():
         action="store_true",
         help="Print only the features of the detected sound card.",
     )
+    parser.add_argument(
+        "--no-eeprom",
+        action="store_true",
+        help="Disable EEPROM check and use only aplay -l for detection.",
+    )
     args = parser.parse_args()
 
+    # Configure logging to send WARNING and ERROR to stderr
     if args.very_verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
     elif args.verbose:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     else:
-        logging.basicConfig(level=logging.WARNING)
+        logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
 
-    card = Soundcard()
+    card = Soundcard(no_eeprom=args.no_eeprom)
 
     # Check if any specific output option is selected
     specific_output = any([
