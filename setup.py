@@ -28,7 +28,7 @@ setup(
             "config-detectpi=configurator.pimodel:main",
             "config-soundcard=configurator.soundcard:main",
             "config-cmdline=configurator.cmdline:main",
-            "config-sambamount=configurator.sambamount:main",
+            "config-sambaclient=configurator.sambaclient:main",
             "config-sambashare=configurator.sambashare:main",
             "config-wifi=configurator.wifi:main",
             "config-network=configurator.network:main",
