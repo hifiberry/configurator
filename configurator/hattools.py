@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import argparse
+import logging
+import sys
 from typing import Dict, Optional
 
 # Import from the hateeprom module in the eeprom package
@@ -17,7 +19,7 @@ def get_hat_info() -> Dict[str, Optional[str]]:
     This function now uses the hateeprom module from the eeprom package.
     """
     if HatEEPROM is None:
-        print("Warning: hateeprom module not available, returning default values")
+        logging.warning("hateeprom module not available, returning default values")
         return {"vendor": None, "product": None, "uuid": None}
     
     try:
@@ -38,10 +40,13 @@ def get_hat_info() -> Dict[str, Optional[str]]:
             return {"vendor": None, "product": None, "uuid": None}
             
     except Exception as e:
-        print(f"Error reading HAT information: {e}")
+        logging.error(f"Error reading HAT information: {e}")
         return {"vendor": None, "product": None, "uuid": None}
 
 def main():
+    # Configure logging to send messages to stderr
+    logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+    
     parser = argparse.ArgumentParser(description="Retrieve HAT information")
     parser.add_argument("-a", "--all", action="store_true",
                         help="Display vendor, product, and UUID")
