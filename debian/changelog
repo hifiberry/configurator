@@ -1,10 +1,18 @@
-hifiberry-configurator (1.6.2) unstable; urgency=medium
+hifiberry-configurator (1.6.3) stable; urgency=medium
+
+  * Refactored hattools.py to use hateeprom module from eeprom package
+  * Added hifiberry-eeprom dependency for improved HAT EEPROM handling
+  * Simplified HAT detection code and improved reliability
+
+ -- HiFiBerry Support <support@hifiberry.com>  Mon, 01 Jul 2025 12:00:00 +0000
+
+hifiberry-configurator (1.6.2) stable; urgency=medium
 
   * Package renamed from python-configurator to hifiberry-configurator
 
  -- HiFiBerry Support <support@hifiberry.com>  Mon, 30 Jun 2025 12:00:00 +0000
 
-hifiberry-configurator (1.6.1) unstable; urgency=medium
+hifiberry-configurator (1.6.1) stable; urgency=medium
 
   * Updated build system to use GitHub checkout instead of submodule
   * Improved Docker container isolation and reproducibility
