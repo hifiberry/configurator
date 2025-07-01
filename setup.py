@@ -16,7 +16,7 @@ setup(
     packages=["configurator"],
     install_requires=requirements,
     data_files=[
-        ('/usr/lib/systemd/system', ['systemd/volume-store.service', 'systemd/volume-store.timer']),
+        ('/usr/lib/systemd/system', ['systemd/volume-store.service', 'systemd/volume-store.timer', 'systemd/sambamount.service']),
     ],
     entry_points={
         "console_scripts": [
