@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# HiFiBerry Volume Restore Wrapper
+# 
+# This script provides a simple interface to the volume restoration functionality
+# and is designed to be called by systemd services or administrators.
+#
+
+set -e
+
+# Default paths
+PYTHON_SCRIPT="/usr/lib/python3/dist-packages/configurator/volume.py"
+PYTHON_CMD="python3"
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 [--store|--restore] [--verbose]"
+    echo "  --store    Store current volume settings"
+    echo "  --restore  Restore saved volume settings"
+    echo "  --verbose  Enable verbose output"
+    echo "  --help     Show this help message"
+    exit 1
+}
+
+# Function to check if the Python script exists
+check_script() {
+    if [ ! -f "$PYTHON_SCRIPT" ]; then
+        echo "Error: Volume script not found at $PYTHON_SCRIPT" >&2
+        exit 1
+    fi
+}
+
+# Parse command line arguments
+ACTION=""
+VERBOSE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --store)
+            ACTION="--store"
+            shift
+            ;;
+        --restore)
+            ACTION="--restore"
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE="--verbose"
+            shift
+            ;;
+        --help|-h)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage
+            ;;
+    esac
+done
+
+# Check if action is specified
+if [ -z "$ACTION" ]; then
+    echo "Error: Must specify either --store or --restore" >&2
+    usage
+fi
+
+# Check if the Python script exists
+check_script
+
+# Execute the Python script with the specified action
+exec $PYTHON_CMD "$PYTHON_SCRIPT" $ACTION $VERBOSE

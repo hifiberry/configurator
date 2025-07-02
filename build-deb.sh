@@ -3,26 +3,19 @@ set -e
 
 cd `dirname $0`
 
-# Expected version
-EXPECTED_VERSION="1.6.5"
-
-# Check if the changelog version matches the expected version
+# Extract version from changelog as single source of truth
 CHANGELOG_VERSION=$(head -1 debian/changelog | sed 's/.*(\([^)]*\)).*/\1/')
-if [ "$CHANGELOG_VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "ERROR: Changelog version ($CHANGELOG_VERSION) does not match expected version ($EXPECTED_VERSION)"
-    echo "Please update debian/changelog manually"
-    exit 1
-fi
+echo "Version from changelog: $CHANGELOG_VERSION"
 
-# Check if setup.py version matches
+# Check if setup.py version matches changelog
 SETUP_VERSION=$(grep 'version=' setup.py | sed 's/.*version="\([^"]*\)".*/\1/')
-if [ "$SETUP_VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "ERROR: setup.py version ($SETUP_VERSION) does not match expected version ($EXPECTED_VERSION)"
-    echo "Please update setup.py manually"
+if [ "$SETUP_VERSION" != "$CHANGELOG_VERSION" ]; then
+    echo "ERROR: setup.py version ($SETUP_VERSION) does not match changelog version ($CHANGELOG_VERSION)"
+    echo "Please update setup.py to match changelog version"
     exit 1
 fi
 
-echo "Version consistency check passed: $EXPECTED_VERSION"
+echo "Version consistency check passed: $CHANGELOG_VERSION"
 
 # Check if DIST is set by environment variable
 if [ -n "$DIST" ]; then

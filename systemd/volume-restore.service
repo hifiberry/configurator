@@ -1,0 +1,19 @@
+[Unit]
+Description=HiFiBerry Volume Restore Service
+Documentation=man:config-volume(1)
+After=pipewire.service wireplumber-system.service sound.target
+Wants=pipewire.service wireplumber-system.service
+Requires=sound.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/config-volume --restore
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

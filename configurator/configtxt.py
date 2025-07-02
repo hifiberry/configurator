@@ -128,6 +128,7 @@ class ConfigTxt:
         self.enable_eeprom()
         self.enable_spi()
         self.enable_i2c()
+        self.disable_hat_i2c()
         logging.info("Default configuration applied.")
 
     def enable_updi(self):

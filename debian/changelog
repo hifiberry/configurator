@@ -1,3 +1,14 @@
+hifiberry-configurator (1.6.6) stable; urgency=medium
+
+  * Added volume-restore systemd service for automatic volume restoration
+  * Enhanced volume.py to support PipeWire virtual controls (Master/Capture)
+  * Added Python ALSA API support for direct mixer control access
+  * Volume restoration service starts after PipeWire and WirePlumber with 2s delay
+  * Added --list-controls option for debugging ALSA mixer controls
+  * Fixed HAT I2C overlay disabled by default in config.txt
+
+ -- HiFiBerry Support <support@hifiberry.com>  Wed, 02 Jul 2025 18:00:00 +0000
+
 hifiberry-configurator (1.6.5) stable; urgency=medium
 
   * Improved error and warning logging to use stderr consistently
