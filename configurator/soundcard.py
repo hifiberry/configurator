@@ -16,6 +16,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 8,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["DAC", "ADC"],
     },
     "DAC8x": {
         "aplay_contains": "DAC8x",
@@ -25,6 +26,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["DAC"],
     },
     "Digi2 Pro": {
         "hat_name": "Digi2 Pro",
@@ -33,6 +35,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["dsp"],
         "supports_dsp": True,
+        "card_type": ["Digi"],
     },
     "Amp100": {
         "hat_name": "Amp100",
@@ -41,6 +44,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["spdifnoclock", "toslink"],
         "supports_dsp": False,
+        "card_type": ["Amp"],
     },
     "Amp3": {
         "aplay_contains": "Amp3",
@@ -50,6 +54,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["usehwvolume"],
         "supports_dsp": False,
+        "card_type": ["Amp"],
     },
     "Amp4": {
         "hat_name": "Amp4",
@@ -58,6 +63,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["usehwvolume"],
         "supports_dsp": True,
+        "card_type": ["Amp"],
     },
     "Amp4 Pro": {
         "aplay_contains": "Amp4 Pro",
@@ -67,6 +73,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["usehwvolume"],
         "supports_dsp": True,
+        "card_type": ["Amp"],
     },
     "DSP 2x4": {
         "aplay_contains": "DSP 2x4",
@@ -76,6 +83,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["dsp"],
         "supports_dsp": False,
+        "card_type": ["DAC", "ADC", "Digi"],
     },
     "DAC+ ADC Pro": {
         "aplay_contains": "DAC+ADC Pro",
@@ -85,6 +93,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 2,
         "features": ["analoginput"],
         "supports_dsp": False,
+        "card_type": ["DAC", "ADC"],
     },
     "DAC+ ADC": {
         "aplay_contains": "DAC+ ADC",
@@ -94,6 +103,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 2,
         "features": ["analoginput"],
         "supports_dsp": False,
+        "card_type": ["DAC", "ADC"],
     },
     "DAC2 ADC Pro": {
         "aplay_contains": "DAC2 ADC Pro",
@@ -103,6 +113,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 2,
         "features": ["analoginput"],
         "supports_dsp": True,
+        "card_type": ["DAC", "ADC"],
     },
     "DAC2 HD": {
         "aplay_contains": "DAC2 HD",
@@ -112,6 +123,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": True,
+        "card_type": ["DAC"],
     },
     "DAC+ DSP": {
         "aplay_contains": "DAC+DSP",
@@ -121,6 +133,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["toslink"],
         "supports_dsp": False,
+        "card_type": ["DAC", "Digi"],
     },
     "DAC+/Amp2": {
         "aplay_contains": "DAC+",
@@ -130,6 +143,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["DAC"],
     },
     "DAC2 Pro": {
         "hat_name": "DAC2 Pro",
@@ -138,6 +152,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["DAC", "Headphone"],
     },
     "Amp+": {
         "aplay_contains": "AMP",
@@ -147,6 +162,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["Amp"],
     },
     "Digi+ Pro": {
         "aplay_contains": "Digi Pro",
@@ -156,6 +172,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["digi"],
         "supports_dsp": True,
+        "card_type": ["Digi"],
     },
     "Digi+": {
         "aplay_contains": "Digi",
@@ -165,6 +182,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": ["digi"],
         "supports_dsp": False,
+        "card_type": ["Digi"],
     },
     "Beocreate 4-Channel Amplifier": {
         "aplay_contains": None,
@@ -173,7 +191,8 @@ SOUND_CARD_DEFINITIONS = {
         "output_channels": 2,
         "input_channels": 0,
         "features": ["dsp", "toslink"],
-        "supports_dsp": False,
+        "supports_dsp": True,
+        "card_type": ["Amp"],
     },
     "DAC+ Zero/Light/MiniAmp": {
         "aplay_contains": None,
@@ -183,6 +202,7 @@ SOUND_CARD_DEFINITIONS = {
         "input_channels": 0,
         "features": [],
         "supports_dsp": False,
+        "card_type": ["DAC"],
     },
 }
 
@@ -197,6 +217,7 @@ class Soundcard:
         features=None,
         hat_name=None,
         supports_dsp=False,
+        card_type=None,
         no_eeprom=False,
     ):
         if name is None:
@@ -209,6 +230,7 @@ class Soundcard:
                 self.features = detected_card.get("features", [])
                 self.hat_name = detected_card.get("hat_name")
                 self.supports_dsp = detected_card.get("supports_dsp", False)
+                self.card_type = detected_card.get("card_type", [])
             else:
                 self.name = "Unknown"
                 self.volume_control = volume_control
@@ -217,6 +239,7 @@ class Soundcard:
                 self.features = features or []
                 self.hat_name = hat_name
                 self.supports_dsp = supports_dsp
+                self.card_type = card_type or []
         else:
             self.name = name
             self.volume_control = volume_control
@@ -225,12 +248,14 @@ class Soundcard:
             self.features = features or []
             self.hat_name = hat_name
             self.supports_dsp = supports_dsp
+            self.card_type = card_type or []
 
     def __str__(self):
         return (
             f"Soundcard(name={self.name}, volume_control={self.volume_control}, "
             f"output_channels={self.output_channels}, input_channels={self.input_channels}, "
-            f"features={self.features}, hat_name={self.hat_name}, supports_dsp={self.supports_dsp})"
+            f"features={self.features}, hat_name={self.hat_name}, supports_dsp={self.supports_dsp}, "
+            f"card_type={self.card_type})"
         )
 
     def _detect_card(self, no_eeprom=False):
@@ -464,7 +489,8 @@ def main():
             "input_channels": card.input_channels,
             "features": card.features,
             "hat_name": card.hat_name,
-            "supports_dsp": card.supports_dsp
+            "supports_dsp": card.supports_dsp,
+            "card_type": card.card_type
         }
         print(json.dumps(card_data, indent=2))
     elif args.name:
@@ -493,6 +519,7 @@ def main():
         print(f"Features: {', '.join(card.features) if card.features else 'None'}")
         print(f"HAT Name: {card.hat_name or 'None'}")
         print(f"Supports DSP: {'Yes' if card.supports_dsp else 'No'}")
+        print(f"Card Type: {', '.join(card.card_type) if card.card_type else 'None'}")
 
 
 if __name__ == "__main__":

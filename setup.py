@@ -7,7 +7,7 @@ with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
 
 setup(
     name="configurator",
-    version="1.6.6",
+    version="1.6.7",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",
@@ -33,6 +33,7 @@ setup(
             "config-network=configurator.network:main",
             "config-db=configurator.configdb:main",
             "config-volume=configurator.volume:main",
+            "config-avahi=configurator.avahi:main",
         ],
     },
     classifiers=[

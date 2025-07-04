@@ -1,3 +1,12 @@
+hifiberry-configurator (1.6.7) stable; urgency=medium
+
+  * Added config-avahi command to configure Avahi daemon for physical interfaces only
+  * Restricts Avahi advertising to eth* and wlan* interfaces, excluding virtual interfaces
+  * Prevents service discovery on Docker bridges, VPN connections, and other virtual networks
+  * Automatically creates backup of original configuration before modifications
+
+ -- HiFiBerry Support <support@hifiberry.com>  Fri, 04 Jul 2025 15:15:00 +0000
+
 hifiberry-configurator (1.6.6) stable; urgency=medium
 
   * Added volume-restore systemd service for automatic volume restoration
