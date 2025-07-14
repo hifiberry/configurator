@@ -1,0 +1,49 @@
+.TH CONFIG-CMDLINE 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-cmdline \- kernel command line configuration tool
+.SH SYNOPSIS
+.B config-cmdline
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-cmdline
+manages kernel command line parameters in \fI/boot/firmware/cmdline.txt\fR or \fI/boot/cmdline.txt\fR. It can enable or disable the serial console and manage IPv6 kernel parameters.
+.SH OPTIONS
+.TP
+.B \-\-enable\-serial\-console
+Enable the serial console by adding 'console=serial0,115200'
+.TP
+.B \-\-disable\-serial\-console
+Disable the serial console by removing 'console=serial0,115200'
+.SH EXAMPLES
+.TP
+Enable serial console:
+.B config-cmdline \-\-enable\-serial\-console
+.TP
+Disable serial console:
+.B config-cmdline \-\-disable\-serial\-console
+.SH FILES
+.TP
+.I /boot/firmware/cmdline.txt
+Primary location for kernel command line (modern Raspberry Pi OS)
+.TP
+.I /boot/cmdline.txt
+Fallback location for kernel command line
+.TP
+.I /boot/firmware/cmdline.txt.backup, /boot/cmdline.txt.backup
+Backup files created before modifications
+.SH NOTES
+.B config-cmdline
+automatically creates a backup of the original file before making any changes. Changes take effect after the next reboot.
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during configuration
+.SH SEE ALSO
+.BR config-network (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

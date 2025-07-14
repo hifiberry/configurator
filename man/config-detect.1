@@ -1,0 +1,35 @@
+.TH CONFIG-DETECT 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-detect \- HiFiBerry sound card detection tool
+.SH SYNOPSIS
+.B config-detect
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-detect
+automatically detects connected HiFiBerry sound cards and HATs using EEPROM data and hardware identification.
+.SH OPTIONS
+.TP
+.B \-\-store
+Store detected card configuration in config.txt
+.SH EXAMPLES
+.TP
+Detect HiFiBerry sound card:
+.B config-detect
+.TP
+Detect and store configuration:
+.B config-detect \-\-store
+.SH EXIT STATUS
+.TP
+.B 0
+Success - sound card detected
+.TP
+.B 1
+Error or no sound card detected
+.SH SEE ALSO
+.BR config-soundcard (1),
+.BR config-detectpi (1),
+.BR config-hattools (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

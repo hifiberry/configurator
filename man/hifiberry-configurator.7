@@ -1,0 +1,86 @@
+.TH HIFIBERRY-CONFIGURATOR 7 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+hifiberry-configurator \- HiFiBerry system configuration tools overview
+.SH DESCRIPTION
+The HiFiBerry configurator package provides a comprehensive suite of tools for configuring HiFiBerry audio devices and system settings on Raspberry Pi and compatible systems.
+.SH CONFIGURATION TOOLS
+.SS Audio Configuration
+.TP
+.BR config-soundcard (1)
+Configure HiFiBerry sound cards and audio devices
+.TP
+.BR config-asoundconf (1)
+Manage ALSA sound configuration
+.TP
+.BR config-volume (1)
+Volume control and management with PipeWire support
+.TP
+.BR config-detect (1)
+Automatic HiFiBerry sound card detection
+.SS System Configuration
+.TP
+.BR config-configtxt (1)
+Raspberry Pi config.txt management
+.TP
+.BR config-cmdline (1)
+Kernel command line configuration
+.TP
+.BR config-detectpi (1)
+Raspberry Pi model detection
+.TP
+.BR config-hattools (1)
+HAT EEPROM management
+.TP
+.BR config-db (1)
+Configuration database management
+.SS Network Configuration
+.TP
+.BR config-network (1)
+Comprehensive network interface management with IPv6 support
+.TP
+.BR config-wifi (1)
+WiFi network configuration
+.TP
+.BR config-avahi (1)
+Avahi daemon configuration for service discovery
+.SS Network Storage
+.TP
+.BR config-sambaclient (1)
+Samba client configuration
+.TP
+.BR config-sambamount (1)
+Samba mount management
+.SH VERSION HISTORY
+.SS Version 1.6.8 (July 2025)
+.TP
+.B New Features
+System-wide IPv6 enable/disable functionality, comprehensive manual pages
+.TP
+.B IPv6 Management
+Multi-layer IPv6 configuration including kernel parameters, sysctl, and NetworkManager
+.TP
+.B Documentation
+Complete manual page coverage for all tools
+.SS Version 1.6.7 (July 2025)
+.TP
+.B New Features
+Avahi configuration for physical interfaces only
+.SS Version 1.6.6 (July 2025)
+.TP
+.B New Features
+Volume restoration service, PipeWire virtual controls support
+.SH FILES
+.TP
+.I /usr/share/man/man1/config-*.1
+Individual tool manual pages
+.TP
+.I /usr/lib/systemd/system/
+Systemd service files for volume management
+.SH SEE ALSO
+.BR config-network (1),
+.BR config-soundcard (1),
+.BR systemctl (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

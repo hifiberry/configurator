@@ -1,0 +1,97 @@
+.TH CONFIG-CONFIGTXT 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-configtxt \- Raspberry Pi config.txt management tool
+.SH SYNOPSIS
+.B config-configtxt
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-configtxt
+manages Raspberry Pi configuration settings in \fI/boot/firmware/config.txt\fR or \fI/boot/config.txt\fR for HiFiBerry devices and system configuration.
+.SH OPTIONS
+.TP
+.B \-\-overlay \fIPARAMETER\fR
+Add a dtoverlay with the given parameter
+.TP
+.B \-\-remove\-hifiberry
+Remove all HiFiBerry overlays
+.TP
+.B \-\-disable\-onboard\-sound
+Disable onboard sound
+.TP
+.B \-\-enable\-onboard\-sound
+Enable onboard sound
+.TP
+.B \-\-disable\-hdmi\-sound
+Disable HDMI sound
+.TP
+.B \-\-enable\-hdmi\-sound
+Enable HDMI sound
+.TP
+.B \-\-disable\-eeprom
+Disable EEPROM read
+.TP
+.B \-\-enable\-eeprom
+Enable EEPROM read
+.TP
+.B \-\-disable\-i2c
+Disable I2C interface
+.TP
+.B \-\-enable\-i2c
+Enable I2C interface
+.TP
+.B \-\-disable\-spi
+Disable SPI interface
+.TP
+.B \-\-enable\-spi
+Enable SPI interface
+.TP
+.B \-\-default\-config
+Apply the default configuration
+.TP
+.B \-\-report\-change
+Exit with return code 1 if changes were made
+.TP
+.B \-\-enable\-updi
+Enable UPDI settings: enable UART, dtoverlay for uart0, and disable Bluetooth
+.TP
+.B \-\-enable\-hat_i2c
+Enable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1)
+.TP
+.B \-\-disable\-hat_i2c
+Disable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1)
+.SH EXAMPLES
+.TP
+Add HiFiBerry DAC overlay:
+.B config-configtxt \-\-overlay hifiberry-dac
+.TP
+Remove all HiFiBerry overlays:
+.B config-configtxt \-\-remove\-hifiberry
+.TP
+Disable onboard sound:
+.B config-configtxt \-\-disable\-onboard\-sound
+.TP
+Enable I2C interface:
+.B config-configtxt \-\-enable\-i2c
+.SH FILES
+.TP
+.I /boot/firmware/config.txt
+Primary Raspberry Pi configuration file (modern Raspberry Pi OS)
+.TP
+.I /boot/config.txt
+Fallback Raspberry Pi configuration file
+.TP
+.I /boot/firmware/config.txt.backup, /boot/config.txt.backup
+Backup files created before modifications
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during configuration or changes were made (with \-\-report\-change)
+.SH SEE ALSO
+.BR config-soundcard (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

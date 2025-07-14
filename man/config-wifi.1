@@ -1,0 +1,67 @@
+.TH CONFIG-WIFI 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-wifi \- WiFi network management tool
+.SH SYNOPSIS
+.B config-wifi
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-wifi
+manages WiFi network connections and configuration for HiFiBerry systems using NetworkManager.
+.SH OPTIONS
+.TP
+.B \-\-list\-networks
+List available WiFi networks
+.TP
+.B \-\-connect \fISSID\fR
+Connect to specified WiFi network
+.TP
+.B \-\-show\-current
+Show currently connected WiFi network
+.TP
+.B \-\-timeout \fISECONDS\fR
+Maximum scanning time in seconds (default: 10)
+.TP
+.B \-\-passphrase \fIPASSPHRASE\fR
+Passphrase for the WiFi network
+.TP
+.B \-\-revert\-when\-fail
+Revert to previous connection if new connection fails
+.TP
+.B \-\-long
+Display detailed network information
+.TP
+.B \-v, \-\-verbose
+Enable verbose output
+.TP
+.B \-q, \-\-quiet
+Suppress all output except warnings and errors
+.SH EXAMPLES
+.TP
+List available WiFi networks:
+.B config-wifi \-\-list\-networks
+.TP
+List networks with detailed information:
+.B config-wifi \-\-list\-networks \-\-long
+.TP
+Connect to a WiFi network:
+.B config-wifi \-\-connect "MyNetwork" \-\-passphrase "mypassword"
+.TP
+Show current connection:
+.B config-wifi \-\-show\-current
+.TP
+Connect with revert on failure:
+.B config-wifi \-\-connect "MyNetwork" \-\-passphrase "mypassword" \-\-revert\-when\-fail
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during WiFi configuration
+.SH SEE ALSO
+.BR config-network (1),
+.BR nmcli (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

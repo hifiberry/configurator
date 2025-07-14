@@ -8,6 +8,7 @@ import logging
 import subprocess
 import netifaces
 from typing import List, Dict, Optional
+from .cmdline import CmdlineTxt
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -56,6 +57,10 @@ def parse_arguments():
                         help='Configure specified interface to use DHCP')
     command_group.add_argument('--set-fixed', metavar='INTERFACE',
                         help='Configure specified interface to use static IP')
+    command_group.add_argument('--enable-ipv6', action='store_true',
+                        help='Enable IPv6 system-wide on all interfaces (persistent across reboots)')
+    command_group.add_argument('--disable-ipv6', action='store_true',
+                        help='Disable IPv6 system-wide on all interfaces (persistent across reboots)')
     
     # Fixed IP configuration options
     parser.add_argument('--ip', help='Fixed IP address with netmask (e.g., 192.168.1.10/24)')
@@ -420,6 +425,244 @@ def configure_fixed_ip(interface: str, ip_with_mask: str, router: str) -> bool:
     logger.info(f"Successfully configured {interface} with static IP {ip_with_mask}")
     return True
 
+def enable_ipv6() -> bool:
+    """
+    Enable IPv6 system-wide on all interfaces and make it persistent across reboots.
+    
+    This function configures IPv6 at multiple levels to ensure comprehensive enablement:
+    1. Removes ipv6.disable=1 from kernel command line (cmdline.txt)
+    2. Removes any sysctl configurations that disable IPv6
+    3. Creates sysctl configuration to explicitly enable IPv6
+    4. Enables IPv6 on all NetworkManager connections
+    5. Restarts NetworkManager to apply changes immediately
+    
+    The changes persist across reboots through:
+    - Kernel command line parameters in /boot/firmware/cmdline.txt or /boot/cmdline.txt
+    - Sysctl configuration files in /etc/sysctl.d/
+    - NetworkManager connection profiles
+    
+    Returns:
+        bool: True if successful, False otherwise
+        
+    Note:
+        A reboot may be required for kernel-level changes to take full effect.
+    """
+    logger.info("Enabling IPv6 system-wide")
+    
+    # Remove IPv6 disable parameters from kernel parameters
+    try:
+        cmdline = CmdlineTxt()
+        cmdline.enable_ipv6()
+        cmdline.save()
+        logger.info("Updated kernel command line to enable IPv6")
+    except Exception as e:
+        logger.warning(f"Failed to update kernel command line: {e}")
+    
+    # Remove sysctl settings that disable IPv6
+    sysctl_file = '/etc/sysctl.d/99-disable-ipv6.conf'
+    if os.path.exists(sysctl_file):
+        try:
+            os.remove(sysctl_file)
+            logger.info("Removed IPv6 disable sysctl configuration")
+        except Exception as e:
+            logger.error(f"Failed to remove {sysctl_file}: {e}")
+            return False
+    
+    # Create sysctl configuration to ensure IPv6 is enabled
+    enable_sysctl_file = '/etc/sysctl.d/99-enable-ipv6.conf'
+    try:
+        with open(enable_sysctl_file, 'w') as f:
+            f.write("# Enable IPv6\n")
+            f.write("net.ipv6.conf.all.disable_ipv6 = 0\n")
+            f.write("net.ipv6.conf.default.disable_ipv6 = 0\n")
+            f.write("net.ipv6.conf.lo.disable_ipv6 = 0\n")
+        logger.info("Created IPv6 enable sysctl configuration")
+    except Exception as e:
+        logger.error(f"Failed to create {enable_sysctl_file}: {e}")
+        return False
+    
+    # Apply sysctl settings immediately
+    try:
+        cmd = ['sysctl', '-p', enable_sysctl_file]
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            logger.error(f"Failed to apply sysctl settings: {result.stderr}")
+            return False
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        logger.error(f"Error applying sysctl settings: {e}")
+        return False
+    
+    # Enable IPv6 on all NetworkManager connections
+    success = True
+    try:
+        # Get all connections
+        cmd = ['nmcli', '-t', '-f', 'NAME', 'connection', 'show']
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            connections = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            
+            for connection_name in connections:
+                try:
+                    # Enable IPv6 for each connection
+                    cmd = ['nmcli', 'connection', 'modify', connection_name, 'ipv6.method', 'auto']
+                    logger.debug(f"Running command: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if result.returncode != 0:
+                        logger.warning(f"Failed to enable IPv6 on connection {connection_name}: {result.stderr}")
+                        success = False
+                    else:
+                        logger.debug(f"Enabled IPv6 on connection {connection_name}")
+                except Exception as e:
+                    logger.warning(f"Error enabling IPv6 on connection {connection_name}: {e}")
+                    success = False
+        else:
+            logger.warning("Failed to get NetworkManager connections")
+            success = False
+            
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        logger.warning(f"Error configuring NetworkManager connections: {e}")
+        success = False
+    
+    # Restart NetworkManager to apply changes
+    try:
+        cmd = ['systemctl', 'restart', 'NetworkManager']
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            logger.warning(f"Failed to restart NetworkManager: {result.stderr}")
+        else:
+            logger.info("Restarted NetworkManager")
+    except Exception as e:
+        logger.warning(f"Error restarting NetworkManager: {e}")
+    
+    if success:
+        logger.info("Successfully enabled IPv6 system-wide")
+        return True
+    else:
+        logger.error("IPv6 enabled with some warnings - check logs for details")
+        return False
+
+def disable_ipv6() -> bool:
+    """
+    Disable IPv6 system-wide on all interfaces and make it persistent across reboots.
+    
+    This function configures IPv6 at multiple levels to ensure comprehensive disabling:
+    1. Adds ipv6.disable=1 to kernel command line (cmdline.txt)
+    2. Creates sysctl configuration to disable IPv6
+    3. Removes any sysctl configurations that enable IPv6
+    4. Disables IPv6 on all NetworkManager connections
+    5. Restarts NetworkManager to apply changes immediately
+    
+    The changes persist across reboots through:
+    - Kernel command line parameters in /boot/firmware/cmdline.txt or /boot/cmdline.txt
+    - Sysctl configuration files in /etc/sysctl.d/
+    - NetworkManager connection profiles
+    
+    Returns:
+        bool: True if successful, False otherwise
+        
+    Note:
+        A reboot is required for kernel-level IPv6 disable to take full effect.
+    """
+    logger.info("Disabling IPv6 system-wide")
+    
+    # Create sysctl configuration to disable IPv6
+    sysctl_file = '/etc/sysctl.d/99-disable-ipv6.conf'
+    try:
+        with open(sysctl_file, 'w') as f:
+            f.write("# Disable IPv6\n")
+            f.write("net.ipv6.conf.all.disable_ipv6 = 1\n")
+            f.write("net.ipv6.conf.default.disable_ipv6 = 1\n")
+            f.write("net.ipv6.conf.lo.disable_ipv6 = 1\n")
+        logger.info("Created IPv6 disable sysctl configuration")
+    except Exception as e:
+        logger.error(f"Failed to create {sysctl_file}: {e}")
+        return False
+    
+    # Remove any IPv6 enable configuration
+    enable_sysctl_file = '/etc/sysctl.d/99-enable-ipv6.conf'
+    if os.path.exists(enable_sysctl_file):
+        try:
+            os.remove(enable_sysctl_file)
+            logger.info("Removed IPv6 enable sysctl configuration")
+        except Exception as e:
+            logger.warning(f"Failed to remove {enable_sysctl_file}: {e}")
+    
+    # Apply sysctl settings immediately
+    try:
+        cmd = ['sysctl', '-p', sysctl_file]
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            logger.error(f"Failed to apply sysctl settings: {result.stderr}")
+            return False
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        logger.error(f"Error applying sysctl settings: {e}")
+        return False
+    
+    # Disable IPv6 on all NetworkManager connections
+    success = True
+    try:
+        # Get all connections
+        cmd = ['nmcli', '-t', '-f', 'NAME', 'connection', 'show']
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            connections = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            
+            for connection_name in connections:
+                try:
+                    # Disable IPv6 for each connection
+                    cmd = ['nmcli', 'connection', 'modify', connection_name, 'ipv6.method', 'disabled']
+                    logger.debug(f"Running command: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if result.returncode != 0:
+                        logger.warning(f"Failed to disable IPv6 on connection {connection_name}: {result.stderr}")
+                        success = False
+                    else:
+                        logger.debug(f"Disabled IPv6 on connection {connection_name}")
+                except Exception as e:
+                    logger.warning(f"Error disabling IPv6 on connection {connection_name}: {e}")
+                    success = False
+        else:
+            logger.warning("Failed to get NetworkManager connections")
+            success = False
+            
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        logger.warning(f"Error configuring NetworkManager connections: {e}")
+        success = False
+    
+    # Add IPv6 disable to kernel parameters for complete disable
+    try:
+        cmdline = CmdlineTxt()
+        cmdline.disable_ipv6()
+        cmdline.save()
+        logger.info("Updated kernel command line to disable IPv6")
+        logger.info("A reboot is required for kernel-level IPv6 disable to take effect")
+    except Exception as e:
+        logger.warning(f"Failed to update kernel command line: {e}")
+    
+    # Restart NetworkManager to apply changes
+    try:
+        cmd = ['systemctl', 'restart', 'NetworkManager']
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            logger.warning(f"Failed to restart NetworkManager: {result.stderr}")
+        else:
+            logger.info("Restarted NetworkManager")
+    except Exception as e:
+        logger.warning(f"Error restarting NetworkManager: {e}")
+    
+    if success:
+        logger.info("Successfully disabled IPv6 system-wide")
+        return True
+    else:
+        logger.error("IPv6 disabled with some warnings - check logs for details")
+        return False
+
 def main():
     """Main function to run when script is executed directly."""
     args = parse_arguments()
@@ -480,6 +723,22 @@ def main():
             sys.exit(0)
         else:
             logger.error(f"Failed to configure static IP on interface {interface}")
+            sys.exit(1)
+    
+    elif args.enable_ipv6:
+        if enable_ipv6():
+            logger.info("IPv6 enabled system-wide")
+            sys.exit(0)
+        else:
+            logger.error("Failed to enable IPv6 system-wide")
+            sys.exit(1)
+    
+    elif args.disable_ipv6:
+        if disable_ipv6():
+            logger.info("IPv6 disabled system-wide")
+            sys.exit(0)
+        else:
+            logger.error("Failed to disable IPv6 system-wide")
             sys.exit(1)
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+.TH CONFIG-SAMBAMOUNT 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-sambamount \- Samba mount management tool
+.SH SYNOPSIS
+.B config-sambamount
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-sambamount
+manages Samba/CIFS mount points for network file system access on HiFiBerry systems.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Enable verbose output for debugging
+.TP
+.B \-q, \-\-quiet
+Suppress all output except warnings and errors
+.SH FILES
+.TP
+.I /etc/fstab
+File system mount table
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during mount configuration
+.SH SEE ALSO
+.BR config-sambaclient (1),
+.BR mount.cifs (8),
+.BR fstab (5)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

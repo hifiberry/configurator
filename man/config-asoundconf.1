@@ -1,0 +1,47 @@
+.TH CONFIG-ASOUNDCONF 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-asoundconf \- ALSA sound configuration tool
+.SH SYNOPSIS
+.B config-asoundconf
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-asoundconf
+manages ALSA sound configuration by updating \fI/etc/asound.conf\fR for optimal HiFiBerry audio device operation.
+.SH OPTIONS
+.TP
+.B \-\-default
+Trigger creation of a default ALSA configuration
+.TP
+.B \-\-channels \fINUM\fR
+Set the number of channels (default: 2)
+.TP
+.B \-\-hw \fINUM\fR
+Set the default hardware card number (default: 0)
+.SH EXAMPLES
+.TP
+Create default configuration:
+.B config-asoundconf \-\-default
+.TP
+Create configuration with 8 channels:
+.B config-asoundconf \-\-default \-\-channels 8
+.TP
+Create configuration for hardware card 1:
+.B config-asoundconf \-\-default \-\-hw 1
+.SH FILES
+.TP
+.I /etc/asound.conf
+ALSA configuration file
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during configuration
+.SH SEE ALSO
+.BR config-soundcard (1),
+.BR alsamixer (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

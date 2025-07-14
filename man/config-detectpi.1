@@ -1,0 +1,29 @@
+.TH CONFIG-DETECTPI 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-detectpi \- Raspberry Pi model detection tool
+.SH SYNOPSIS
+.B config-detectpi
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-detectpi
+detects the Raspberry Pi model and revision for hardware-specific configuration optimization.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Enable verbose output for debugging
+.TP
+.B \-q, \-\-quiet
+Suppress all output except warnings and errors
+.SH EXIT STATUS
+.TP
+.B 0
+Success - Pi model detected
+.TP
+.B 1
+Error or model detection failed
+.SH SEE ALSO
+.BR config-detect (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

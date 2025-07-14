@@ -1,0 +1,57 @@
+.TH CONFIG-VOLUME 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-volume \- volume control and management tool
+.SH SYNOPSIS
+.B config-volume
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-volume
+manages audio volume settings for HiFiBerry devices, including support for PipeWire virtual controls and automatic volume restoration.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Enable verbose output for debugging
+.TP
+.B \-\-list\-controls
+List available ALSA mixer controls and exit
+.SH FEATURES
+.TP
+.B PipeWire Support
+Enhanced support for PipeWire virtual controls (Master/Capture)
+.TP
+.B Volume Restoration
+Automatic volume restoration service via systemd
+.TP
+.B Python ALSA API
+Direct mixer control access using Python ALSA API
+.SH EXAMPLES
+.TP
+List available mixer controls:
+.B config-volume \-\-list\-controls
+.TP
+Enable verbose output:
+.B config-volume \-\-verbose
+.SH FILES
+.TP
+.I /usr/lib/systemd/system/volume-restore.service
+Volume restoration systemd service
+.TP
+.I /usr/lib/systemd/system/volume-store.service
+Volume storage systemd service
+.TP
+.I /usr/lib/systemd/system/volume-store.timer
+Volume storage systemd timer
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during volume operations
+.SH SEE ALSO
+.BR alsamixer (1),
+.BR amixer (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

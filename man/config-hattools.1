@@ -1,0 +1,41 @@
+.TH CONFIG-HATTOOLS 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-hattools \- HAT EEPROM information retrieval tool
+.SH SYNOPSIS
+.B config-hattools
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-hattools
+retrieves HAT EEPROM information for HiFiBerry HATs, including vendor, product, and UUID information.
+.SH OPTIONS
+.TP
+.B \-a, \-\-all
+Display vendor, product, and UUID (default shows only vendor:product)
+.SH OUTPUT FORMAT
+By default, the tool outputs in the format:
+.B vendor:product
+
+With the \fB\-a\fR option, it outputs:
+.B vendor:product:uuid
+
+If information is not available, it displays default values like "no vendor", "no product", or "unknown".
+.SH EXAMPLES
+.TP
+Get basic HAT information:
+.B config-hattools
+.TP
+Get complete HAT information:
+.B config-hattools \-\-all
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during EEPROM operations
+.SH SEE ALSO
+.BR config-detect (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

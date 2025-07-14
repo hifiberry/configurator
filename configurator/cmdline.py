@@ -65,6 +65,38 @@ class CmdlineTxt:
         else:
             logging.info("Serial console already disabled.")
 
+    def enable_ipv6(self) -> None:
+        """
+        Remove ipv6.disable=1 from kernel command line.
+        
+        This enables IPv6 at the kernel level by removing the disable parameter.
+        Changes take effect after the next reboot.
+        """
+        tokens = self.content.split()
+        token = "ipv6.disable=1"
+        new_tokens = [t for t in tokens if t != token]
+        if len(new_tokens) != len(tokens):
+            self.content = " ".join(new_tokens)
+            logging.info("IPv6 enabled in kernel command line.")
+        else:
+            logging.info("IPv6 already enabled in kernel command line.")
+
+    def disable_ipv6(self) -> None:
+        """
+        Add ipv6.disable=1 to kernel command line.
+        
+        This disables IPv6 at the kernel level by adding the disable parameter.
+        Changes take effect after the next reboot.
+        """
+        tokens = self.content.split()
+        token = "ipv6.disable=1"
+        if token not in tokens:
+            tokens.append(token)
+            self.content = " ".join(tokens)
+            logging.info("IPv6 disabled in kernel command line.")
+        else:
+            logging.info("IPv6 already disabled in kernel command line.")
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

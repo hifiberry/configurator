@@ -1,0 +1,44 @@
+.TH CONFIG-AVAHI 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-avahi \- Avahi daemon configuration tool
+.SH SYNOPSIS
+.B config-avahi
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-avahi
+configures the Avahi daemon to advertise services only on physical network interfaces (eth* and wlan*), excluding virtual interfaces like Docker bridges, VPN connections, and other virtual networks.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Enable verbose output for debugging
+.TP
+.B \-q, \-\-quiet
+Suppress all output except warnings and errors
+.SH FEATURES
+.TP
+.B Physical Interface Restriction
+Restricts Avahi advertising to eth* and wlan* interfaces only
+.TP
+.B Virtual Interface Exclusion
+Prevents service discovery on Docker bridges, VPN connections, and virtual networks
+.TP
+.B Automatic Backup
+Creates backup of original configuration before modifications
+.SH FILES
+.TP
+.I /etc/avahi/avahi-daemon.conf
+Avahi daemon configuration file
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during Avahi configuration
+.SH SEE ALSO
+.BR avahi-daemon (8),
+.BR config-network (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

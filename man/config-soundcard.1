@@ -1,0 +1,81 @@
+.TH CONFIG-SOUNDCARD 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-soundcard \- sound card configuration and detection tool
+.SH SYNOPSIS
+.B config-soundcard
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-soundcard
+detects and displays HiFiBerry sound card details including hardware information, channel configuration, and device features.
+.SH OPTIONS
+.TP
+.B \-v, \-\-verbose
+Enable verbose logging (INFO level)
+.TP
+.B \-vv, \-\-very\-verbose
+Enable very verbose logging (DEBUG level)
+.TP
+.B \-\-json
+Output in JSON format
+.TP
+.B \-\-name
+Print only the name of the detected sound card
+.TP
+.B \-\-volume\-control
+Print only the volume control of the detected sound card
+.TP
+.B \-\-volume\-control\-softvol
+Print the volume control of the detected sound card, falling back to 'Softvol' if none defined
+.TP
+.B \-\-hw
+Print only the hardware index of the detected sound card
+.TP
+.B \-\-output\-channels
+Print only the number of output channels
+.TP
+.B \-\-input\-channels
+Print only the number of input channels
+.TP
+.B \-\-features
+Print only the features of the detected sound card
+.TP
+.B \-\-no\-eeprom
+Disable EEPROM check and use only aplay -l for detection
+.SH EXAMPLES
+.TP
+Detect sound card:
+.B config-soundcard
+.TP
+Get sound card name only:
+.B config-soundcard \-\-name
+.TP
+Get hardware index:
+.B config-soundcard \-\-hw
+.TP
+Output in JSON format:
+.B config-soundcard \-\-json
+.TP
+Detect without EEPROM:
+.B config-soundcard \-\-no\-eeprom
+.SH FILES
+.TP
+.I /boot/firmware/config.txt, /boot/config.txt
+Raspberry Pi configuration file
+.TP
+.I /etc/asound.conf
+ALSA configuration file
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during detection
+.SH SEE ALSO
+.BR config-detect (1),
+.BR config-asoundconf (1),
+.BR config-configtxt (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

@@ -1,0 +1,83 @@
+.TH CONFIG-SAMBACLIENT 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-sambaclient \- SMB/CIFS client tools
+.SH SYNOPSIS
+.B config-sambaclient
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-sambaclient
+provides SMB/CIFS client functionality for network file sharing access on HiFiBerry systems, including server discovery and connection testing.
+.SH OPTIONS
+.SS Authentication Options
+.TP
+.B \-u, \-\-user \fIUSERNAME\fR
+Username for authentication
+.TP
+.B \-p, \-\-password \fIPASSWORD\fR
+Password for authentication
+.TP
+.B \-c, \-\-credentials \fIFILE\fR
+Path to credentials file
+.TP
+.B \-\-smbversion \fIVERSION\fR
+Specify SMB version to use (SMB1, SMB2, SMB3)
+.SS Commands
+.TP
+.B \-\-list\-file\-servers
+List all SMB file servers on the network
+.TP
+.B \-\-check\-connect \fISERVER\fR
+Test connection to specified server
+.TP
+.B \-\-detect\-version \fISERVER\fR
+Detect SMB version of specified server
+.TP
+.B \-\-list\-shares \fISERVER\fR
+List shares on specified server
+.SS Display Options
+.TP
+.B \-\-long
+Use detailed format when listing shares
+.TP
+.B \-v, \-\-verbose
+Enable verbose output
+.TP
+.B \-q, \-\-quiet
+Suppress non-essential output
+.SH EXAMPLES
+.TP
+List SMB servers on network:
+.B config-sambaclient \-\-list\-file\-servers
+.TP
+Test connection to server:
+.B config-sambaclient \-\-check\-connect myserver
+.TP
+List shares with authentication:
+.B config-sambaclient \-\-list\-shares myserver \-u myuser \-p mypass
+.TP
+List shares with detailed format:
+.B config-sambaclient \-\-list\-shares myserver \-\-long
+.SH REQUIREMENTS
+.TP
+.B samba-common-bin
+Samba client binaries
+.TP
+.B smbclient
+SMB client tools
+.TP
+.B netifaces
+Python network interfaces library
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during Samba client operations
+.SH SEE ALSO
+.BR config-sambamount (1),
+.BR smbclient (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.

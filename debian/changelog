@@ -1,3 +1,16 @@
+hifiberry-configurator (1.6.8) stable; urgency=medium
+
+  * Added system-wide IPv6 enable/disable functionality to config-network
+  * IPv6 settings now persist across reboots using multiple configuration layers
+  * Uses cmdline.txt for kernel parameters (Raspberry Pi compatible)
+  * Configures sysctl settings and NetworkManager connections for comprehensive IPv6 control
+  * Added --enable-ipv6 and --disable-ipv6 command-line options
+  * Enhanced cmdline.py with IPv6 kernel parameter management methods
+  * Added comprehensive manual pages for all configuration tools
+  * Manual pages installed to /usr/share/man/man1/ for system-wide access
+
+ -- HiFiBerry Support <support@hifiberry.com>  Sun, 14 Jul 2025 12:00:00 +0000
+
 hifiberry-configurator (1.6.7) stable; urgency=medium
 
   * Added config-avahi command to configure Avahi daemon for physical interfaces only

@@ -7,7 +7,7 @@ with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
 
 setup(
     name="configurator",
-    version="1.6.7",
+    version="1.6.8",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",
@@ -17,6 +17,25 @@ setup(
     install_requires=requirements,
     data_files=[
         ('/usr/lib/systemd/system', ['systemd/volume-store.service', 'systemd/volume-store.timer', 'systemd/sambamount.service', 'systemd/volume-restore.service']),
+        ('/usr/share/man/man1', [
+            'man/config-network.1',
+            'man/config-cmdline.1',
+            'man/config-soundcard.1',
+            'man/config-asoundconf.1',
+            'man/config-configtxt.1',
+            'man/config-detect.1',
+            'man/config-detectpi.1',
+            'man/config-hattools.1',
+            'man/config-wifi.1',
+            'man/config-sambaclient.1',
+            'man/config-sambamount.1',
+            'man/config-db.1',
+            'man/config-volume.1',
+            'man/config-avahi.1',
+        ]),
+        ('/usr/share/man/man7', [
+            'man/hifiberry-configurator.7',
+        ]),
     ],
     entry_points={
         "console_scripts": [

@@ -1,0 +1,112 @@
+.TH CONFIG-NETWORK 1 "July 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-network \- network interface configuration tool
+.SH SYNOPSIS
+.B config-network
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-network
+provides comprehensive network interface management for HiFiBerry systems. It can list physical network interfaces, configure DHCP or static IP addresses, and manage system-wide IPv6 settings.
+.SH OPTIONS
+.TP
+.B \-\-list\-interfaces
+List all physical network interfaces (Ethernet and WiFi)
+.TP
+.B \-\-long
+Display detailed interface information in a single line (use with \-\-list\-interfaces)
+.TP
+.B \-\-set\-dhcp \fIINTERFACE\fR
+Configure the specified interface to use DHCP
+.TP
+.B \-\-set\-fixed \fIINTERFACE\fR
+Configure the specified interface to use static IP (requires \-\-ip and \-\-router)
+.TP
+.B \-\-ip \fIIP/MASK\fR
+Fixed IP address with netmask (e.g., 192.168.1.10/24)
+.TP
+.B \-\-router \fIGATEWAY\fR
+Router/gateway address (e.g., 192.168.1.1)
+.TP
+.B \-\-enable\-ipv6
+Enable IPv6 system-wide on all interfaces (persistent across reboots)
+.TP
+.B \-\-disable\-ipv6
+Disable IPv6 system-wide on all interfaces (persistent across reboots)
+.TP
+.B \-v, \-\-verbose
+Enable verbose output for debugging
+.TP
+.B \-q, \-\-quiet
+Suppress all output except warnings and errors
+.SH IPv6 MANAGEMENT
+The IPv6 enable/disable functionality configures multiple layers for comprehensive control:
+.TP
+.B Kernel Parameters
+Manages \fIipv6.disable=1\fR in \fI/boot/firmware/cmdline.txt\fR or \fI/boot/cmdline.txt\fR
+.TP
+.B Sysctl Settings
+Creates/removes configuration files in \fI/etc/sysctl.d/\fR
+.TP
+.B NetworkManager
+Updates all connection profiles to enable/disable IPv6
+.TP
+.B Service Management
+Restarts NetworkManager to apply changes immediately
+.PP
+.B Note:
+A reboot may be required for kernel-level IPv6 changes to take full effect.
+.SH EXAMPLES
+.TP
+List all physical network interfaces:
+.B config-network \-\-list\-interfaces
+.TP
+List interfaces with detailed information:
+.B config-network \-\-list\-interfaces \-\-long
+.TP
+Configure interface to use DHCP:
+.B config-network \-\-set\-dhcp eth0
+.TP
+Configure interface with static IP:
+.B config-network \-\-set\-fixed eth0 \-\-ip 192.168.1.100/24 \-\-router 192.168.1.1
+.TP
+Enable IPv6 system-wide:
+.B config-network \-\-enable\-ipv6
+.TP
+Disable IPv6 system-wide:
+.B config-network \-\-disable\-ipv6
+.TP
+Enable IPv6 with verbose output:
+.B config-network \-\-enable\-ipv6 \-\-verbose
+.SH FILES
+.TP
+.I /boot/firmware/cmdline.txt, /boot/cmdline.txt
+Kernel command line parameters
+.TP
+.I /etc/sysctl.d/99-disable-ipv6.conf
+IPv6 disable sysctl configuration
+.TP
+.I /etc/sysctl.d/99-enable-ipv6.conf
+IPv6 enable sysctl configuration
+.SH REQUIREMENTS
+.TP
+.B NetworkManager
+Required for network interface management
+.TP
+.B Root privileges
+Required for system configuration changes
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error occurred during configuration
+.SH SEE ALSO
+.BR config-cmdline (1),
+.BR config-wifi (1),
+.BR nmcli (1),
+.BR sysctl (8)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.
