@@ -1,3 +1,15 @@
+hifiberry-configurator (1.8.0) stable; urgency=medium
+
+  * Added systeminfo.py module for collecting system information
+  * Provides Pi model, HAT vendor/product, and system UUID information
+  * Added /api/v1/systeminfo REST API endpoint for programmatic access
+  * Command-line tool supports both simple text and JSON output formats
+  * Reads system UUID from /etc/uuid file when available
+  * Updated API documentation to include new systeminfo endpoint
+  * Removed contact email references from documentation
+
+ -- HiFiBerry Support <support@hifiberry.com>  Thu, 17 Jul 2025 19:30:00 +0000
+
 hifiberry-configurator (1.7.0) stable; urgency=medium
 
   * Added system-wide IPv6 enable/disable functionality to config-network
