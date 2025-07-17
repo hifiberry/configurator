@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional
 # Import from other configurator modules
 from .pimodel import PiModel
 from .hattools import get_hat_info
+from .soundcard import Soundcard
 
 class SystemInfo:
     """Collects and provides system information from various sources"""
@@ -24,6 +25,7 @@ class SystemInfo:
         self._pi_model = None
         self._hat_info = None
         self._system_uuid = None
+        self._soundcard = None
         
     def _get_pi_model(self) -> PiModel:
         """Get Pi model information (cached)"""
@@ -50,6 +52,12 @@ class SystemInfo:
                 self.logger.error(f"Failed to read /etc/uuid: {e}")
                 self._system_uuid = None
         return self._system_uuid
+    
+    def _get_soundcard(self) -> Soundcard:
+        """Get sound card information (cached)"""
+        if self._soundcard is None:
+            self._soundcard = Soundcard()
+        return self._soundcard
     
     def get_pi_model_name(self) -> str:
         """Get the Pi model name"""
@@ -86,12 +94,68 @@ class SystemInfo:
             self.logger.error(f"Failed to get system UUID: {e}")
             return None
     
+    def get_soundcard_info(self) -> dict:
+        """Get sound card information as a dictionary"""
+        try:
+            soundcard = self._get_soundcard()
+            return {
+                'name': soundcard.name,
+                'volume_control': soundcard.volume_control,
+                'hardware_index': soundcard.get_hardware_index(),
+                'output_channels': soundcard.output_channels,
+                'input_channels': soundcard.input_channels,
+                'features': soundcard.features,
+                'hat_name': soundcard.hat_name,
+                'supports_dsp': soundcard.supports_dsp,
+                'card_type': soundcard.card_type
+            }
+        except Exception as e:
+            self.logger.error(f"Failed to get sound card info: {e}")
+            # Try to get basic info from aplay if soundcard detection fails
+            try:
+                import subprocess
+                result = subprocess.check_output("aplay -l", shell=True, text=True)
+                if 'hifiberry' in result.lower():
+                    # Extract basic info from aplay output
+                    lines = result.strip().split('\n')
+                    for line in lines:
+                        if 'hifiberry' in line.lower():
+                            # Try to extract card name from the line
+                            if '[' in line and ']' in line:
+                                card_name = line.split('[')[1].split(']')[0]
+                                return {
+                                    'name': card_name,
+                                    'volume_control': 'unknown',
+                                    'hardware_index': 0,
+                                    'output_channels': 2,
+                                    'input_channels': 0,
+                                    'features': [],
+                                    'hat_name': 'unknown',
+                                    'supports_dsp': False,
+                                    'card_type': ['DAC']
+                                }
+            except:
+                pass
+            
+            return {
+                'name': 'unknown',
+                'volume_control': None,
+                'hardware_index': None,
+                'output_channels': 0,
+                'input_channels': 0,
+                'features': [],
+                'hat_name': None,
+                'supports_dsp': False,
+                'card_type': []
+            }
+    
     def get_system_info_dict(self) -> Dict[str, Any]:
         """Get all system information as a structured dictionary"""
         try:
             pi_model = self._get_pi_model()
             hat_info = self._get_hat_info()
             system_uuid = self._get_system_uuid()
+            soundcard_info = self.get_soundcard_info()
             
             return {
                 'pi_model': {
@@ -104,6 +168,7 @@ class SystemInfo:
                     'uuid': hat_info.get('uuid'),
                     'vendor_card': self.get_hat_vendor_card()
                 },
+                'soundcard': soundcard_info,
                 'system': {
                     'uuid': system_uuid
                 },
@@ -122,6 +187,17 @@ class SystemInfo:
                     'uuid': None,
                     'vendor_card': 'unknown:unknown'
                 },
+                'soundcard': {
+                    'name': 'unknown',
+                    'volume_control': None,
+                    'hardware_index': None,
+                    'output_channels': 0,
+                    'input_channels': 0,
+                    'features': [],
+                    'hat_name': None,
+                    'supports_dsp': False,
+                    'card_type': []
+                },
                 'system': {
                     'uuid': None
                 },
@@ -135,6 +211,7 @@ class SystemInfo:
             pi_model = self._get_pi_model()
             hat_info = self._get_hat_info()
             system_uuid = self._get_system_uuid()
+            soundcard_info = self.get_soundcard_info()
             
             # Build Pi Model string (name + version)
             pi_model_name = pi_model.get_model_name().strip('\x00')  # Remove null characters
@@ -152,6 +229,7 @@ class SystemInfo:
             flat_dict = {
                 'Pi Model': pi_model_full,
                 'HAT': hat_full,
+                'Sound Card': soundcard_info.get('name', 'unknown'),
                 'UUID': system_uuid or 'unknown'
             }
             
@@ -161,6 +239,7 @@ class SystemInfo:
             return {
                 'Pi Model': 'unknown',
                 'HAT': 'unknown',
+                'Sound Card': 'unknown',
                 'UUID': 'unknown'
             }
     
@@ -169,8 +248,9 @@ class SystemInfo:
         pi_model_name = self.get_pi_model_name()
         hat_vendor_card = self.get_hat_vendor_card()
         system_uuid = self.get_system_uuid()
+        soundcard_info = self.get_soundcard_info()
         
-        output = f"Pi Model: {pi_model_name}\nHat info: {hat_vendor_card}"
+        output = f"Pi Model: {pi_model_name}\nHat info: {hat_vendor_card}\nSound Card: {soundcard_info.get('name', 'unknown')}"
         if system_uuid:
             output += f"\nSystem UUID: {system_uuid}"
         

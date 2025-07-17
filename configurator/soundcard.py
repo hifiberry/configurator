@@ -185,7 +185,7 @@ SOUND_CARD_DEFINITIONS = {
         "card_type": ["Digi"],
     },
     "Beocreate 4-Channel Amplifier": {
-        "aplay_contains": None,
+        "aplay_contains": "beocreate",
         "hat_name": "Beocreate 4-Channel Amplifier",
         "volume_control": None,
         "output_channels": 2,
@@ -195,9 +195,9 @@ SOUND_CARD_DEFINITIONS = {
         "card_type": ["Amp"],
     },
     "DAC+ Zero/Light/MiniAmp": {
-        "aplay_contains": None,
+        "aplay_contains": "snd_rpi_hifiberry_dac",
         "hat_name": None,
-        "volume_control": None,
+        "volume_control": "Softvol",
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -292,8 +292,8 @@ class Soundcard:
                 return None
 
             for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                aplay_contains = attributes.get("aplay_contains", "").lower()
-                if aplay_contains and aplay_contains in output.lower():
+                aplay_contains = attributes.get("aplay_contains", "")
+                if aplay_contains and aplay_contains.lower() in output.lower():
                     return {"name": card_name, **attributes}
         except subprocess.CalledProcessError:
             logging.error("Error: Unable to execute `aplay -l`. Ensure ALSA is installed and configured.")

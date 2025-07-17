@@ -51,7 +51,7 @@ Get version information and available endpoints.
 
 #### `GET /api/v1/systeminfo`
 
-Get system information including Pi model, HAT details, and system UUID.
+Get system information including Pi model, HAT details, sound card information, and system UUID.
 
 **Response:**
 ```json
@@ -65,6 +65,17 @@ Get system information including Pi model, HAT details, and system UUID.
     "product": "DAC+ Pro",
     "uuid": "12345678-1234-1234-1234-123456789abc",
     "vendor_card": "HiFiBerry:DAC+ Pro"
+  },
+  "soundcard": {
+    "name": "DAC+ Pro",
+    "volume_control": "Digital",
+    "hardware_index": 0,
+    "output_channels": 2,
+    "input_channels": 0,
+    "features": ["usehwvolume"],
+    "hat_name": "DAC+ Pro",
+    "supports_dsp": false,
+    "card_type": ["DAC"]
   },
   "system": {
     "uuid": "abcd1234-5678-90ef-1234-567890abcdef"

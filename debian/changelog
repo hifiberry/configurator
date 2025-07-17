@@ -1,10 +1,12 @@
 hifiberry-configurator (1.8.0) stable; urgency=medium
 
   * Added systeminfo.py module for collecting system information
-  * Provides Pi model, HAT vendor/product, and system UUID information
+  * Provides Pi model, HAT vendor/product, sound card, and system UUID information
   * Added /api/v1/systeminfo REST API endpoint for programmatic access
   * Command-line tool supports both simple text and JSON output formats
   * Reads system UUID from /etc/uuid file when available
+  * Sound card information includes name, volume control, channels, and features
+  * Robust fallback for sound card detection when detailed detection fails
   * Updated API documentation to include new systeminfo endpoint
   * Removed contact email references from documentation
 
