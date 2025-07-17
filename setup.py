@@ -23,9 +23,6 @@ setup(
             'systemd/volume-restore.service',
             'systemd/config-server.service'
         ]),
-        ('/etc/nginx/conf.d', [
-            'nginx/hifiberry-config.nginx'
-        ]),
         ('/usr/share/man/man1', [
             'man/config-asoundconf.1',
             'man/config-avahi.1',

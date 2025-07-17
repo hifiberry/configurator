@@ -15,7 +15,6 @@ hifiberry-configurator (1.7.0) stable; urgency=medium
   * Created config-server command with comprehensive manual page
   * Added comprehensive API documentation with HTML and OpenAPI formats
   * API server automatically enabled and started upon package installation
-  * Added nginx configuration for reverse proxy setup at /api/config
 
  -- HiFiBerry Support <support@hifiberry.com>  Thu, 17 Jul 2025 12:00:00 +0000
 
