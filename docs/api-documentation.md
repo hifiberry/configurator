@@ -523,7 +523,7 @@ Add and mount a new SMB share for music access.
 }
 ```
 
-#### `DELETE /api/v1/smb/unmount/{server}/{share}`
+#### `POST /api/v1/smb/unmount/{server}/{share}`
 
 Unmount and remove an SMB share configuration.
 
@@ -583,7 +583,7 @@ Mount a specific SMB share by its configuration ID.
 }
 ```
 
-#### `DELETE /api/v1/smb/unmount/{id}`
+#### `POST /api/v1/smb/unmount/{id}`
 
 Unmount a specific SMB share by its configuration ID.
 

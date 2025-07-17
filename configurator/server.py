@@ -168,7 +168,7 @@ class ConfigAPIServer:
             """Create and mount a new SMB share"""
             return self.smb_handler.handle_create_mount()
         
-        @self.app.route('/api/v1/smb/unmount/<server>/<share>', methods=['DELETE'])
+        @self.app.route('/api/v1/smb/unmount/<server>/<share>', methods=['POST'])
         def remove_smb_mount(server, share):
             """Unmount and remove an SMB share configuration"""
             return self.smb_handler.handle_remove_mount(server, share)
@@ -178,7 +178,7 @@ class ConfigAPIServer:
             """Mount an SMB share by configuration ID"""
             return self.smb_handler.handle_mount_by_id(mount_id)
 
-        @self.app.route('/api/v1/smb/unmount/<int:mount_id>', methods=['DELETE'])
+        @self.app.route('/api/v1/smb/unmount/<int:mount_id>', methods=['POST'])
         def unmount_smb_share_by_id(mount_id):
             """Unmount an SMB share by configuration ID"""
             return self.smb_handler.handle_unmount_by_id(mount_id)
