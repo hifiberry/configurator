@@ -292,7 +292,7 @@ class SMBHandler:
     
     def handle_remove_mount(self, server: str, share: str) -> Dict[str, Any]:
         """
-        Handle DELETE /api/v1/smb/unmount/<server>/<share>
+        Handle POST /api/v1/smb/unmount/<server>/<share>
         Unmount and remove an SMB share configuration
         """
         try:
@@ -375,7 +375,7 @@ class SMBHandler:
 
     def handle_unmount_by_id(self, mount_id: int) -> Dict[str, Any]:
         """
-        Handle DELETE /api/v1/smb/unmount/<id>
+        Handle POST /api/v1/smb/unmount/<id>
         Unmount an SMB share by its configuration ID
         """
         try:
