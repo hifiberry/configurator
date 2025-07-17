@@ -47,223 +47,50 @@ class ConfigAPIServer:
         self._register_routes()
     
     def _get_html_documentation(self):
-        """Generate HTML documentation for browser viewing"""
-        html = f"""
+        """Serve HTML documentation from external file"""
+        try:
+            # Try to find the HTML documentation file in multiple locations
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # First, try the local docs directory (for development)
+            local_html_file = os.path.join(script_dir, '..', 'docs', 'api-documentation.html')
+            
+            # Then try the system installation location
+            system_html_file = '/usr/share/doc/hifiberry-configurator/api-documentation.html'
+            
+            html_file = None
+            for path in [local_html_file, system_html_file]:
+                if os.path.exists(path):
+                    html_file = path
+                    break
+            
+            if html_file is None:
+                raise FileNotFoundError("HTML documentation file not found")
+            
+            # Read the HTML file
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Replace localhost:1081 with actual host:port
+            html_content = html_content.replace('localhost:1081', f'{self.host}:{self.port}')
+            
+            return html_content
+        except Exception as e:
+            logger.error(f"Error loading HTML documentation: {e}")
+            # Return a simple fallback message
+            return f"""
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HiFiBerry Configuration API Documentation</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
-        h2 {{ color: #34495e; margin-top: 30px; }}
-        h3 {{ color: #7f8c8d; }}
-        .endpoint {{ background: #ecf0f1; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #3498db; }}
-        .method {{ display: inline-block; padding: 3px 8px; border-radius: 3px; font-weight: bold; font-size: 12px; }}
-        .get {{ background: #27ae60; color: white; }}
-        .post {{ background: #f39c12; color: white; }}
-        .put {{ background: #e67e22; color: white; }}
-        .delete {{ background: #e74c3c; color: white; }}
-        .code {{ background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 4px; overflow-x: auto; font-family: 'Courier New', monospace; }}
-        .param {{ background: #f8f9fa; padding: 5px; margin: 5px 0; border-radius: 3px; }}
-        .param-name {{ font-weight: bold; color: #e74c3c; }}
-        .example {{ background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; }}
-        .response {{ background: #d5f4e6; padding: 10px; border-radius: 4px; margin: 10px 0; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
-        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-        th {{ background-color: #f2f2f2; font-weight: bold; }}
-        .nav {{ background: #34495e; color: white; padding: 15px; margin: -30px -30px 30px -30px; border-radius: 8px 8px 0 0; }}
-        .nav a {{ color: #3498db; text-decoration: none; margin-right: 20px; }}
-        .nav a:hover {{ text-decoration: underline; }}
-    </style>
+    <title>HiFiBerry Configuration API</title>
 </head>
 <body>
-    <div class="container">
-        <div class="nav">
-            <h1 style="margin: 0; border: none; padding: 0;">HiFiBerry Configuration API v1.7.0</h1>
-            <p style="margin: 5px 0 0 0;">
-                <a href="#endpoints">Endpoints</a>
-                <a href="#examples">Examples</a>
-                <a href="#errors">Error Codes</a>
-                <a href="/api/v1/openapi.json">OpenAPI Spec</a>
-            </p>
-        </div>
-        
-        <h2>Overview</h2>
-        <p>The HiFiBerry Configuration API provides REST endpoints for managing configuration settings in the HiFiBerry system. 
-        All responses are in JSON format with consistent structure.</p>
-        
-        <p><strong>Base URL:</strong> <code>http://{self.host}:{self.port}</code></p>
-        
-        <h2 id="endpoints">API Endpoints</h2>
-        
-        <div class="endpoint">
-            <h3><span class="method get">GET</span> /health</h3>
-            <p>Health check endpoint to verify the API server is running.</p>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "healthy", "service": "hifiberry-config-api", "version": "1.6.8"}}</pre>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <h3><span class="method get">GET</span> /api/v1/config</h3>
-            <p>Get all configuration key-value pairs.</p>
-            <div class="param">
-                <span class="param-name">prefix</span> (query, optional): Filter keys by prefix
-            </div>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "success", "data": {{"volume": "75", "soundcard": "hifiberry-dac"}}, "count": 2}}</pre>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <h3><span class="method get">GET</span> /api/v1/config/keys</h3>
-            <p>Get all configuration keys only (without values).</p>
-            <div class="param">
-                <span class="param-name">prefix</span> (query, optional): Filter keys by prefix
-            </div>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "success", "data": ["volume", "soundcard"], "count": 2}}</pre>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <h3><span class="method get">GET</span> /api/v1/config/{{key}}</h3>
-            <p>Get a specific configuration value by key.</p>
-            <div class="param">
-                <span class="param-name">key</span> (path, required): Configuration key name
-            </div>
-            <div class="param">
-                <span class="param-name">secure</span> (query, optional): Set to "true" for secure/encrypted values
-            </div>
-            <div class="param">
-                <span class="param-name">default</span> (query, optional): Default value if key not found
-            </div>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "success", "data": {{"key": "volume", "value": "75"}}}}</pre>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <h3><span class="method post">POST</span> / <span class="method put">PUT</span> /api/v1/config/{{key}}</h3>
-            <p>Set or update a configuration value.</p>
-            <div class="param">
-                <span class="param-name">key</span> (path, required): Configuration key name
-            </div>
-            <div class="param">
-                <span class="param-name">Content-Type</span> (header, required): application/json
-            </div>
-            <div class="param">
-                <strong>Request Body:</strong><br>
-                <span class="param-name">value</span> (required): The value to set<br>
-                <span class="param-name">secure</span> (optional): Store as encrypted value
-            </div>
-            <div class="example">
-                <strong>Request Body Example:</strong>
-                <pre class="code">{{"value": "75", "secure": false}}</pre>
-            </div>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "success", "message": "Configuration key \\"volume\\" set successfully", "data": {{"key": "volume", "value": "75"}}}}</pre>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <h3><span class="method delete">DELETE</span> /api/v1/config/{{key}}</h3>
-            <p>Delete a configuration key and its value.</p>
-            <div class="param">
-                <span class="param-name">key</span> (path, required): Configuration key name
-            </div>
-            <div class="response">
-                <strong>Response:</strong>
-                <pre class="code">{{"status": "success", "message": "Configuration key \\"volume\\" deleted successfully"}}</pre>
-            </div>
-        </div>
-        
-        <h2 id="examples">Usage Examples</h2>
-        
-        <h3>curl Commands</h3>
-        <div class="example">
-            <strong>Get all configuration:</strong>
-            <pre class="code">curl http://{self.host}:{self.port}/api/v1/config</pre>
-        </div>
-        
-        <div class="example">
-            <strong>Get specific value:</strong>
-            <pre class="code">curl http://{self.host}:{self.port}/api/v1/config/volume</pre>
-        </div>
-        
-        <div class="example">
-            <strong>Set configuration value:</strong>
-            <pre class="code">curl -X POST -H "Content-Type: application/json" \\
-     -d '{{"value":"75"}}' \\
-     http://{self.host}:{self.port}/api/v1/config/volume</pre>
-        </div>
-        
-        <div class="example">
-            <strong>Set secure value:</strong>
-            <pre class="code">curl -X POST -H "Content-Type: application/json" \\
-     -d '{{"value":"secret","secure":true}}' \\
-     http://{self.host}:{self.port}/api/v1/config/password</pre>
-        </div>
-        
-        <div class="example">
-            <strong>Delete configuration:</strong>
-            <pre class="code">curl -X DELETE http://{self.host}:{self.port}/api/v1/config/volume</pre>
-        </div>
-        
-        <h2 id="errors">Error Responses</h2>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th>HTTP Code</th>
-                    <th>Description</th>
-                    <th>Example Response</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>400</td>
-                    <td>Bad Request</td>
-                    <td><code>{{"status": "error", "message": "Missing required field: value"}}</code></td>
-                </tr>
-                <tr>
-                    <td>404</td>
-                    <td>Not Found</td>
-                    <td><code>{{"status": "error", "message": "Configuration key not found"}}</code></td>
-                </tr>
-                <tr>
-                    <td>500</td>
-                    <td>Internal Server Error</td>
-                    <td><code>{{"status": "error", "message": "Failed to retrieve configuration data"}}</code></td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <h2>Additional Resources</h2>
-        <ul>
-            <li><a href="/api/v1/openapi.json">OpenAPI 3.0 Specification</a> - Machine-readable API specification</li>
-            <li><a href="/health">Health Check</a> - Server status endpoint</li>
-        </ul>
-        
-        <hr style="margin: 30px 0;">
-        <p style="text-align: center; color: #7f8c8d; font-size: 14px;">
-            HiFiBerry Configuration API v1.7.0 | 
-            <a href="mailto:info@hifiberry.com" style="color: #3498db;">Contact Support</a>
-        </p>
-    </div>
+    <h1>HiFiBerry Configuration API v1.7.0</h1>
+    <p>API documentation is available at: <a href="/api/v1/openapi.json">OpenAPI Specification</a></p>
+    <p>For JSON documentation, access this endpoint with Accept: application/json header.</p>
 </body>
 </html>
 """
-        return html
     
     def _register_routes(self):
         """Register all API routes"""
@@ -292,6 +119,24 @@ class ConfigAPIServer:
                             'status': 'healthy',
                             'service': 'hifiberry-config-api',
                             'version': '1.7.0'
+                        }
+                    },
+                    'version': {
+                        'path': '/version',
+                        'method': 'GET',
+                        'description': 'Get version information and available endpoints',
+                        'response': {
+                            'service': 'hifiberry-config-api',
+                            'version': '1.7.0',
+                            'api_version': 'v1',
+                            'description': 'HiFiBerry Configuration Server',
+                            'endpoints': {
+                                'health': '/health',
+                                'version': '/version',
+                                'config': '/api/v1/config',
+                                'docs': '/docs',
+                                'openapi': '/api/v1/openapi.json'
+                            }
                         }
                     },
                     'get_all_config': {
@@ -399,6 +244,14 @@ class ConfigAPIServer:
                 'examples': {
                     'curl_commands': [
                         {
+                            'description': 'Get version information',
+                            'command': f'curl http://{self.host}:{self.port}/version'
+                        },
+                        {
+                            'description': 'Health check',
+                            'command': f'curl http://{self.host}:{self.port}/health'
+                        },
+                        {
                             'description': 'Get all configuration',
                             'command': f'curl http://{self.host}:{self.port}/api/v1/config'
                         },
@@ -459,7 +312,41 @@ class ConfigAPIServer:
                                                 'properties': {
                                                     'status': {'type': 'string', 'example': 'healthy'},
                                                     'service': {'type': 'string', 'example': 'hifiberry-config-api'},
-                                                    'version': {'type': 'string', 'example': '1.6.8'}
+                                                    'version': {'type': 'string', 'example': '1.7.0'}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    '/version': {
+                        'get': {
+                            'summary': 'Version Information',
+                            'description': 'Get version information and available endpoints',
+                            'responses': {
+                                '200': {
+                                    'description': 'Version information',
+                                    'content': {
+                                        'application/json': {
+                                            'schema': {
+                                                'type': 'object',
+                                                'properties': {
+                                                    'service': {'type': 'string', 'example': 'hifiberry-config-api'},
+                                                    'version': {'type': 'string', 'example': '1.7.0'},
+                                                    'api_version': {'type': 'string', 'example': 'v1'},
+                                                    'description': {'type': 'string', 'example': 'HiFiBerry Configuration Server'},
+                                                    'endpoints': {
+                                                        'type': 'object',
+                                                        'example': {
+                                                            'health': '/health',
+                                                            'version': '/version',
+                                                            'config': '/api/v1/config',
+                                                            'docs': '/docs',
+                                                            'openapi': '/api/v1/openapi.json'
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -764,6 +651,25 @@ class ConfigAPIServer:
                 'status': 'healthy',
                 'service': 'hifiberry-config-api',
                 'version': '1.7.0'
+            })
+        
+        # Version endpoint
+        @self.app.route('/version', methods=['GET'])
+        @self.app.route('/api/v1/version', methods=['GET'])
+        def get_version():
+            """Get version information"""
+            return jsonify({
+                'service': 'hifiberry-config-api',
+                'version': '1.7.0',
+                'api_version': 'v1',
+                'description': 'HiFiBerry Configuration Server',
+                'endpoints': {
+                    'health': '/health',
+                    'version': '/version',
+                    'config': '/api/v1/config',
+                    'docs': '/docs',
+                    'openapi': '/api/v1/openapi.json'
+                }
             })
         
         # ConfigDB endpoints
