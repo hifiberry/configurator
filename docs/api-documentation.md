@@ -1,9 +1,10 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 1.7.0**
+**Version 1.8.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
+  - [System Information](#system-information)
   - [Configuration Management](#configuration-management)
   - [System Service Management](#system-service-management)
 - [Configuration File](#configuration-file)
@@ -30,11 +31,12 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
     "version": "/version",
+    "systeminfo": "/api/v1/systeminfo",
     "keys": "/api/v1/keys",
     "key": "/api/v1/key/<key>",
     "systemd_services": "/api/v1/systemd/services",
@@ -42,6 +44,41 @@ Get version information and available endpoints.
     "systemd_service_exists": "/api/v1/systemd/service/<service>/exists",
     "systemd_operation": "/api/v1/systemd/service/<service>/<operation>"
   }
+}
+```
+
+### System Information
+
+#### `GET /api/v1/systeminfo`
+
+Get system information including Pi model, HAT details, and system UUID.
+
+**Response:**
+```json
+{
+  "pi_model": {
+    "name": "Raspberry Pi 4 Model B Rev 1.4",
+    "version": "4"
+  },
+  "hat_info": {
+    "vendor": "HiFiBerry",
+    "product": "DAC+ Pro",
+    "uuid": "12345678-1234-1234-1234-123456789abc",
+    "vendor_card": "HiFiBerry:DAC+ Pro"
+  },
+  "system": {
+    "uuid": "abcd1234-5678-90ef-1234-567890abcdef"
+  },
+  "status": "success"
+}
+```
+
+**Response (Error):**
+```json
+{
+  "status": "error",
+  "message": "Failed to retrieve system information",
+  "error": "Error details"
 }
 ```
 
@@ -294,6 +331,11 @@ The configuration file is managed by the `ConfigParser` class, which provides ce
 curl http://localhost:1081/version
 ```
 
+**Get system information:**
+```bash
+curl http://localhost:1081/api/v1/systeminfo
+```
+
 **Get all configuration keys:**
 ```bash
 curl http://localhost:1081/api/v1/keys
@@ -384,4 +426,4 @@ curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/disable
 
 ---
 
-*HiFiBerry Configuration API v1.7.0 | [Contact Support](mailto:info@hifiberry.com)*
+*HiFiBerry Configuration API v1.8.0*
