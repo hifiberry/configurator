@@ -44,16 +44,17 @@ class SystemdHandler:
     def _service_exists(self, service: str) -> bool:
         """Check if a systemd service exists on the system"""
         try:
-            # Use systemctl list-unit-files to check if service exists
+            # Use systemctl cat to check if service exists
+            # This works with or without .service suffix
             result = subprocess.run(
-                ['systemctl', 'list-unit-files', '--type=service', '--no-legend', service],
+                ['systemctl', 'cat', service],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
             
-            # If service exists, it will be in the output
-            return service in result.stdout
+            # If service exists, systemctl cat will return 0
+            return result.returncode == 0
             
         except Exception as e:
             logger.error(f"Error checking if service exists: {e}")
