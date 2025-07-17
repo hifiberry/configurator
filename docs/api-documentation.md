@@ -256,6 +256,14 @@ Execute a systemd operation on a service.
 }
 ```
 
+**Response (Service Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Service \"nonexistent-service\" does not exist on the system"
+}
+```
+
 ## Configuration File
 
 The systemd API is controlled by `/etc/configserver/configserver.json`:
@@ -327,6 +335,11 @@ curl http://localhost:1081/api/v1/systemd/services
 curl http://localhost:1081/api/v1/systemd/service/shairport
 ```
 
+**Check if service exists:**
+```bash
+curl http://localhost:1081/api/v1/systemd/service/shairport/exists
+```
+
 **Start a service:**
 ```bash
 curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/start
@@ -358,7 +371,7 @@ curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/disable
 |-----------|-------------|------------------|
 | 400 | Bad Request | `{"status": "error", "message": "Missing required field: value"}` |
 | 403 | Forbidden | `{"status": "error", "message": "Operation \"start\" not allowed for service \"restricted-service\". Allowed operations: [\"status\"]"}` |
-| 404 | Not Found | `{"status": "error", "message": "Configuration key not found"}` |
+| 404 | Not Found | `{"status": "error", "message": "Configuration key not found"}` or `{"status": "error", "message": "Service \"nonexistent-service\" does not exist on the system"}` |
 | 500 | Internal Server Error | `{"status": "error", "message": "Failed to retrieve configuration data"}` |
 
 ## Security Considerations
