@@ -7,6 +7,7 @@
   - [System Information](#system-information)
   - [Configuration Management](#configuration-management)
   - [System Service Management](#system-service-management)
+  - [SMB/CIFS Management](#smbcifs-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -42,7 +43,13 @@ Get version information and available endpoints.
     "systemd_services": "/api/v1/systemd/services",
     "systemd_service": "/api/v1/systemd/service/<service>",
     "systemd_service_exists": "/api/v1/systemd/service/<service>/exists",
-    "systemd_operation": "/api/v1/systemd/service/<service>/<operation>"
+    "systemd_operation": "/api/v1/systemd/service/<service>/<operation>",
+    "smb_servers": "/api/v1/smb/servers",
+    "smb_server_test": "/api/v1/smb/test/<server>",
+    "smb_shares": "/api/v1/smb/shares/<server>",
+    "smb_mounts": "/api/v1/smb/mounts",
+    "smb_mount": "/api/v1/smb/mount",
+    "smb_unmount": "/api/v1/smb/unmount/<server>/<share>"
   }
 }
 ```
@@ -312,6 +319,231 @@ Execute a systemd operation on a service.
 }
 ```
 
+### SMB/CIFS Management
+
+The SMB/CIFS API provides functionality for discovering and mounting network shares containing music files. This enables accessing music libraries stored on NAS devices, Windows shares, or other SMB-compatible file servers.
+
+#### `GET /api/v1/smb/servers`
+
+Discover SMB/CIFS file servers on the local network.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "servers": [
+      {
+        "ip": "192.168.1.100",
+        "name": "MUSICSERVER",
+        "hostname": "musicserver",
+        "is_file_server": true,
+        "services": ["File Server"],
+        "local_network": "192.168.1.0/24",
+        "interface": "eth0"
+      },
+      {
+        "ip": "192.168.1.101",
+        "name": "NAS",
+        "hostname": "synology-nas",
+        "is_file_server": true,
+        "services": ["File Server"],
+        "local_network": "192.168.1.0/24",
+        "interface": "eth0"
+      }
+    ],
+    "count": 2
+  }
+}
+```
+
+#### `GET /api/v1/smb/test/{server}`
+
+Test connection to a specific SMB server.
+
+**Parameters:**
+- **server** (path, required): Server IP address or hostname
+- **username** (query, optional): Username for authentication
+- **password** (query, optional): Password for authentication
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "server": "192.168.1.100",
+    "connected": true,
+    "message": "Connection successful"
+  }
+}
+```
+
+**Response (Failure):**
+```json
+{
+  "status": "error",
+  "message": "Connection failed",
+  "data": {
+    "server": "192.168.1.100",
+    "connected": false,
+    "error": "Authentication failed"
+  }
+}
+```
+
+#### `GET /api/v1/smb/shares/{server}`
+
+List available shares on a specific SMB server.
+
+**Parameters:**
+- **server** (path, required): Server IP address or hostname
+- **username** (query, optional): Username for authentication
+- **password** (query, optional): Password for authentication
+- **detailed** (query, optional): Set to "true" for detailed share information
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "server": "192.168.1.100",
+    "shares": [
+      {
+        "name": "music",
+        "type": "Disk",
+        "comment": "Music Library"
+      },
+      {
+        "name": "media",
+        "type": "Disk",
+        "comment": "Media Files"
+      },
+      {
+        "name": "backup",
+        "type": "Disk",
+        "comment": "Backup Storage"
+      }
+    ],
+    "count": 3
+  }
+}
+```
+
+#### `GET /api/v1/smb/mounts`
+
+List all configured SMB mount points for music access.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "mounts": [
+      {
+        "server": "192.168.1.100",
+        "share": "music",
+        "mountpoint": "/data/music",
+        "user": "musicuser",
+        "version": "SMB3",
+        "options": "rw,uid=1000,gid=1000",
+        "mounted": true
+      },
+      {
+        "server": "192.168.1.101",
+        "share": "media",
+        "mountpoint": "/data/nas-media",
+        "user": "guest",
+        "version": "SMB2",
+        "options": "ro,uid=1000,gid=1000",
+        "mounted": false
+      }
+    ],
+    "count": 2
+  }
+}
+```
+
+#### `POST /api/v1/smb/mount`
+
+Add and mount a new SMB share for music access.
+
+**Request Body:**
+```json
+{
+  "server": "192.168.1.100",
+  "share": "music",
+  "mountpoint": "/data/music",
+  "user": "musicuser",
+  "password": "password123",
+  "version": "SMB3",
+  "options": "rw,uid=1000,gid=1000"
+}
+```
+
+**Required Fields:**
+- **server**: Server IP address or hostname
+- **share**: Share name to mount
+
+**Optional Fields:**
+- **mountpoint**: Mount point path (default: `/data/{server}-{share}`)
+- **user**: Username for authentication
+- **password**: Password for authentication
+- **version**: SMB protocol version (SMB1, SMB2, SMB3)
+- **options**: Additional mount options
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "SMB share mounted successfully",
+  "data": {
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "mounted": true
+  }
+}
+```
+
+**Response (Error):**
+```json
+{
+  "status": "error",
+  "message": "Failed to mount SMB share",
+  "error": "Mount configuration for 192.168.1.100/music already exists"
+}
+```
+
+#### `DELETE /api/v1/smb/unmount/{server}/{share}`
+
+Unmount and remove an SMB share configuration.
+
+**Parameters:**
+- **server** (path, required): Server IP address or hostname
+- **share** (path, required): Share name to unmount
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "SMB share unmounted successfully",
+  "data": {
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "unmounted": true
+  }
+}
+```
+
+**Response (Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Mount configuration not found for 192.168.1.100/music"
+}
+```
+
 ## Configuration File
 
 The systemd API is controlled by `/etc/configserver/configserver.json`:
@@ -416,6 +648,73 @@ curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/enable
 **Disable a service:**
 ```bash
 curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/disable
+```
+
+### SMB/CIFS Management
+
+**Discover SMB servers on the network:**
+```bash
+curl http://localhost:1081/api/v1/smb/servers
+```
+
+**Test connection to a server:**
+```bash
+curl http://localhost:1081/api/v1/smb/test/192.168.1.100
+```
+
+**Test connection with authentication:**
+```bash
+curl "http://localhost:1081/api/v1/smb/test/192.168.1.100?username=musicuser&password=mypass"
+```
+
+**List shares on a server:**
+```bash
+curl http://localhost:1081/api/v1/smb/shares/192.168.1.100
+```
+
+**List shares with authentication:**
+```bash
+curl "http://localhost:1081/api/v1/smb/shares/192.168.1.100?username=musicuser&password=mypass"
+```
+
+**Get detailed share information:**
+```bash
+curl "http://localhost:1081/api/v1/smb/shares/192.168.1.100?detailed=true"
+```
+
+**List all configured mounts:**
+```bash
+curl http://localhost:1081/api/v1/smb/mounts
+```
+
+**Mount a music share:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{
+       "server": "192.168.1.100",
+       "share": "music",
+       "mountpoint": "/data/music",
+       "user": "musicuser",
+       "password": "mypass",
+       "version": "SMB3",
+       "options": "rw,uid=1000,gid=1000"
+     }' \
+     http://localhost:1081/api/v1/smb/mount
+```
+
+**Mount with minimal configuration (guest access):**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{
+       "server": "192.168.1.100",
+       "share": "public-music"
+     }' \
+     http://localhost:1081/api/v1/smb/mount
+```
+
+**Unmount a share:**
+```bash
+curl -X DELETE http://localhost:1081/api/v1/smb/unmount/192.168.1.100/music
 ```
 
 ## Error Responses

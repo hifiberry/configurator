@@ -19,6 +19,7 @@ from typing import Dict, Any, Optional
 from .configdb import ConfigDB
 from .systemd_handler import SystemdHandler
 from .systeminfo import SystemInfo
+from .smb_handler import SMBHandler
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ class ConfigAPIServer:
         self.configdb = ConfigDB()
         self.systemd_handler = SystemdHandler()
         self.systeminfo = SystemInfo()
+        self.smb_handler = SMBHandler()
         
         # Configure Flask logging
         if not debug:
@@ -71,7 +73,13 @@ class ConfigAPIServer:
                     'systemd_services': '/api/v1/systemd/services',
                     'systemd_service': '/api/v1/systemd/service/<service>',
                     'systemd_service_exists': '/api/v1/systemd/service/<service>/exists',
-                    'systemd_operation': '/api/v1/systemd/service/<service>/<operation>'
+                    'systemd_operation': '/api/v1/systemd/service/<service>/<operation>',
+                    'smb_servers': '/api/v1/smb/servers',
+                    'smb_server_test': '/api/v1/smb/test/<server>',
+                    'smb_shares': '/api/v1/smb/shares/<server>',
+                    'smb_mounts': '/api/v1/smb/mounts',
+                    'smb_mount': '/api/v1/smb/mount',
+                    'smb_unmount': '/api/v1/smb/unmount/<server>/<share>'
                 }
             })
         
@@ -132,6 +140,37 @@ class ConfigAPIServer:
             """Execute a systemd operation on a service"""
             return self.systemd_handler.handle_systemd_operation(service, operation)
         
+        # SMB/CIFS endpoints
+        @self.app.route('/api/v1/smb/servers', methods=['GET'])
+        def list_smb_servers():
+            """List all SMB servers on the network"""
+            return self.smb_handler.handle_list_servers()
+        
+        @self.app.route('/api/v1/smb/test/<server>', methods=['GET'])
+        def test_smb_connection(server):
+            """Test connection to an SMB server"""
+            return self.smb_handler.handle_test_connection(server)
+        
+        @self.app.route('/api/v1/smb/shares/<server>', methods=['GET'])
+        def list_smb_shares(server):
+            """List shares on an SMB server"""
+            return self.smb_handler.handle_list_shares(server)
+        
+        @self.app.route('/api/v1/smb/mounts', methods=['GET'])
+        def list_smb_mounts():
+            """List all configured SMB mounts"""
+            return self.smb_handler.handle_list_mounts()
+        
+        @self.app.route('/api/v1/smb/mount', methods=['POST'])
+        def create_smb_mount():
+            """Create and mount a new SMB share"""
+            return self.smb_handler.handle_create_mount()
+        
+        @self.app.route('/api/v1/smb/unmount/<server>/<share>', methods=['DELETE'])
+        def remove_smb_mount(server, share):
+            """Unmount and remove an SMB share configuration"""
+            return self.smb_handler.handle_remove_mount(server, share)
+
         # Error handlers
         @self.app.errorhandler(400)
         def bad_request(error):
