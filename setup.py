@@ -44,7 +44,7 @@ setup(
             'man/hifiberry-configurator.7',
         ]),
         ('/usr/share/doc/hifiberry-configurator', [
-            'docs/api-documentation.html',
+            'docs/api-documentation.md',
             'docs/README.md',
         ]),
     ],

@@ -46,50 +46,46 @@ class ConfigAPIServer:
         # Register API routes
         self._register_routes()
     
-    def _get_html_documentation(self):
-        """Serve HTML documentation from external file"""
+    def _get_markdown_documentation(self):
+        """Serve raw Markdown documentation"""
         try:
-            # Try to find the HTML documentation file in multiple locations
+            # Try to find the Markdown documentation file in multiple locations
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
             # First, try the local docs directory (for development)
-            local_html_file = os.path.join(script_dir, '..', 'docs', 'api-documentation.html')
+            local_md_file = os.path.join(script_dir, '..', 'docs', 'api-documentation.md')
             
             # Then try the system installation location
-            system_html_file = '/usr/share/doc/hifiberry-configurator/api-documentation.html'
+            system_md_file = '/usr/share/doc/hifiberry-configurator/api-documentation.md'
             
-            html_file = None
-            for path in [local_html_file, system_html_file]:
+            md_file = None
+            for path in [local_md_file, system_md_file]:
                 if os.path.exists(path):
-                    html_file = path
+                    md_file = path
                     break
             
-            if html_file is None:
-                raise FileNotFoundError("HTML documentation file not found")
+            if md_file is None:
+                raise FileNotFoundError("Markdown documentation file not found")
             
-            # Read the HTML file
-            with open(html_file, 'r', encoding='utf-8') as f:
-                html_content = f.read()
+            # Read the Markdown file
+            with open(md_file, 'r', encoding='utf-8') as f:
+                md_content = f.read()
             
             # Replace localhost:1081 with actual host:port
-            html_content = html_content.replace('localhost:1081', f'{self.host}:{self.port}')
+            md_content = md_content.replace('localhost:1081', f'{self.host}:{self.port}')
             
-            return html_content
+            return md_content
         except Exception as e:
-            logger.error(f"Error loading HTML documentation: {e}")
-            # Return a simple fallback message
-            return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>HiFiBerry Configuration API</title>
-</head>
-<body>
-    <h1>HiFiBerry Configuration API v1.7.0</h1>
-    <p>API documentation is available at: <a href="/api/v1/openapi.json">OpenAPI Specification</a></p>
-    <p>For JSON documentation, access this endpoint with Accept: application/json header.</p>
-</body>
-</html>
+            logger.error(f"Error loading Markdown documentation: {e}")
+            return f"""# HiFiBerry Configuration API v1.7.0
+
+## Error Loading Documentation
+
+The API documentation could not be loaded. Please check the server logs for more information.
+
+## Alternative Resources
+
+- [OpenAPI 3.0 Specification](/api/v1/openapi.json) - Machine-readable API specification
 """
     
     def _register_routes(self):
@@ -100,9 +96,14 @@ class ConfigAPIServer:
         @self.app.route('/docs', methods=['GET'])
         def api_documentation():
             """Serve API documentation"""
-            # Check if request accepts HTML (browser request)
-            if 'text/html' in request.headers.get('Accept', ''):
-                return self._get_html_documentation()
+            accept_header = request.headers.get('Accept', '')
+            
+            # Check if request accepts markdown
+            if 'text/markdown' in accept_header or 'text/plain' in accept_header:
+                return self._get_markdown_documentation(), 200, {'Content-Type': 'text/markdown; charset=utf-8'}
+            # For HTML requests (browsers), redirect to markdown docs
+            elif 'text/html' in accept_header:
+                return self._get_markdown_documentation(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
             
             # Return JSON documentation for API clients
             docs = {
@@ -111,16 +112,6 @@ class ConfigAPIServer:
                 'description': 'REST API for HiFiBerry configuration database access',
                 'base_url': f'http://{self.host}:{self.port}',
                 'endpoints': {
-                    'health': {
-                        'path': '/health',
-                        'method': 'GET',
-                        'description': 'Health check endpoint',
-                        'response': {
-                            'status': 'healthy',
-                            'service': 'hifiberry-config-api',
-                            'version': '1.7.0'
-                        }
-                    },
                     'version': {
                         'path': '/version',
                         'method': 'GET',
@@ -131,7 +122,6 @@ class ConfigAPIServer:
                             'api_version': 'v1',
                             'description': 'HiFiBerry Configuration Server',
                             'endpoints': {
-                                'health': '/health',
                                 'version': '/version',
                                 'config': '/api/v1/config',
                                 'docs': '/docs',
@@ -166,7 +156,7 @@ class ConfigAPIServer:
                         }
                     },
                     'get_config_value': {
-                        'path': '/api/v1/config/<key>',
+                        'path': '/api/v1/config/key/<key>',
                         'method': 'GET',
                         'description': 'Get a specific configuration value',
                         'parameters': {
@@ -181,10 +171,10 @@ class ConfigAPIServer:
                                 'value': '75'
                             }
                         },
-                        'example': 'GET /api/v1/config/volume?default=50'
+                        'example': 'GET /api/v1/config/key/volume?default=50'
                     },
                     'set_config_value': {
-                        'path': '/api/v1/config/<key>',
+                        'path': '/api/v1/config/key/<key>',
                         'method': 'PUT/POST',
                         'description': 'Set a configuration value',
                         'parameters': {
@@ -202,10 +192,10 @@ class ConfigAPIServer:
                                 'value': '75'
                             }
                         },
-                        'example': 'POST /api/v1/config/volume with body: {"value": "75"}'
+                        'example': 'POST /api/v1/config/key/volume with body: {"value": "75"}'
                     },
                     'delete_config_value': {
-                        'path': '/api/v1/config/<key>',
+                        'path': '/api/v1/config/key/<key>',
                         'method': 'DELETE',
                         'description': 'Delete a configuration value',
                         'parameters': {
@@ -215,7 +205,7 @@ class ConfigAPIServer:
                             'status': 'success',
                             'message': 'Configuration key "volume" deleted successfully'
                         },
-                        'example': 'DELETE /api/v1/config/volume'
+                        'example': 'DELETE /api/v1/config/key/volume'
                     }
                 },
                 'error_responses': {
@@ -248,24 +238,20 @@ class ConfigAPIServer:
                             'command': f'curl http://{self.host}:{self.port}/version'
                         },
                         {
-                            'description': 'Health check',
-                            'command': f'curl http://{self.host}:{self.port}/health'
-                        },
-                        {
                             'description': 'Get all configuration',
                             'command': f'curl http://{self.host}:{self.port}/api/v1/config'
                         },
                         {
                             'description': 'Get specific configuration value',
-                            'command': f'curl http://{self.host}:{self.port}/api/v1/config/volume'
+                            'command': f'curl http://{self.host}:{self.port}/api/v1/config/key/volume'
                         },
                         {
                             'description': 'Set configuration value',
-                            'command': f'curl -X POST -H "Content-Type: application/json" -d \'{{"value":"75"}}\' http://{self.host}:{self.port}/api/v1/config/volume'
+                            'command': f'curl -X POST -H "Content-Type: application/json" -d \'{{"value":"75"}}\' http://{self.host}:{self.port}/api/v1/config/key/volume'
                         },
                         {
                             'description': 'Delete configuration value',
-                            'command': f'curl -X DELETE http://{self.host}:{self.port}/api/v1/config/volume'
+                            'command': f'curl -X DELETE http://{self.host}:{self.port}/api/v1/config/key/volume'
                         },
                         {
                             'description': 'Get keys with prefix filter',
@@ -298,29 +284,6 @@ class ConfigAPIServer:
                     }
                 ],
                 'paths': {
-                    '/health': {
-                        'get': {
-                            'summary': 'Health Check',
-                            'description': 'Check if the API server is running and healthy',
-                            'responses': {
-                                '200': {
-                                    'description': 'Server is healthy',
-                                    'content': {
-                                        'application/json': {
-                                            'schema': {
-                                                'type': 'object',
-                                                'properties': {
-                                                    'status': {'type': 'string', 'example': 'healthy'},
-                                                    'service': {'type': 'string', 'example': 'hifiberry-config-api'},
-                                                    'version': {'type': 'string', 'example': '1.7.0'}
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
                     '/version': {
                         'get': {
                             'summary': 'Version Information',
@@ -340,7 +303,6 @@ class ConfigAPIServer:
                                                     'endpoints': {
                                                         'type': 'object',
                                                         'example': {
-                                                            'health': '/health',
                                                             'version': '/version',
                                                             'config': '/api/v1/config',
                                                             'docs': '/docs',
@@ -421,7 +383,7 @@ class ConfigAPIServer:
                             }
                         }
                     },
-                    '/api/v1/config/{key}': {
+                    '/api/v1/config/key/{key}': {
                         'get': {
                             'summary': 'Get Configuration Value',
                             'description': 'Retrieve a specific configuration value by key',
@@ -643,16 +605,6 @@ class ConfigAPIServer:
             }
             return jsonify(spec)
         
-        # Health check endpoint
-        @self.app.route('/health', methods=['GET'])
-        def health_check():
-            """Health check endpoint"""
-            return jsonify({
-                'status': 'healthy',
-                'service': 'hifiberry-config-api',
-                'version': '1.7.0'
-            })
-        
         # Version endpoint
         @self.app.route('/version', methods=['GET'])
         @self.app.route('/api/v1/version', methods=['GET'])
@@ -664,7 +616,6 @@ class ConfigAPIServer:
                 'api_version': 'v1',
                 'description': 'HiFiBerry Configuration Server',
                 'endpoints': {
-                    'health': '/health',
                     'version': '/version',
                     'config': '/api/v1/config',
                     'docs': '/docs',
@@ -709,7 +660,7 @@ class ConfigAPIServer:
                     'message': 'Failed to retrieve configuration keys'
                 }), 500
         
-        @self.app.route('/api/v1/config/<key>', methods=['GET'])
+        @self.app.route('/api/v1/config/key/<key>', methods=['GET'])
         def get_config_value(key):
             """Get a specific configuration value"""
             try:
@@ -738,7 +689,7 @@ class ConfigAPIServer:
                     'message': 'Failed to retrieve configuration value'
                 }), 500
         
-        @self.app.route('/api/v1/config/<key>', methods=['PUT', 'POST'])
+        @self.app.route('/api/v1/config/key/<key>', methods=['PUT', 'POST'])
         def set_config_value(key):
             """Set a configuration value"""
             try:
@@ -786,7 +737,7 @@ class ConfigAPIServer:
                     'message': 'Failed to set configuration value'
                 }), 500
         
-        @self.app.route('/api/v1/config/<key>', methods=['DELETE'])
+        @self.app.route('/api/v1/config/key/<key>', methods=['DELETE'])
         def delete_config_value(key):
             """Delete a configuration value"""
             try:
