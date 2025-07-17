@@ -58,12 +58,17 @@ def parse_arguments():
                         help='Remove a mount configuration from the config database and unmount if active')
     command_group.add_argument('--mount-all', action='store_true',
                         help='Mount all shares defined in the config database')
+    command_group.add_argument('--mount', action='store_true',
+                        help='Mount a specific share (requires --id OR --server and --share)')
+    command_group.add_argument('--unmount', action='store_true',
+                        help='Unmount a specific share (requires --id OR --server and --share)')
     command_group.add_argument('--list-mounts', action='store_true',
                         help='List all configured mounts')
 
     # Mount configuration options
     parser.add_argument('--server', help='Server name or IP address (for mount operations)')
     parser.add_argument('--share', help='Share name (for mount operations)')
+    parser.add_argument('--id', type=int, help='Mount ID from config database (alternative to --server/--share)')
     parser.add_argument('--user', help='Username for connection')
     parser.add_argument('--password', help='Password for connection')
     parser.add_argument('--mountpoint', help='Mount point (default: /data/server-share)')
@@ -109,6 +114,7 @@ def read_mount_config(secure: bool = False) -> List[Dict[str, str]]:
         options = db.get(f"{prefix}.options", "")
 
         mounts.append({
+            'id': index,
             'server': server,
             'share': share,
             'mountpoint': mountpoint,
@@ -441,6 +447,239 @@ def mount_all_shares() -> Dict[str, Any]:
 
     return results
 
+def find_mount_by_id(mount_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Find a mount configuration by its ID.
+    
+    Args:
+        mount_id: The mount ID to search for
+        
+    Returns:
+        Mount configuration dictionary or None if not found
+    """
+    mounts = read_mount_config(secure=True)
+    for mount in mounts:
+        if mount.get('id') == mount_id:
+            return mount
+    return None
+
+def find_mount_by_server_share(server: str, share: str) -> Optional[Dict[str, Any]]:
+    """
+    Find a mount configuration by server and share name.
+    
+    Args:
+        server: Server name or IP address
+        share: Share name
+        
+    Returns:
+        Mount configuration dictionary or None if not found
+    """
+    mounts = read_mount_config(secure=True)
+    for mount in mounts:
+        if mount['server'] == server and mount['share'] == share:
+            return mount
+    return None
+
+def mount_smb_share_by_id(mount_id: int) -> bool:
+    """
+    Mount a specific SMB share by its configuration ID.
+    
+    Args:
+        mount_id: The mount ID from the configuration database
+        
+    Returns:
+        True if successfully mounted and verified, False otherwise
+    """
+    try:
+        # Find the mount configuration by ID
+        target_mount = find_mount_by_id(mount_id)
+        
+        if not target_mount:
+            logger.error(f"Mount configuration with ID {mount_id} not found")
+            return False
+        
+        server = target_mount['server']
+        share = target_mount['share']
+        mountpoint = target_mount['mountpoint']
+        user = target_mount['user'] if target_mount['user'] else None
+        password = target_mount['password'] if target_mount['password'] else None
+        version = target_mount['version'] if target_mount['version'] else None
+        options = target_mount['options'] if target_mount['options'] else None
+        
+        logger.info(f"Attempting to mount ID {mount_id}: {server}/{share} at {mountpoint}")
+        
+        # Check if already mounted
+        if is_mounted(mountpoint):
+            logger.info(f"ID {mount_id} ({server}/{share}) is already mounted at {mountpoint}")
+            return True
+        
+        # Attempt to mount
+        mount_success = mount_cifs_share(server, share, mountpoint, user, password, version, options)
+        
+        if not mount_success:
+            logger.error(f"Failed to mount ID {mount_id} ({server}/{share})")
+            return False
+        
+        # Verify the mount succeeded by checking again
+        if is_mounted(mountpoint):
+            logger.info(f"Successfully mounted and verified ID {mount_id} ({server}/{share}) at {mountpoint}")
+            return True
+        else:
+            logger.error(f"Mount command succeeded but verification failed for ID {mount_id} ({server}/{share})")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error mounting ID {mount_id}: {e}")
+        return False
+
+def unmount_smb_share_by_id(mount_id: int) -> bool:
+    """
+    Unmount a specific SMB share by its configuration ID.
+    
+    Args:
+        mount_id: The mount ID from the configuration database
+        
+    Returns:
+        True if successfully unmounted and verified, False otherwise
+    """
+    try:
+        # Find the mount configuration by ID
+        target_mount = find_mount_by_id(mount_id)
+        
+        if not target_mount:
+            logger.error(f"Mount configuration with ID {mount_id} not found")
+            return False
+        
+        server = target_mount['server']
+        share = target_mount['share']
+        mountpoint = target_mount['mountpoint']
+        
+        logger.info(f"Attempting to unmount ID {mount_id}: {server}/{share} from {mountpoint}")
+        
+        # Check if actually mounted
+        if not is_mounted(mountpoint):
+            logger.info(f"ID {mount_id} ({server}/{share}) is not mounted at {mountpoint}")
+            return True
+        
+        # Attempt to unmount
+        unmount_success = unmount_share(mountpoint)
+        
+        if not unmount_success:
+            logger.error(f"Failed to unmount ID {mount_id} ({server}/{share})")
+            return False
+        
+        # Verify the unmount succeeded by checking again
+        if not is_mounted(mountpoint):
+            logger.info(f"Successfully unmounted and verified ID {mount_id} ({server}/{share}) from {mountpoint}")
+            return True
+        else:
+            logger.error(f"Unmount command succeeded but verification failed for ID {mount_id} ({server}/{share})")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error unmounting ID {mount_id}: {e}")
+        return False
+
+def mount_smb_share(server: str, share: str) -> bool:
+    """
+    Mount a specific SMB share by server and share name.
+    This function looks up the configuration and mounts the share with verification.
+    
+    Args:
+        server: Server name or IP address
+        share: Share name
+        
+    Returns:
+        True if successfully mounted and verified, False otherwise
+    """
+    try:
+        # Find the mount configuration by server and share
+        target_mount = find_mount_by_server_share(server, share)
+        
+        if not target_mount:
+            logger.error(f"Mount configuration for {server}/{share} not found")
+            return False
+        
+        mountpoint = target_mount['mountpoint']
+        user = target_mount['user'] if target_mount['user'] else None
+        password = target_mount['password'] if target_mount['password'] else None
+        version = target_mount['version'] if target_mount['version'] else None
+        options = target_mount['options'] if target_mount['options'] else None
+        
+        logger.info(f"Attempting to mount {server}/{share} at {mountpoint}")
+        
+        # Check if already mounted
+        if is_mounted(mountpoint):
+            logger.info(f"{server}/{share} is already mounted at {mountpoint}")
+            return True
+        
+        # Attempt to mount
+        mount_success = mount_cifs_share(server, share, mountpoint, user, password, version, options)
+        
+        if not mount_success:
+            logger.error(f"Failed to mount {server}/{share}")
+            return False
+        
+        # Verify the mount succeeded by checking again
+        if is_mounted(mountpoint):
+            logger.info(f"Successfully mounted and verified {server}/{share} at {mountpoint}")
+            return True
+        else:
+            logger.error(f"Mount command succeeded but verification failed for {server}/{share}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error mounting {server}/{share}: {e}")
+        return False
+
+def unmount_smb_share(server: str, share: str) -> bool:
+    """
+    Unmount a specific SMB share by server and share name.
+    This function looks up the configuration and unmounts the share with verification.
+    
+    Args:
+        server: Server name or IP address
+        share: Share name
+        
+    Returns:
+        True if successfully unmounted and verified, False otherwise
+    """
+    try:
+        # Find the mount configuration by server and share
+        target_mount = find_mount_by_server_share(server, share)
+        
+        if not target_mount:
+            logger.error(f"Mount configuration for {server}/{share} not found")
+            return False
+        
+        mountpoint = target_mount['mountpoint']
+        
+        logger.info(f"Attempting to unmount {server}/{share} from {mountpoint}")
+        
+        # Check if actually mounted
+        if not is_mounted(mountpoint):
+            logger.info(f"{server}/{share} is not mounted at {mountpoint}")
+            return True
+        
+        # Attempt to unmount
+        unmount_success = unmount_share(mountpoint)
+        
+        if not unmount_success:
+            logger.error(f"Failed to unmount {server}/{share}")
+            return False
+        
+        # Verify the unmount succeeded by checking again
+        if not is_mounted(mountpoint):
+            logger.info(f"Successfully unmounted and verified {server}/{share} from {mountpoint}")
+            return True
+        else:
+            logger.error(f"Unmount command succeeded but verification failed for {server}/{share}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error unmounting {server}/{share}: {e}")
+        return False
+
 def list_configured_mounts() -> List[Dict[str, str]]:
     """
     List all mounts from the configuration database.
@@ -535,12 +774,61 @@ def main():
             logger.warning("No shares were mounted")
             sys.exit(0)
     
+    elif args.mount:
+        # Mount a specific share
+        if args.id:
+            # Mount by ID
+            success = mount_smb_share_by_id(args.id)
+            if success:
+                logger.info(f"Successfully mounted share with ID {args.id}")
+                sys.exit(0)
+            else:
+                logger.error(f"Failed to mount share with ID {args.id}")
+                sys.exit(1)
+        elif args.server and args.share:
+            # Mount by server/share
+            success = mount_smb_share(args.server, args.share)
+            if success:
+                logger.info(f"Successfully mounted {args.server}/{args.share}")
+                sys.exit(0)
+            else:
+                logger.error(f"Failed to mount {args.server}/{args.share}")
+                sys.exit(1)
+        else:
+            logger.error("--mount requires either --id or both --server and --share")
+            sys.exit(1)
+    
+    elif args.unmount:
+        # Unmount a specific share
+        if args.id:
+            # Unmount by ID
+            success = unmount_smb_share_by_id(args.id)
+            if success:
+                logger.info(f"Successfully unmounted share with ID {args.id}")
+                sys.exit(0)
+            else:
+                logger.error(f"Failed to unmount share with ID {args.id}")
+                sys.exit(1)
+        elif args.server and args.share:
+            # Unmount by server/share
+            success = unmount_smb_share(args.server, args.share)
+            if success:
+                logger.info(f"Successfully unmounted {args.server}/{args.share}")
+                sys.exit(0)
+            else:
+                logger.error(f"Failed to unmount {args.server}/{args.share}")
+                sys.exit(1)
+        else:
+            logger.error("--unmount requires either --id or both --server and --share")
+            sys.exit(1)
+    
     elif args.list_mounts:
         # List all configured mounts
         mounts = list_configured_mounts()
         
         if mounts:
             for mount in mounts:
+                mount_id = mount.get('id', '?')
                 server = mount['server']
                 share = mount['share']
                 mountpoint = mount['mountpoint']
@@ -553,10 +841,10 @@ def main():
                 status_icon = "✓" if mounted else "✗"
                 status_text = "MOUNTED" if mounted else "UNMOUNTED"
 
-                # Format: [STATUS] //user@server/share -> mountpoint (SMB Version)
+                # Format: [ID] [STATUS] //user@server/share -> mountpoint (SMB Version)
                 user_prefix = f"{user}@" if user else ""
                 password_suffix = f" (Password: {password})" if password else ""
-                print(f"[{status_icon} {status_text}] //{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
+                print(f"[{mount_id}] [{status_icon} {status_text}] //{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
         else:
             logger.warning("No mount configurations found in configdb")
 

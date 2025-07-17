@@ -49,7 +49,9 @@ Get version information and available endpoints.
     "smb_shares": "/api/v1/smb/shares/<server>",
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount": "/api/v1/smb/mount",
-    "smb_unmount": "/api/v1/smb/unmount/<server>/<share>"
+    "smb_unmount": "/api/v1/smb/unmount/<server>/<share>",
+    "smb_mount_by_id": "/api/v1/smb/mount/<id>",
+    "smb_unmount_by_id": "/api/v1/smb/unmount/<id>"
   }
 }
 ```
@@ -440,6 +442,7 @@ List all configured SMB mount points for music access with real-time mount statu
   "data": {
     "mounts": [
       {
+        "id": 1,
         "server": "192.168.1.100",
         "share": "music",
         "mountpoint": "/data/music",
@@ -449,6 +452,7 @@ List all configured SMB mount points for music access with real-time mount statu
         "mounted": true
       },
       {
+        "id": 2,
         "server": "192.168.1.101",
         "share": "media",
         "mountpoint": "/data/nas-media",
@@ -546,6 +550,66 @@ Unmount and remove an SMB share configuration.
 {
   "status": "error",
   "message": "Mount configuration not found for 192.168.1.100/music"
+}
+```
+
+#### `POST /api/v1/smb/mount/{id}`
+
+Mount a specific SMB share by its configuration ID.
+
+**Parameters:**
+- **id** (path, required): Mount configuration ID
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "SMB share mounted successfully",
+  "data": {
+    "id": 1,
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "mounted": true
+  }
+}
+```
+
+**Response (Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Mount configuration with ID 1 not found"
+}
+```
+
+#### `DELETE /api/v1/smb/unmount/{id}`
+
+Unmount a specific SMB share by its configuration ID.
+
+**Parameters:**
+- **id** (path, required): Mount configuration ID
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "SMB share unmounted successfully",
+  "data": {
+    "id": 1,
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "unmounted": true
+  }
+}
+```
+
+**Response (Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Mount configuration with ID 1 not found"
 }
 ```
 

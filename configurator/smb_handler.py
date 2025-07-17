@@ -15,7 +15,10 @@ from configurator.sambamount import (
     write_mount_config,
     add_mount_config,
     remove_mount_config,
-    is_mounted
+    is_mounted,
+    mount_smb_share_by_id,
+    unmount_smb_share_by_id,
+    find_mount_by_id
 )
 
 logger = logging.getLogger(__name__)
@@ -321,5 +324,97 @@ class SMBHandler:
             return jsonify({
                 'status': 'error',
                 'message': f'Failed to unmount SMB share {server}/{share}',
+                'error': str(e)
+            }), 500
+
+    def handle_mount_by_id(self, mount_id: int) -> Dict[str, Any]:
+        """
+        Handle POST /api/v1/smb/mount/<id>
+        Mount an SMB share by its configuration ID
+        """
+        try:
+            logger.debug(f"Mounting SMB share by ID: {mount_id}")
+            
+            # Find the mount configuration
+            mount_config = find_mount_by_id(mount_id)
+            if not mount_config:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Mount configuration with ID {mount_id} not found'
+                }), 404
+            
+            # Mount the share
+            success = mount_smb_share_by_id(mount_id)
+            
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': 'SMB share mounted successfully',
+                    'data': {
+                        'id': mount_id,
+                        'server': mount_config['server'],
+                        'share': mount_config['share'],
+                        'mountpoint': mount_config['mountpoint'],
+                        'mounted': True
+                    }
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to mount SMB share with ID {mount_id}'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Error mounting SMB share by ID {mount_id}: {e}")
+            logger.debug(traceback.format_exc())
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to mount SMB share with ID {mount_id}',
+                'error': str(e)
+            }), 500
+
+    def handle_unmount_by_id(self, mount_id: int) -> Dict[str, Any]:
+        """
+        Handle DELETE /api/v1/smb/unmount/<id>
+        Unmount an SMB share by its configuration ID
+        """
+        try:
+            logger.debug(f"Unmounting SMB share by ID: {mount_id}")
+            
+            # Find the mount configuration
+            mount_config = find_mount_by_id(mount_id)
+            if not mount_config:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Mount configuration with ID {mount_id} not found'
+                }), 404
+            
+            # Unmount the share
+            success = unmount_smb_share_by_id(mount_id)
+            
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': 'SMB share unmounted successfully',
+                    'data': {
+                        'id': mount_id,
+                        'server': mount_config['server'],
+                        'share': mount_config['share'],
+                        'mountpoint': mount_config['mountpoint'],
+                        'unmounted': True
+                    }
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to unmount SMB share with ID {mount_id}'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Error unmounting SMB share by ID {mount_id}: {e}")
+            logger.debug(traceback.format_exc())
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to unmount SMB share with ID {mount_id}',
                 'error': str(e)
             }), 500
