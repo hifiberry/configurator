@@ -165,22 +165,36 @@ class SMBHandler:
     def handle_list_mounts(self) -> Dict[str, Any]:
         """
         Handle GET /api/v1/smb/mounts
-        List all configured SMB mounts
+        List all configured SMB mounts with mount status
         """
         try:
-            logger.debug("Listing SMB mount configurations")
+            logger.debug("Listing SMB mount configurations with mount status")
             mounts = read_mount_config(secure=True)
             
-            # Check mount status for each mount
+            # Check mount status for each mount and collect statistics
+            mounted_count = 0
+            unmounted_count = 0
+            
             for mount in mounts:
                 mountpoint = mount.get('mountpoint', '')
-                mount['mounted'] = is_mounted(mountpoint) if mountpoint else False
+                is_mount_active = is_mounted(mountpoint) if mountpoint else False
+                mount['mounted'] = is_mount_active
+                
+                if is_mount_active:
+                    mounted_count += 1
+                else:
+                    unmounted_count += 1
             
             return jsonify({
                 'status': 'success',
                 'data': {
                     'mounts': mounts,
-                    'count': len(mounts)
+                    'count': len(mounts),
+                    'summary': {
+                        'total': len(mounts),
+                        'mounted': mounted_count,
+                        'unmounted': unmounted_count
+                    }
                 }
             })
             

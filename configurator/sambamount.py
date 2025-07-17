@@ -446,13 +446,19 @@ def list_configured_mounts() -> List[Dict[str, str]]:
     List all mounts from the configuration database.
     
     Returns:
-        List of mount configurations
+        List of mount configurations with mount status included
     """
     # Read mount configurations
     mounts = read_mount_config()
     
     if not mounts:
         logger.debug("No mount configurations found in configdb")
+        return mounts
+    
+    # Check mount status for each mount
+    for mount in mounts:
+        mountpoint = mount.get('mountpoint', '')
+        mount['mounted'] = is_mounted(mountpoint) if mountpoint else False
     
     return mounts
 
@@ -541,11 +547,16 @@ def main():
                 user = mount['user'] if 'user' in mount and mount['user'] else ''
                 version = mount['version'] if 'version' in mount and mount['version'] else 'Auto'
                 password = '***' if 'password' in mount and mount['password'] else ''
+                mounted = mount.get('mounted', False)
+                
+                # Mount status indicator
+                status_icon = "✓" if mounted else "✗"
+                status_text = "MOUNTED" if mounted else "UNMOUNTED"
 
-                # Format: //user@server/share -> mountpoint (SMB Version)
+                # Format: [STATUS] //user@server/share -> mountpoint (SMB Version)
                 user_prefix = f"{user}@" if user else ""
                 password_suffix = f" (Password: {password})" if password else ""
-                print(f"//{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
+                print(f"[{status_icon} {status_text}] //{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
         else:
             logger.warning("No mount configurations found in configdb")
 

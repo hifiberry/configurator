@@ -431,7 +431,7 @@ List available shares on a specific SMB server.
 
 #### `GET /api/v1/smb/mounts`
 
-List all configured SMB mount points for music access.
+List all configured SMB mount points for music access with real-time mount status.
 
 **Response:**
 ```json
@@ -458,7 +458,12 @@ List all configured SMB mount points for music access.
         "mounted": false
       }
     ],
-    "count": 2
+    "count": 2,
+    "summary": {
+      "total": 2,
+      "mounted": 1,
+      "unmounted": 1
+    }
   }
 }
 ```
