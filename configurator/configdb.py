@@ -12,6 +12,7 @@ import logging
 import argparse
 import base64
 from cryptography.fernet import Fernet
+from flask import request, jsonify
 
 CONFIG_DB = "/var/hifiberry/config.sqlite"
 KEY_FILE = "/etc/configdb.key"
@@ -245,6 +246,122 @@ class ConfigDB:
         except Exception as e:
             logging.error(f"Error getting all keys: {str(e)}")
             return {}
+
+    # Flask handler methods for API endpoints
+    def handle_get_config_keys(self):
+        """Flask handler: Get all configuration keys"""
+        try:
+            prefix = request.args.get('prefix')
+            keys = self.list_keys(prefix)
+            return jsonify({
+                'status': 'success',
+                'data': keys,
+                'count': len(keys)
+            })
+        except Exception as e:
+            logging.error(f"Error getting config keys: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to retrieve configuration keys'
+            }), 500
+    
+    def handle_get_config_value(self, key: str):
+        """Flask handler: Get a specific configuration value"""
+        try:
+            secure = request.args.get('secure', 'false').lower() == 'true'
+            default = request.args.get('default')
+            
+            value = self.get(key, default, secure)
+            
+            if value is None and default is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Configuration key "{key}" not found'
+                }), 404
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'key': key,
+                    'value': value
+                }
+            })
+        except Exception as e:
+            logging.error(f"Error getting config value for key {key}: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to retrieve configuration value'
+            }), 500
+    
+    def handle_set_config_value(self, key: str):
+        """Flask handler: Set a configuration value"""
+        try:
+            if not request.is_json:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Content-Type must be application/json'
+                }), 400
+            
+            data = request.get_json()
+            if 'value' not in data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Missing required field: value'
+                }), 400
+            
+            value = data['value']
+            secure = data.get('secure', False)
+            
+            # Convert value to string if it's not already
+            if not isinstance(value, str):
+                value = str(value)
+            
+            success = self.set(key, value, secure)
+            
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Configuration key "{key}" set successfully',
+                    'data': {
+                        'key': key,
+                        'value': value
+                    }
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to set configuration value'
+                }), 500
+                
+        except Exception as e:
+            logging.error(f"Error setting config value for key {key}: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to set configuration value'
+            }), 500
+    
+    def handle_delete_config_value(self, key: str):
+        """Flask handler: Delete a configuration value"""
+        try:
+            success = self.delete(key)
+            
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Configuration key "{key}" deleted successfully'
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to delete configuration value'
+                }), 500
+                
+        except Exception as e:
+            logging.error(f"Error deleting config value for key {key}: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to delete configuration value'
+            }), 500
 
 def main():
     # Configure logging
