@@ -7,7 +7,7 @@ with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
 
 setup(
     name="configurator",
-    version="1.7.0",
+    version="1.8.0",
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",

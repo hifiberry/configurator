@@ -18,6 +18,7 @@ from typing import Dict, Any, Optional
 # Import the ConfigDB class
 from .configdb import ConfigDB
 from .systemd_handler import SystemdHandler
+from .systeminfo import SystemInfo
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class ConfigAPIServer:
         self.app = Flask(__name__)
         self.configdb = ConfigDB()
         self.systemd_handler = SystemdHandler()
+        self.systeminfo = SystemInfo()
         
         # Configure Flask logging
         if not debug:
@@ -58,11 +60,12 @@ class ConfigAPIServer:
             """Get version information"""
             return jsonify({
                 'service': 'hifiberry-config-api',
-                'version': '1.7.0',
+                'version': '1.8.0',
                 'api_version': 'v1',
                 'description': 'HiFiBerry Configuration Server',
                 'endpoints': {
                     'version': '/version',
+                    'systeminfo': '/api/v1/systeminfo',
                     'keys': '/api/v1/keys',
                     'key': '/api/v1/key/<key>',
                     'systemd_services': '/api/v1/systemd/services',
@@ -71,6 +74,21 @@ class ConfigAPIServer:
                     'systemd_operation': '/api/v1/systemd/service/<service>/<operation>'
                 }
             })
+        
+        # System information endpoint
+        @self.app.route('/api/v1/systeminfo', methods=['GET'])
+        def get_system_info():
+            """Get system information including Pi model and HAT info"""
+            try:
+                info = self.systeminfo.get_system_info_dict()
+                return jsonify(info)
+            except Exception as e:
+                logger.error(f"Error getting system info: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to retrieve system information',
+                    'error': str(e)
+                }), 500
         
         # Configuration endpoints using configdb handlers
         @self.app.route('/api/v1/keys', methods=['GET'])
