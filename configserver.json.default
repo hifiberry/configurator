@@ -2,6 +2,8 @@
     "systemd": {
         "shairport": "all",
         "raat": "all",
-        "mpd": "all"
+        "mpd": "all",
+        "squeezelite": "all",
+        "librespot": "all"
     }
 }
