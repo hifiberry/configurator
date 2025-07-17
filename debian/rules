@@ -2,3 +2,8 @@
  
 %:
 	dh $@ --buildsystem=pybuild
+
+override_dh_install:
+	dh_install
+	# Install config files
+	install -D -m 644 configserver.json.default $(CURDIR)/debian/hifiberry-configurator/etc/configserver/configserver.json.default

@@ -1,0 +1,7 @@
+{
+    "systemd": {
+        "shairport": "all",
+        "raat": "all",
+        "mpd": "all"
+    }
+}

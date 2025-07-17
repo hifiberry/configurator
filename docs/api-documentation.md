@@ -3,13 +3,16 @@
 **Version 1.7.0**
 
 - [Endpoints](#endpoints)
+  - [Version Information](#version-information)
+  - [Configuration Management](#configuration-management)
+  - [System Service Management](#system-service-management)
+- [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
-- [OpenAPI Spec](/api/v1/openapi.json)
 
 ## Overview
 
-The HiFiBerry Configuration API provides REST endpoints for managing configuration settings in the HiFiBerry system. All responses are in JSON format with consistent structure.
+The HiFiBerry Configuration API provides REST endpoints for managing configuration settings and system services in the HiFiBerry system. All responses are in JSON format with consistent structure.
 
 **Base URL:** `http://localhost:1081`
 
@@ -17,28 +20,33 @@ The HiFiBerry Configuration API provides REST endpoints for managing configurati
 
 ## Endpoints
 
-### `GET /version`
+### Version Information
+
+#### `GET /version`
 
 Get version information and available endpoints.
 
 **Response:**
 ```json
-{"service": "hifiberry-config-api", "version": "1.7.0", "api_version": "v1", "description": "HiFiBerry Configuration Server", "endpoints": {"version": "/version", "config": "/api/v1/config", "docs": "/docs", "openapi": "/api/v1/openapi.json"}}
+{
+  "service": "hifiberry-config-api",
+  "version": "1.7.0",
+  "api_version": "v1",
+  "description": "HiFiBerry Configuration Server",
+  "endpoints": {
+    "version": "/version",
+    "keys": "/api/v1/keys",
+    "key": "/api/v1/key/<key>",
+    "systemd_services": "/api/v1/systemd/services",
+    "systemd_service": "/api/v1/systemd/service/<service>",
+    "systemd_operation": "/api/v1/systemd/service/<service>/<operation>"
+  }
+}
 ```
 
-### `GET /api/v1/config`
+### Configuration Management
 
-Get all configuration key-value pairs.
-
-**Parameters:**
-- **prefix** (query, optional): Filter keys by prefix
-
-**Response:**
-```json
-{"status": "success", "data": {"volume": "75", "soundcard": "hifiberry-dac"}, "count": 2}
-```
-
-### `GET /api/v1/config/keys`
+#### `GET /api/v1/keys`
 
 Get all configuration keys only (without values).
 
@@ -47,10 +55,14 @@ Get all configuration keys only (without values).
 
 **Response:**
 ```json
-{"status": "success", "data": ["volume", "soundcard"], "count": 2}
+{
+  "status": "success",
+  "data": ["volume", "soundcard"],
+  "count": 2
+}
 ```
 
-### `GET /api/v1/config/key/{key}`
+#### `GET /api/v1/key/{key}`
 
 Get a specific configuration value by key.
 
@@ -61,10 +73,16 @@ Get a specific configuration value by key.
 
 **Response:**
 ```json
-{"status": "success", "data": {"key": "volume", "value": "75"}}
+{
+  "status": "success",
+  "data": {
+    "key": "volume",
+    "value": "75"
+  }
+}
 ```
 
-### `POST` / `PUT /api/v1/config/key/{key}`
+#### `POST` / `PUT /api/v1/key/{key}`
 
 Set or update a configuration value.
 
@@ -78,15 +96,25 @@ Set or update a configuration value.
 
 **Request Body Example:**
 ```json
-{"value": "75", "secure": false}
+{
+  "value": "75",
+  "secure": false
+}
 ```
 
 **Response:**
 ```json
-{"status": "success", "message": "Configuration key \"volume\" set successfully", "data": {"key": "volume", "value": "75"}}
+{
+  "status": "success",
+  "message": "Configuration key \"volume\" set successfully",
+  "data": {
+    "key": "volume",
+    "value": "75"
+  }
+}
 ```
 
-### `DELETE /api/v1/config/key/{key}`
+#### `DELETE /api/v1/key/{key}`
 
 Delete a configuration key and its value.
 
@@ -95,45 +123,200 @@ Delete a configuration key and its value.
 
 **Response:**
 ```json
-{"status": "success", "message": "Configuration key \"volume\" deleted successfully"}
+{
+  "status": "success",
+  "message": "Configuration key \"volume\" deleted successfully"
+}
 ```
+
+### System Service Management
+
+The systemd API allows controlled management of system services based on permissions defined in the configuration file.
+
+#### `GET /api/v1/systemd/services`
+
+List all configured services and their permissions.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "services": [
+      {
+        "service": "shairport",
+        "permission_level": "all",
+        "allowed_operations": ["start", "stop", "restart", "enable", "disable", "status"],
+        "active": "active",
+        "enabled": "enabled"
+      },
+      {
+        "service": "mpd",
+        "permission_level": "all",
+        "allowed_operations": ["start", "stop", "restart", "enable", "disable", "status"],
+        "active": "inactive",
+        "enabled": "disabled"
+      }
+    ],
+    "count": 2
+  }
+}
+```
+
+#### `GET /api/v1/systemd/service/{service}`
+
+Get detailed status of a specific service.
+
+**Parameters:**
+- **service** (path, required): Service name
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "service": "shairport",
+    "active": "active",
+    "enabled": "enabled",
+    "status_output": "● shairport.service - Shairport Sync...",
+    "status_returncode": 0,
+    "allowed_operations": ["start", "stop", "restart", "enable", "disable", "status"]
+  }
+}
+```
+
+#### `POST /api/v1/systemd/service/{service}/{operation}`
+
+Execute a systemd operation on a service.
+
+**Parameters:**
+- **service** (path, required): Service name
+- **operation** (path, required): Operation to perform (start, stop, restart, enable, disable, status)
+
+**Valid Operations:**
+- `start` - Start the service
+- `stop` - Stop the service
+- `restart` - Restart the service
+- `enable` - Enable the service for automatic startup
+- `disable` - Disable the service from automatic startup
+- `status` - Get service status (always allowed)
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Successfully executed start on shairport",
+  "data": {
+    "service": "shairport",
+    "operation": "start",
+    "output": "",
+    "returncode": 0
+  }
+}
+```
+
+**Response (Permission Denied):**
+```json
+{
+  "status": "error",
+  "message": "Operation \"start\" not allowed for service \"restricted-service\". Allowed operations: [\"status\"]"
+}
+```
+
+## Configuration File
+
+The systemd API is controlled by `/etc/configserver/configserver.json`:
+
+```json
+{
+  "systemd": {
+    "shairport": "all",
+    "raat": "all",
+    "mpd": "all"
+  }
+}
+```
+
+**Permission Levels:**
+- `"all"` - Allows all operations: start, stop, restart, enable, disable, status
+- `"status"` - Allows only status checking
+- No entry - Defaults to "status" only
+
+The configuration file is managed by the `ConfigParser` class, which provides centralized configuration management for all components.
 
 ## Examples
 
-### curl Commands
+### Configuration Management
 
 **Get version information:**
 ```bash
 curl http://localhost:1081/version
 ```
 
-**Get all configuration:**
+**Get all configuration keys:**
 ```bash
-curl http://localhost:1081/api/v1/config
+curl http://localhost:1081/api/v1/keys
 ```
 
-**Get specific value:**
+**Get specific configuration value:**
 ```bash
-curl http://localhost:1081/api/v1/config/key/volume
+curl http://localhost:1081/api/v1/key/volume
 ```
 
 **Set configuration value:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"value":"75"}' \
-     http://localhost:1081/api/v1/config/key/volume
+     http://localhost:1081/api/v1/key/volume
 ```
 
-**Set secure value:**
+**Set secure/encrypted value:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"value":"secret","secure":true}' \
-     http://localhost:1081/api/v1/config/key/password
+     http://localhost:1081/api/v1/key/password
 ```
 
 **Delete configuration:**
 ```bash
-curl -X DELETE http://localhost:1081/api/v1/config/key/volume
+curl -X DELETE http://localhost:1081/api/v1/key/volume
+```
+
+### System Service Management
+
+**List all configured services:**
+```bash
+curl http://localhost:1081/api/v1/systemd/services
+```
+
+**Get service status:**
+```bash
+curl http://localhost:1081/api/v1/systemd/service/shairport
+```
+
+**Start a service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/start
+```
+
+**Stop a service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/stop
+```
+
+**Restart a service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/restart
+```
+
+**Enable a service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/enable
+```
+
+**Disable a service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/disable
 ```
 
 ## Error Responses
@@ -141,12 +324,17 @@ curl -X DELETE http://localhost:1081/api/v1/config/key/volume
 | HTTP Code | Description | Example Response |
 |-----------|-------------|------------------|
 | 400 | Bad Request | `{"status": "error", "message": "Missing required field: value"}` |
+| 403 | Forbidden | `{"status": "error", "message": "Operation \"start\" not allowed for service \"restricted-service\". Allowed operations: [\"status\"]"}` |
 | 404 | Not Found | `{"status": "error", "message": "Configuration key not found"}` |
 | 500 | Internal Server Error | `{"status": "error", "message": "Failed to retrieve configuration data"}` |
 
-## Additional Resources
+## Security Considerations
 
-- [OpenAPI 3.0 Specification](/api/v1/openapi.json) - Machine-readable API specification
+- The configuration server runs with elevated privileges to manage system services
+- Service operations are strictly controlled by the configuration file permissions
+- Only services explicitly configured in `/etc/configserver/configserver.json` can be controlled
+- Services not listed or marked as "status" only allow status checking
+- All systemd operations have a 30-second timeout to prevent hanging requests
 
 ---
 

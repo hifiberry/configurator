@@ -17,6 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
+from .systemd_handler import SystemdHandler
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class ConfigAPIServer:
         self.debug = debug
         self.app = Flask(__name__)
         self.configdb = ConfigDB()
+        self.systemd_handler = SystemdHandler()
         
         # Configure Flask logging
         if not debug:
@@ -62,7 +64,10 @@ class ConfigAPIServer:
                 'endpoints': {
                     'version': '/version',
                     'keys': '/api/v1/keys',
-                    'key': '/api/v1/key/<key>'
+                    'key': '/api/v1/key/<key>',
+                    'systemd_services': '/api/v1/systemd/services',
+                    'systemd_service': '/api/v1/systemd/service/<service>',
+                    'systemd_operation': '/api/v1/systemd/service/<service>/<operation>'
                 }
             })
         
@@ -86,6 +91,22 @@ class ConfigAPIServer:
         def delete_config_value(key):
             """Delete a configuration value"""
             return self.configdb.handle_delete_config_value(key)
+        
+        # Systemd endpoints
+        @self.app.route('/api/v1/systemd/services', methods=['GET'])
+        def list_systemd_services():
+            """List all configured systemd services and their permissions"""
+            return self.systemd_handler.handle_list_services()
+        
+        @self.app.route('/api/v1/systemd/service/<service>', methods=['GET'])
+        def get_systemd_service_status(service):
+            """Get detailed status of a systemd service"""
+            return self.systemd_handler.handle_systemd_status(service)
+        
+        @self.app.route('/api/v1/systemd/service/<service>/<operation>', methods=['POST'])
+        def execute_systemd_operation(service, operation):
+            """Execute a systemd operation on a service"""
+            return self.systemd_handler.handle_systemd_operation(service, operation)
         
         # Error handlers
         @self.app.errorhandler(400)

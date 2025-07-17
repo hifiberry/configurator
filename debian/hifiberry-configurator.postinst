@@ -3,6 +3,21 @@ set -e
 
 case "$1" in
     configure)
+        # Create config directory
+        mkdir -p /etc/configserver
+        
+        # Copy default config if it doesn't exist
+        if [ ! -f /etc/configserver/configserver.json ]; then
+            if [ -f /etc/configserver/configserver.json.default ]; then
+                cp /etc/configserver/configserver.json.default /etc/configserver/configserver.json
+                echo "Created /etc/configserver/configserver.json from default"
+            fi
+        fi
+        
+        # Set proper permissions
+        chown root:root /etc/configserver/configserver.json* 2>/dev/null || true
+        chmod 644 /etc/configserver/configserver.json* 2>/dev/null || true
+        
         # Enable and start the config-server service
         if command -v systemctl >/dev/null 2>&1; then
             # Reload systemd daemon to recognize new service
@@ -18,7 +33,6 @@ case "$1" in
             
             echo "HiFiBerry Configuration Server has been enabled and started."
             echo "The API is available at http://localhost:1081"
-            echo "Documentation: http://localhost:1081/docs"
         fi
         ;;
     
