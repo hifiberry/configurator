@@ -41,6 +41,24 @@ class SystemdHandler:
         allowed_ops = self._get_service_permissions(service)
         return operation in allowed_ops
     
+    def _service_exists(self, service: str) -> bool:
+        """Check if a systemd service exists on the system"""
+        try:
+            # Use systemctl list-unit-files to check if service exists
+            result = subprocess.run(
+                ['systemctl', 'list-unit-files', '--type=service', '--no-legend', service],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # If service exists, it will be in the output
+            return service in result.stdout
+            
+        except Exception as e:
+            logger.error(f"Error checking if service exists: {e}")
+            return False
+    
     def _execute_systemctl(self, operation: str, service: str) -> tuple:
         """Execute systemctl command safely"""
         try:
@@ -74,6 +92,13 @@ class SystemdHandler:
                     'status': 'error',
                     'message': f'Invalid operation: {operation}. Valid operations: {valid_operations}'
                 }), 400
+            
+            # Check if service exists on the system
+            if not self._service_exists(service):
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Service "{service}" does not exist on the system'
+                }), 404
             
             # Check if operation is allowed for this service
             if not self._is_operation_allowed(service, operation):
@@ -120,6 +145,13 @@ class SystemdHandler:
     def handle_systemd_status(self, service: str):
         """Flask handler: Get detailed status of a service"""
         try:
+            # Check if service exists on the system
+            if not self._service_exists(service):
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Service "{service}" does not exist on the system'
+                }), 404
+            
             # Status is always allowed
             returncode, stdout, stderr = self._execute_systemctl('status', service)
             
@@ -146,6 +178,40 @@ class SystemdHandler:
                 'message': f'Failed to get status for service {service}'
             }), 500
     
+    def handle_service_exists(self, service: str):
+        """Flask handler: Check if a service exists on the system"""
+        try:
+            service_exists = self._service_exists(service)
+            
+            response_data = {
+                'service': service,
+                'exists': service_exists
+            }
+            
+            # If service exists, also provide basic info
+            if service_exists:
+                # Get current status
+                active_code, active_output, _ = self._execute_systemctl('is-active', service)
+                enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
+                
+                response_data.update({
+                    'active': active_output.strip(),
+                    'enabled': enabled_output.strip(),
+                    'allowed_operations': self._get_service_permissions(service)
+                })
+            
+            return jsonify({
+                'status': 'success',
+                'data': response_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking if service exists: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to check if service {service} exists'
+            }), 500
+
     def handle_list_services(self):
         """Flask handler: List all configured services and their permissions"""
         try:
@@ -155,17 +221,33 @@ class SystemdHandler:
             for service, permission in systemd_config.items():
                 allowed_ops = self.allowed_operations.get(permission, ['status'])
                 
-                # Get current status
-                active_code, active_output, _ = self._execute_systemctl('is-active', service)
-                enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
+                # Check if service exists
+                service_exists = self._service_exists(service)
                 
-                services.append({
+                service_info = {
                     'service': service,
                     'permission_level': permission,
                     'allowed_operations': allowed_ops,
-                    'active': active_output.strip(),
-                    'enabled': enabled_output.strip()
-                })
+                    'exists': service_exists
+                }
+                
+                # Only get status if service exists
+                if service_exists:
+                    # Get current status
+                    active_code, active_output, _ = self._execute_systemctl('is-active', service)
+                    enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
+                    
+                    service_info.update({
+                        'active': active_output.strip(),
+                        'enabled': enabled_output.strip()
+                    })
+                else:
+                    service_info.update({
+                        'active': 'not-available',
+                        'enabled': 'not-available'
+                    })
+                
+                services.append(service_info)
             
             return jsonify({
                 'status': 'success',

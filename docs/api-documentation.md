@@ -39,6 +39,7 @@ Get version information and available endpoints.
     "key": "/api/v1/key/<key>",
     "systemd_services": "/api/v1/systemd/services",
     "systemd_service": "/api/v1/systemd/service/<service>",
+    "systemd_service_exists": "/api/v1/systemd/service/<service>/exists",
     "systemd_operation": "/api/v1/systemd/service/<service>/<operation>"
   }
 }
@@ -181,6 +182,38 @@ Get detailed status of a specific service.
     "status_output": "● shairport.service - Shairport Sync...",
     "status_returncode": 0,
     "allowed_operations": ["start", "stop", "restart", "enable", "disable", "status"]
+  }
+}
+```
+
+#### `GET /api/v1/systemd/service/{service}/exists`
+
+Check if a systemd service exists on the system.
+
+**Parameters:**
+- **service** (path, required): Service name
+
+**Response (Service Exists):**
+```json
+{
+  "status": "success",
+  "data": {
+    "service": "shairport",
+    "exists": true,
+    "active": "active",
+    "enabled": "enabled",
+    "allowed_operations": ["start", "stop", "restart", "enable", "disable", "status"]
+  }
+}
+```
+
+**Response (Service Does Not Exist):**
+```json
+{
+  "status": "success",
+  "data": {
+    "service": "nonexistent-service",
+    "exists": false
   }
 }
 ```

@@ -67,6 +67,7 @@ class ConfigAPIServer:
                     'key': '/api/v1/key/<key>',
                     'systemd_services': '/api/v1/systemd/services',
                     'systemd_service': '/api/v1/systemd/service/<service>',
+                    'systemd_service_exists': '/api/v1/systemd/service/<service>/exists',
                     'systemd_operation': '/api/v1/systemd/service/<service>/<operation>'
                 }
             })
@@ -102,6 +103,11 @@ class ConfigAPIServer:
         def get_systemd_service_status(service):
             """Get detailed status of a systemd service"""
             return self.systemd_handler.handle_systemd_status(service)
+        
+        @self.app.route('/api/v1/systemd/service/<service>/exists', methods=['GET'])
+        def check_service_exists(service):
+            """Check if a systemd service exists on the system"""
+            return self.systemd_handler.handle_service_exists(service)
         
         @self.app.route('/api/v1/systemd/service/<service>/<operation>', methods=['POST'])
         def execute_systemd_operation(service, operation):
