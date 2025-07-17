@@ -1,0 +1,109 @@
+.TH CONFIG-SERVER 1 "2024-12-19" "HiFiBerry Configurator 1.7.0" "User Commands"
+.SH NAME
+config-server \- HiFiBerry configuration REST API server
+.SH SYNOPSIS
+.B config-server
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+\fBconfig-server\fR provides a REST API interface to the HiFiBerry configuration database. The server exposes HTTP endpoints for reading and writing configuration parameters programmatically.
+
+The server runs as a daemon and provides secure access to the encrypted configuration database through a simple REST API interface.
+.SH OPTIONS
+.TP
+\fB\-\-host\fR \fIHOST\fR
+Host address to bind the server to (default: 0.0.0.0)
+.TP
+\fB\-\-port\fR \fIPORT\fR
+Port number to listen on (default: 1081)
+.TP
+\fB\-\-debug\fR
+Enable debug mode for development
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Show help message and exit
+.SH API ENDPOINTS
+The server provides the following REST API endpoints:
+.TP
+\fBGET /\fR, \fBGET /docs\fR
+Interactive API documentation with examples and endpoint descriptions
+.TP
+\fBGET /api/v1/openapi.json\fR
+OpenAPI 3.0 specification for the API (machine-readable documentation)
+.TP
+\fBGET /health\fR
+Health check endpoint returning server status
+.TP
+\fBGET /api/v1/config\fR
+List all configuration key-value pairs
+.br
+Query parameters: \fIprefix\fR (optional) - filter keys by prefix
+.TP
+\fBGET /api/v1/config/keys\fR
+List all configuration keys only
+.br
+Query parameters: \fIprefix\fR (optional) - filter keys by prefix
+.TP
+\fBGET /api/v1/config/\fIkey\fR
+Get value for specific configuration key
+.br
+Query parameters: \fIsecure\fR (optional) - access encrypted values, \fIdefault\fR (optional) - default value if key not found
+.TP
+\fBPOST /api/v1/config/\fIkey\fR, \fBPUT /api/v1/config/\fIkey\fR
+Set value for configuration key
+.br
+Request body (JSON): {"value": "...", "secure": false}
+.TP
+\fBDELETE /api/v1/config/\fIkey\fR
+Delete configuration key
+.SH EXAMPLES
+.TP
+Start the API server on default port 1081:
+.B config-server
+.TP
+Start server on specific port:
+.B config-server --port 8080
+.TP
+Start server in debug mode:
+.B config-server --debug
+.TP
+View API documentation in browser:
+.B curl http://localhost:1081/docs
+.TP
+Get OpenAPI specification:
+.B curl http://localhost:1081/api/v1/openapi.json
+.TP
+Get all configuration:
+.B curl http://localhost:1081/api/v1/config
+.TP
+Get configuration keys with prefix:
+.B curl "http://localhost:1081/api/v1/config/keys?prefix=audio"
+.TP
+Get configuration value:
+.B curl http://localhost:1081/api/v1/config/volume
+.TP
+Set configuration value:
+.B curl -X POST -H "Content-Type: application/json" -d '{"value":"75"}' http://localhost:1081/api/v1/config/volume
+.TP
+Set secure configuration value:
+.B curl -X POST -H "Content-Type: application/json" -d '{"value":"secret","secure":true}' http://localhost:1081/api/v1/config/password
+.TP
+Delete configuration value:
+.B curl -X DELETE http://localhost:1081/api/v1/config/volume
+.SH FILES
+.TP
+\fB/var/lib/hifiberry/config.db\fR
+Encrypted configuration database file
+.TP
+\fB/etc/systemd/system/config-server.service\fR
+systemd service file for automatic startup
+.SH SECURITY
+The API server runs with restricted privileges and only has access to the configuration database. No authentication is currently implemented, so access should be restricted at the network level if needed.
+.SH SEE ALSO
+.BR config-get (1),
+.BR config-set (1),
+.BR config-delete (1),
+.BR hifiberry-config (1)
+.SH AUTHOR
+HiFiBerry Team
+.SH BUGS
+Report bugs to the HiFiBerry support team.

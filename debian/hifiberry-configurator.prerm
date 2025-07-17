@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|purge)
+        # Stop and disable the config-server service
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl is-active --quiet config-server.service; then
+                systemctl stop config-server.service
+            fi
+            
+            if systemctl is-enabled --quiet config-server.service; then
+                systemctl disable config-server.service
+            fi
+            
+            # Reload systemd daemon
+            systemctl daemon-reload
+            
+            echo "HiFiBerry Configuration Server has been stopped and disabled."
+        fi
+        ;;
+    
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#

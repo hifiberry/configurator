@@ -1,0 +1,43 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Enable and start the config-server service
+        if command -v systemctl >/dev/null 2>&1; then
+            # Reload systemd daemon to recognize new service
+            systemctl daemon-reload
+            
+            # Enable the service for automatic startup
+            systemctl enable config-server.service
+            
+            # Start the service if not already running
+            if ! systemctl is-active --quiet config-server.service; then
+                systemctl start config-server.service
+            fi
+            
+            echo "HiFiBerry Configuration Server has been enabled and started."
+            echo "The API is available at http://localhost:1081"
+            echo "Documentation: http://localhost:1081/docs"
+            
+            # Reload nginx if it's installed and running
+            if command -v nginx >/dev/null 2>&1; then
+                if systemctl is-active --quiet nginx; then
+                    echo "Reloading nginx configuration..."
+                    systemctl reload nginx || true
+                    echo "Configuration API is also available via nginx at /api/config"
+                fi
+            fi
+        fi
+        ;;
+    
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#

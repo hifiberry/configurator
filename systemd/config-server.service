@@ -1,0 +1,31 @@
+[Unit]
+Description=HiFiBerry Configuration Server
+Documentation=man:config-server(1)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081
+Restart=always
+RestartSec=5
+User=root
+Group=root
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/hifiberry /etc
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=1024
+LimitNPROC=64
+
+[Install]
+WantedBy=multi-user.target

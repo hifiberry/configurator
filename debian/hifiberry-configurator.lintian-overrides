@@ -1,14 +1,17 @@
-# Configuration tools don't need manual pages - they are internal utilities
-hifiberry-configurator: no-manual-page [usr/bin/config-asoundconf]
-hifiberry-configurator: no-manual-page [usr/bin/config-cmdline]
-hifiberry-configurator: no-manual-page [usr/bin/config-configtxt]
-hifiberry-configurator: no-manual-page [usr/bin/config-db]
-hifiberry-configurator: no-manual-page [usr/bin/config-detect]
-hifiberry-configurator: no-manual-page [usr/bin/config-detectpi]
-hifiberry-configurator: no-manual-page [usr/bin/config-hattools]
-hifiberry-configurator: no-manual-page [usr/bin/config-network]
-hifiberry-configurator: no-manual-page [usr/bin/config-sambaclient]
-hifiberry-configurator: no-manual-page [usr/bin/config-sambamount]
-hifiberry-configurator: no-manual-page [usr/bin/config-soundcard]
-hifiberry-configurator: no-manual-page [usr/bin/config-volume]
-hifiberry-configurator: no-manual-page [usr/bin/config-wifi]
+# Configuration tools now have manual pages since 1.7.0
+# hifiberry-configurator: no-manual-page [usr/bin/config-asoundconf]
+# hifiberry-configurator: no-manual-page [usr/bin/config-cmdline]
+# hifiberry-configurator: no-manual-page [usr/bin/config-configtxt]
+# hifiberry-configurator: no-manual-page [usr/bin/config-db]
+# hifiberry-configurator: no-manual-page [usr/bin/config-detect]
+# hifiberry-configurator: no-manual-page [usr/bin/config-detectpi]
+# hifiberry-configurator: no-manual-page [usr/bin/config-hattools]
+# hifiberry-configurator: no-manual-page [usr/bin/config-network]
+# hifiberry-configurator: no-manual-page [usr/bin/config-sambaclient]
+# hifiberry-configurator: no-manual-page [usr/bin/config-sambamount]
+# hifiberry-configurator: no-manual-page [usr/bin/config-soundcard]
+# hifiberry-configurator: no-manual-page [usr/bin/config-volume]
+# hifiberry-configurator: no-manual-page [usr/bin/config-wifi]
+
+# systemctl calls are needed for proper service management
+hifiberry-configurator: maintainer-script-calls-systemctl

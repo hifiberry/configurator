@@ -2,4 +2,5 @@ python3-pyalsaaudio>=0.8.0  # Required for ALSA sound card detection in soundcar
 cryptography
 netifaces  # Required for network interface detection in sambaclient.py
 hateeprom  # Required for HAT EEPROM reading in hattools.py
+flask>=2.0.0  # Required for API server in server.py
 
