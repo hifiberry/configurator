@@ -59,13 +59,15 @@ class SMBHandler:
     
     def handle_test_connection(self, server: str) -> Dict[str, Any]:
         """
-        Handle GET /api/v1/smb/test/<server>
+        Handle POST /api/v1/smb/test/<server>
         Test connection to an SMB server
         """
         try:
-            # Get optional authentication from query parameters
-            username = request.args.get('username')
-            password = request.args.get('password')
+            # Get authentication from POST body
+            data = request.get_json() or {}
+            username = data.get('username')
+            password = data.get('password')
+            credentials_file = data.get('credentials_file')
             
             logger.debug(f"Testing connection to SMB server: {server}")
             
@@ -73,7 +75,8 @@ class SMBHandler:
             connected = check_smb_connection(
                 server=server,
                 username=username,
-                password=password
+                password=password,
+                credentials_file=credentials_file
             )
             
             if connected:
@@ -94,20 +97,20 @@ class SMBHandler:
                         'connected': False,
                         'error': 'Authentication failed or server unreachable'
                     }
-                }), 400
+                })
                 
         except Exception as e:
             logger.error(f"Error testing connection to {server}: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Connection failed',
+                'message': 'Internal server error',
                 'data': {
                     'server': server,
                     'connected': False,
                     'error': str(e)
                 }
-            }), 500
+            })
     
     def handle_list_shares(self, server: str) -> Dict[str, Any]:
         """

@@ -148,7 +148,7 @@ class ConfigAPIServer:
             """List all SMB servers on the network"""
             return self.smb_handler.handle_list_servers()
         
-        @self.app.route('/api/v1/smb/test/<server>', methods=['GET'])
+        @self.app.route('/api/v1/smb/test/<server>', methods=['POST'])
         def test_smb_connection(server):
             """Test connection to an SMB server"""
             return self.smb_handler.handle_test_connection(server)

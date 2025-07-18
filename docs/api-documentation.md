@@ -365,16 +365,28 @@ Discover SMB/CIFS file servers on the local network.
 }
 ```
 
-#### `GET /api/v1/smb/test/{server}`
+#### `POST /api/v1/smb/test/{server}`
 
 Test connection to a specific SMB server.
 
 **Parameters:**
 - **server** (path, required): Server IP address or hostname
-- **username** (query, optional): Username for authentication
-- **password** (query, optional): Password for authentication
 
-**Response (Success):**
+**Request Body:**
+```json
+{
+  "username": "myuser",
+  "password": "mypass",
+  "credentials_file": "/path/to/credentials"
+}
+```
+
+**Request Body Parameters:**
+- **username** (optional): Username for authentication
+- **password** (optional): Password for authentication  
+- **credentials_file** (optional): Path to credentials file
+
+**Response (Success - HTTP 200):**
 ```json
 {
   "status": "success",
@@ -386,7 +398,7 @@ Test connection to a specific SMB server.
 }
 ```
 
-**Response (Failure):**
+**Response (Failure - HTTP 200):**
 ```json
 {
   "status": "error",
@@ -394,7 +406,7 @@ Test connection to a specific SMB server.
   "data": {
     "server": "192.168.1.100",
     "connected": false,
-    "error": "Authentication failed"
+    "error": "Authentication failed or server unreachable"
   }
 }
 ```
@@ -754,12 +766,15 @@ curl http://localhost:1081/api/v1/smb/servers
 
 **Test connection to a server:**
 ```bash
-curl http://localhost:1081/api/v1/smb/test/192.168.1.100
+curl -X POST http://localhost:1081/api/v1/smb/test/192.168.1.100 \
+  -H "Content-Type: application/json"
 ```
 
 **Test connection with authentication:**
 ```bash
-curl "http://localhost:1081/api/v1/smb/test/192.168.1.100?username=musicuser&password=mypass"
+curl -X POST http://localhost:1081/api/v1/smb/test/192.168.1.100 \
+  -H "Content-Type: application/json" \
+  -d '{"username": "musicuser", "password": "mypass"}'
 ```
 
 **List shares on a server:**
