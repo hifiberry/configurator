@@ -376,15 +376,13 @@ Test connection to a specific SMB server.
 ```json
 {
   "username": "myuser",
-  "password": "mypass",
-  "credentials_file": "/path/to/credentials"
+  "password": "mypass"
 }
 ```
 
 **Request Body Parameters:**
 - **username** (optional): Username for authentication
-- **password** (optional): Password for authentication  
-- **credentials_file** (optional): Path to credentials file
+- **password** (optional): Password for authentication
 
 **Response (Success - HTTP 200):**
 ```json

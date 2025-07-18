@@ -67,16 +67,14 @@ class SMBHandler:
             data = request.get_json() or {}
             username = data.get('username')
             password = data.get('password')
-            credentials_file = data.get('credentials_file')
             
             logger.debug(f"Testing connection to SMB server: {server}")
             
             # Test connection
-            connected = check_smb_connection(
+            connected, error_msg = check_smb_connection(
                 server=server,
                 username=username,
-                password=password,
-                credentials_file=credentials_file
+                password=password
             )
             
             if connected:
@@ -95,7 +93,7 @@ class SMBHandler:
                     'data': {
                         'server': server,
                         'connected': False,
-                        'error': 'Authentication failed or server unreachable'
+                        'error': error_msg or 'Unknown connection error'
                     }
                 })
                 

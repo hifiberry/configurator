@@ -314,7 +314,7 @@ def list_all_servers() -> List[Dict[str, str]]:
 
 
 def check_smb_connection(server: str, username: Optional[str] = None, password: Optional[str] = None, 
-                        credentials_file: Optional[str] = None) -> bool:
+                        credentials_file: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
     Check if a connection to the specified SMB server is possible with the given credentials.
     
@@ -325,12 +325,12 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
         credentials_file: Optional path to credentials file
         
     Returns:
-        bool: True if connection was successful, False otherwise
+        Tuple of (success: bool, error_message: Optional[str])
     """
     # Check if smbclient is available
     if not shutil.which('smbclient'):
         logger.error("smbclient command not found. Please install samba-client package.")
-        return False
+        return False, "smbclient command not found"
     
     # Build the command
     cmd = ['smbclient', '-L', server]
@@ -342,7 +342,7 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
             cmd.extend(['--authentication-file', credentials_file])
         else:
             logger.error(f"Credentials file not found: {credentials_file}")
-            return False
+            return False, f"Credentials file not found: {credentials_file}"
     elif username:
         cmd.extend(['-U', username])
         
@@ -375,18 +375,37 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
         if result.returncode == 0:
             logger.debug("Connection successful")
             logger.debug(f"Server response: {result.stdout[:200]}...")
-            return True
+            return True, None
         else:
             logger.debug(f"Connection failed with return code {result.returncode}")
             logger.debug(f"Error message: {result.stderr}")
-            return False
+            
+            # Analyze the error to provide specific feedback
+            error_output = result.stderr.lower()
+            
+            if "connection refused" in error_output or "no route to host" in error_output:
+                return False, f"Server {server} is not reachable"
+            elif "host not found" in error_output or "name or service not known" in error_output:
+                return False, f"Server {server} not found"
+            elif "connection timed out" in error_output:
+                return False, f"Connection to {server} timed out"
+            elif "authentication failed" in error_output or "logon failure" in error_output or "access denied" in error_output:
+                return False, "Authentication failed"
+            elif "session setup failed" in error_output:
+                if username:
+                    return False, "Authentication failed"
+                else:
+                    return False, "Server requires authentication"
+            else:
+                # Generic error
+                return False, f"Connection failed: {result.stderr.strip()}"
     
     except subprocess.TimeoutExpired:
         logger.error(f"Connection to {server} timed out")
-        return False
+        return False, f"Connection to {server} timed out"
     except subprocess.SubprocessError as e:
         logger.error(f"Error connecting to {server}: {e}")
-        return False
+        return False, f"Connection error: {str(e)}"
     finally:
         # Make sure to clean up the credentials file in case of exceptions
         if username and password and 'cred_file_path' in locals():
@@ -396,7 +415,7 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
             except Exception:
                 pass
     
-    return False
+    return False, "Unknown connection error"
 
 
 def list_smb_shares(server: str, username: Optional[str] = None, password: Optional[str] = None,
@@ -718,14 +737,14 @@ def main():
         server = args.check_connect
         
         # Try connection
-        result = check_smb_connection(server, args.user, args.password, args.credentials)
+        success, error_msg = check_smb_connection(server, args.user, args.password, args.credentials)
         
         # Output result (to stdout for potential script integration)
-        if result:
+        if success:
             print("Connection successful")
             sys.exit(0)
         else:
-            print("Connection failed")
+            print(f"Connection failed: {error_msg}" if error_msg else "Connection failed")
             sys.exit(1)
     
     elif args.detect_version:
