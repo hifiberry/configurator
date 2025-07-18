@@ -21,6 +21,12 @@ The HiFiBerry Configuration API provides two main categories of endpoints:
 - Permission-based access control
 - Service status monitoring
 
+### SMB/CIFS Management (v1.9.0+)
+- Network share discovery and configuration
+- Systemd service-based mounting for reliability
+- Secure credential storage with encryption
+- Automatic mount management across reboots
+
 ## Maintaining the Documentation
 
 The documentation is maintained in Markdown format in the `api-documentation.md` file.
