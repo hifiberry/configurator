@@ -78,10 +78,8 @@ class ConfigAPIServer:
                     'smb_server_test': '/api/v1/smb/test/<server>',
                     'smb_shares': '/api/v1/smb/shares',
                     'smb_mounts': '/api/v1/smb/mounts',
-                    'smb_mount': '/api/v1/smb/mount',
-                    'smb_unmount': '/api/v1/smb/unmount',
-                    'smb_mount_by_id': '/api/v1/smb/mounts/mount/<int:mount_id>',
-                    'smb_unmount_by_id': '/api/v1/smb/mounts/unmount/<int:mount_id>'
+                    'smb_mount_config': '/api/v1/smb/mount',
+                    'smb_mount_all': '/api/v1/smb/mount-all'
                 }
             })
         
@@ -164,14 +162,9 @@ class ConfigAPIServer:
             return self.smb_handler.handle_list_mounts()
         
         @self.app.route('/api/v1/smb/mount', methods=['POST'])
-        def create_smb_mount():
-            """Create a new SMB share configuration"""
-            return self.smb_handler.handle_create_mount()
-        
-        @self.app.route('/api/v1/smb/unmount', methods=['POST'])
-        def remove_smb_mount():
-            """Remove an SMB share configuration"""
-            return self.smb_handler.handle_remove_mount()
+        def manage_smb_mount():
+            """Create or remove SMB share configuration based on action parameter"""
+            return self.smb_handler.handle_manage_mount()
 
         @self.app.route('/api/v1/smb/mount-all', methods=['POST'])
         def mount_all_samba_shares():

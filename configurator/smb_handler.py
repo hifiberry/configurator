@@ -228,10 +228,10 @@ class SMBHandler:
                 'error': str(e)
             }), 500
     
-    def handle_create_mount(self) -> Dict[str, Any]:
+    def handle_manage_mount(self) -> Dict[str, Any]:
         """
         Handle POST /api/v1/smb/mount
-        Create a new SMB share configuration (does not mount it)
+        Create or remove SMB share configuration based on action parameter
         """
         try:
             # Get JSON data from request
@@ -248,6 +248,20 @@ class SMBHandler:
                     'message': 'Missing request body'
                 }), 400
             
+            # Validate action field
+            action = data.get('action')
+            if not action:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Missing required field: action. Must be \'add\' or \'remove\''
+                }), 400
+            
+            if action not in ['add', 'remove']:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid action. Must be \'add\' or \'remove\''
+                }), 400
+            
             # Validate required fields
             server = data.get('server')
             share = data.get('share')
@@ -255,133 +269,104 @@ class SMBHandler:
             if not server or not share:
                 return jsonify({
                     'status': 'error',
-                    'message': 'Missing required fields: server and share'
+                    'message': 'Missing required fields: action, server and share'
                 }), 400
             
-            # Get optional fields
-            mountpoint = data.get('mountpoint')
-            user = data.get('user')
-            password = data.get('password')
-            version = data.get('version')
-            options = data.get('options')
-            
-            logger.debug(f"Creating SMB mount configuration for {server}/{share}")
-            
-            # Add mount configuration (but don't mount it)
-            success, error_msg = add_mount_config(
-                server=server,
-                share=share,
-                mountpoint=mountpoint,
-                user=user,
-                password=password,
-                version=version,
-                options=options
-            )
-            
-            if success:
-                # Determine the actual mountpoint used
-                final_mountpoint = mountpoint or f"/data/{server}-{share}"
-                
-                return jsonify({
-                    'status': 'success',
-                    'message': 'SMB share configuration created successfully',
-                    'data': {
-                        'server': server,
-                        'share': share,
-                        'mountpoint': final_mountpoint,
-                        'note': 'Configuration saved. Use /api/v1/smb/mount-all to mount all configured shares.'
-                    }
-                })
-            else:
-                # Distinguish between different types of errors
-                if "already exists" in error_msg:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Mount configuration already exists',
-                        'error': 'configuration_exists',
-                        'details': error_msg
-                    }), 400
-                else:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Failed to save mount configuration',
-                        'error': 'configuration_save_failed',
-                        'details': error_msg
-                    }), 500
+            if action == 'add':
+                return self._handle_add_mount(data, server, share)
+            else:  # action == 'remove'
+                return self._handle_remove_mount(data, server, share)
                 
         except Exception as e:
-            logger.error(f"Error creating SMB mount: {e}")
+            logger.error(f"Error managing SMB mount: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to create SMB share configuration',
+                'message': 'Failed to process SMB share configuration',
                 'error': str(e),
-                'details': 'An internal server error occurred while creating the mount configuration'
+                'details': 'An internal server error occurred while processing the mount configuration'
             }), 500
     
-    def handle_remove_mount(self) -> Dict[str, Any]:
-        """
-        Handle POST /api/v1/smb/unmount
-        Remove an SMB share configuration (does not unmount running shares)
-        """
-        try:
-            # Get JSON data from request
-            if not request.is_json:
+    def _handle_add_mount(self, data: Dict[str, Any], server: str, share: str) -> Dict[str, Any]:
+        """Helper method to handle adding a mount configuration"""
+        # Get optional fields
+        mountpoint = data.get('mountpoint')
+        user = data.get('user')
+        password = data.get('password')
+        version = data.get('version')
+        options = data.get('options')
+        
+        logger.debug(f"Creating SMB mount configuration for {server}/{share}")
+        
+        # Add mount configuration (but don't mount it)
+        success, error_msg = add_mount_config(
+            server=server,
+            share=share,
+            mountpoint=mountpoint,
+            user=user,
+            password=password,
+            version=version,
+            options=options
+        )
+        
+        if success:
+            # Determine the actual mountpoint used
+            final_mountpoint = mountpoint or f"/data/{server}-{share}"
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'SMB share configuration created successfully',
+                'data': {
+                    'action': 'add',
+                    'server': server,
+                    'share': share,
+                    'mountpoint': final_mountpoint,
+                    'note': 'Configuration saved. Use /api/v1/smb/mount-all to mount all configured shares.'
+                }
+            })
+        else:
+            # Distinguish between different types of errors
+            if "already exists" in error_msg:
                 return jsonify({
                     'status': 'error',
-                    'message': 'Content-Type must be application/json'
+                    'message': 'Mount configuration already exists',
+                    'error': 'configuration_exists',
+                    'details': error_msg
                 }), 400
-            
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing request body'
-                }), 400
-            
-            # Validate required fields
-            server = data.get('server')
-            share = data.get('share')
-            
-            if not server or not share:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing required fields: server and share'
-                }), 400
-            
-            logger.debug(f"Removing SMB mount configuration for {server}/{share}")
-            
-            # Remove mount configuration (but don't unmount)
-            success, mountpoint = remove_mount_config(server, share)
-            
-            if success:
-                return jsonify({
-                    'status': 'success',
-                    'message': 'SMB share configuration removed successfully',
-                    'data': {
-                        'server': server,
-                        'share': share,
-                        'mountpoint': mountpoint,
-                        'note': 'Configuration removed. Restart sambamount service to apply changes to active mounts.'
-                    }
-                })
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Mount configuration not found for {server}/{share}',
-                    'error': 'Configuration not found',
-                    'details': f'No mount configuration exists for server {server} and share {share}'
-                }), 404
-                
-        except Exception as e:
-            logger.error(f"Error removing SMB mount: {e}")
-            logger.debug(traceback.format_exc())
+                    'message': 'Failed to save mount configuration',
+                    'error': 'configuration_save_failed',
+                    'details': error_msg
+                }), 500
+    
+    def _handle_remove_mount(self, data: Dict[str, Any], server: str, share: str) -> Dict[str, Any]:
+        """Helper method to handle removing a mount configuration"""
+        logger.debug(f"Removing SMB mount configuration for {server}/{share}")
+        
+        # Remove mount configuration (but don't unmount)
+        success, mountpoint = remove_mount_config(server, share)
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': 'SMB share configuration removed successfully',
+                'data': {
+                    'action': 'remove',
+                    'server': server,
+                    'share': share,
+                    'mountpoint': mountpoint,
+                    'note': 'Configuration removed. Restart sambamount service to apply changes to active mounts.'
+                }
+            })
+        else:
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to remove SMB share configuration',
-                'error': str(e),
-                'details': 'An internal server error occurred while removing the mount configuration'
-            }), 500
+                'message': f'Mount configuration not found for {server}/{share}',
+                'error': 'Configuration not found',
+                'details': f'No mount configuration exists for server {server} and share {share}'
+            }), 404
 
     def handle_mount_all_samba(self) -> Dict[str, Any]:
         """
