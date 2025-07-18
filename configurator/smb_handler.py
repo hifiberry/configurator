@@ -367,7 +367,7 @@ class SMBHandler:
                 }), 404
             
             # Mount the share
-            success = mount_smb_share_by_id(mount_id)
+            success, error_msg = mount_smb_share_by_id(mount_id)
             
             if success:
                 return jsonify({
@@ -384,7 +384,7 @@ class SMBHandler:
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Failed to mount SMB share with ID {mount_id}',
+                    'message': error_msg or f'Failed to mount SMB share with ID {mount_id}',
                     'data': {
                         'id': mount_id,
                         'server': mount_config['server'],
@@ -420,7 +420,7 @@ class SMBHandler:
                 }), 404
             
             # Unmount the share
-            success = unmount_smb_share_by_id(mount_id)
+            success, error_msg = unmount_smb_share_by_id(mount_id)
             
             if success:
                 return jsonify({
@@ -437,7 +437,7 @@ class SMBHandler:
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Failed to unmount SMB share with ID {mount_id}',
+                    'message': error_msg or f'Failed to unmount SMB share with ID {mount_id}',
                     'data': {
                         'id': mount_id,
                         'server': mount_config['server'],
