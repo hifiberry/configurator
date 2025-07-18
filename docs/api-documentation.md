@@ -336,7 +336,13 @@ The SMB/CIFS API provides functionality for discovering and mounting network sha
 1. Use `/api/v1/smb/mount` with `"action": "add"` to create share configurations
 2. Use `/api/v1/smb/mount-all` to restart sambamount service and mount all configured shares
 3. Use `/api/v1/smb/mount` with `"action": "remove"` to remove configurations
-4. Use `/api/v1/smb/mount-all` again to restart sambamount service and apply configuration changes to active mounts
+4. Use `/api/v1/smb/mount-all` again to restart sambamount service - this will automatically unmount removed shares and mount remaining ones
+
+**Smart Cleanup:**
+- The system tracks which shares were previously mounted in `/tmp/sambamount_state.json`
+- When `/api/v1/smb/mount-all` is called, it compares current configuration with previous state
+- Shares that are no longer configured are automatically unmounted before mounting current shares
+- State file is automatically cleaned up on system reboot for fresh startup
 
 **Security Features:**
 - Passwords are automatically encrypted using the secure configuration store
@@ -721,6 +727,8 @@ Create or remove SMB share configurations.
 Mount all configured Samba shares by restarting the sambamount systemd service.
 
 > **Note:** This endpoint restarts the sambamount.service which will mount all configured SMB shares. Restarting ensures a fresh mount operation and applies any new configurations. The service runs with proper permissions to make mounts visible system-wide.
+> 
+> **Smart Cleanup:** The endpoint tracks previously mounted shares and automatically unmounts any shares that are no longer configured. This state is reset on system reboot to ensure clean startup.
 
 **Request Body:** None required
 
@@ -747,10 +755,22 @@ Mount all configured Samba shares by restarting the sambamount systemd service.
       }
     ],
     "count": 2,
+    "cleanup": {
+      "unmounted_shares": [
+        {
+          "mount_key": "192.168.1.100/old-share",
+          "mountpoint": "/data/old-share",
+          "status": "unmounted"
+        }
+      ],
+      "count": 1
+    },
     "note": "Check service logs with: journalctl -u sambamount.service -f"
   }
 }
 ```
+
+> **Note:** The `cleanup` section appears only when shares were automatically unmounted because they were removed from the configuration.
 
 **Response (Service Restart Failed):**
 - HTTP 500 Internal Server Error

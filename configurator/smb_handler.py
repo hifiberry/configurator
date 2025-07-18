@@ -2,6 +2,9 @@
 
 import logging
 import subprocess
+import json
+import os
+import tempfile
 from flask import jsonify, request
 from typing import Dict, List, Any, Optional, Tuple
 import traceback
@@ -19,6 +22,67 @@ from configurator.sambamount import (
 )
 
 logger = logging.getLogger(__name__)
+
+# State file to track previously mounted shares
+SAMBA_STATE_FILE = "/tmp/sambamount_state.json"
+
+def load_mount_state() -> Dict[str, str]:
+    """
+    Load the previous mount state from the state file.
+    Returns a dict mapping mount keys (server/share) to mountpoints.
+    """
+    try:
+        if os.path.exists(SAMBA_STATE_FILE):
+            with open(SAMBA_STATE_FILE, 'r') as f:
+                state = json.load(f)
+                logger.debug(f"Loaded mount state: {state}")
+                return state
+        else:
+            logger.debug("No existing mount state file found")
+            return {}
+    except Exception as e:
+        logger.warning(f"Failed to load mount state: {e}")
+        return {}
+
+def save_mount_state(mount_state: Dict[str, str]) -> None:
+    """
+    Save the current mount state to the state file.
+    mount_state is a dict mapping mount keys (server/share) to mountpoints.
+    """
+    try:
+        with open(SAMBA_STATE_FILE, 'w') as f:
+            json.dump(mount_state, f, indent=2)
+        logger.debug(f"Saved mount state: {mount_state}")
+    except Exception as e:
+        logger.error(f"Failed to save mount state: {e}")
+
+def get_mount_key(server: str, share: str) -> str:
+    """Generate a unique key for a server/share combination"""
+    return f"{server}/{share}"
+
+def unmount_share(mountpoint: str) -> bool:
+    """
+    Unmount a share at the given mountpoint.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        logger.info(f"Unmounting {mountpoint}")
+        result = subprocess.run(
+            ['umount', mountpoint],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            logger.info(f"Successfully unmounted {mountpoint}")
+            return True
+        else:
+            logger.warning(f"Failed to unmount {mountpoint}: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"Error unmounting {mountpoint}: {e}")
+        return False
 
 class SMBHandler:
     """Handler for SMB/CIFS related API endpoints"""
@@ -371,9 +435,53 @@ class SMBHandler:
     def handle_mount_all_samba(self) -> Dict[str, Any]:
         """
         Handle POST /api/v1/smb/mount-all
-        Mount all configured Samba shares by triggering the sambamount systemd service
+        Mount all configured Samba shares by triggering the sambamount systemd service.
+        Also manages cleanup of shares that are no longer configured.
         """
         try:
+            logger.debug("Processing samba mount-all request")
+            
+            # Load previous mount state
+            previous_state = load_mount_state()
+            
+            # Get current mount configurations
+            current_mounts = list_configured_mounts()
+            current_state = {}
+            
+            # Build current state mapping
+            for mount in current_mounts:
+                mount_key = get_mount_key(mount['server'], mount['share'])
+                current_state[mount_key] = mount['mountpoint']
+            
+            # Find mounts that need to be removed (in previous state but not in current)
+            mounts_to_remove = []
+            for mount_key, mountpoint in previous_state.items():
+                if mount_key not in current_state:
+                    mounts_to_remove.append((mount_key, mountpoint))
+            
+            # Unmount shares that are no longer configured
+            unmounted_shares = []
+            for mount_key, mountpoint in mounts_to_remove:
+                server_share = mount_key  # mount_key is already "server/share"
+                logger.info(f"Unmounting removed share: {server_share} at {mountpoint}")
+                if unmount_share(mountpoint):
+                    unmounted_shares.append({
+                        'mount_key': server_share,
+                        'mountpoint': mountpoint,
+                        'status': 'unmounted'
+                    })
+                    # Remove from previous state since successfully unmounted
+                    del previous_state[mount_key]
+                else:
+                    # Log warning but continue processing - don't fail the entire operation
+                    logger.warning(f"Failed to unmount {server_share} at {mountpoint}, but continuing")
+                    unmounted_shares.append({
+                        'mount_key': server_share,
+                        'mountpoint': mountpoint,
+                        'status': 'unmount_failed'
+                    })
+                    # Keep it in the state since it's still mounted
+            
             logger.debug("Restarting sambamount systemd service to mount all Samba shares")
             
             # Restart the sambamount service
@@ -387,11 +495,23 @@ class SMBHandler:
             if result.returncode == 0:
                 logger.info("sambamount.service restarted successfully")
                 
+                # Save the new state: current configurations + any failed unmounts
+                # Start with current configurations
+                final_state = current_state.copy()
+                
+                # Add back any shares that failed to unmount (they're still mounted)
+                for mount_key, mountpoint in previous_state.items():
+                    if mount_key not in current_state:
+                        # This was a share we tried to remove but might have failed to unmount
+                        # Check if it's still in the previous_state (wasn't successfully removed)
+                        final_state[mount_key] = mountpoint
+                
+                save_mount_state(final_state)
+                
                 # Get the current mount configurations to show what should be mounted
                 try:
-                    mounts = list_configured_mounts()
                     mount_list = []
-                    for mount in mounts:
+                    for mount in current_mounts:
                         mount_list.append({
                             'server': mount['server'],
                             'share': mount['share'],
@@ -399,27 +519,46 @@ class SMBHandler:
                             'id': mount.get('id', '?')
                         })
                     
+                    response_data = {
+                        'service': 'sambamount.service',
+                        'action': 'restarted',
+                        'configurations': mount_list,
+                        'count': len(mount_list),
+                        'note': 'Check service logs with: journalctl -u sambamount.service -f'
+                    }
+                    
+                    # Add cleanup information if any shares were unmounted
+                    if unmounted_shares:
+                        response_data['cleanup'] = {
+                            'unmounted_shares': unmounted_shares,
+                            'count': len(unmounted_shares)
+                        }
+                    
                     return jsonify({
                         'status': 'success',
                         'message': 'Samba mount service restarted successfully',
-                        'data': {
-                            'service': 'sambamount.service',
-                            'action': 'restarted',
-                            'configurations': mount_list,
-                            'count': len(mount_list),
-                            'note': 'Check service logs with: journalctl -u sambamount.service -f'
-                        }
+                        'data': response_data
                     })
                 except Exception as list_error:
                     logger.warning(f"Service restarted but failed to list configurations: {list_error}")
+                    
+                    response_data = {
+                        'service': 'sambamount.service',
+                        'action': 'restarted',
+                        'note': 'Check service logs with: journalctl -u sambamount.service -f'
+                    }
+                    
+                    # Add cleanup information if any shares were unmounted
+                    if unmounted_shares:
+                        response_data['cleanup'] = {
+                            'unmounted_shares': unmounted_shares,
+                            'count': len(unmounted_shares)
+                        }
+                    
                     return jsonify({
                         'status': 'success',
                         'message': 'Samba mount service restarted successfully',
-                        'data': {
-                            'service': 'sambamount.service',
-                            'action': 'restarted',
-                            'note': 'Check service logs with: journalctl -u sambamount.service -f'
-                        }
+                        'data': response_data
                     })
             else:
                 stderr_output = result.stderr.strip()
