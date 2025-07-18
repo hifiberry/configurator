@@ -325,6 +325,12 @@ Execute a systemd operation on a service.
 
 The SMB/CIFS API provides functionality for discovering and mounting network shares containing music files. This enables accessing music libraries stored on NAS devices, Windows shares, or other SMB-compatible file servers.
 
+**Security Features:**
+- Passwords are automatically encrypted using the secure configuration store
+- All credentials are stored securely and never exposed in plain text
+- Mount configurations persist across system reboots
+- Support for various SMB protocol versions (SMB1, SMB2, SMB3)
+
 #### `GET /api/v1/smb/servers`
 
 Discover SMB/CIFS file servers on the local network.
@@ -496,9 +502,11 @@ Add and mount a new SMB share for music access.
 **Optional Fields:**
 - **mountpoint**: Mount point path (default: `/data/{server}-{share}`)
 - **user**: Username for authentication
-- **password**: Password for authentication
+- **password**: Password for authentication (automatically encrypted and stored securely)
 - **version**: SMB protocol version (SMB1, SMB2, SMB3)
 - **options**: Additional mount options
+
+> **Security Note:** Passwords are automatically encrypted using the secure configuration store and are never stored in plain text.
 
 **Response (Success):**
 ```json
