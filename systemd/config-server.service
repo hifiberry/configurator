@@ -15,11 +15,16 @@ User=root
 Group=root
 PrivateMounts=no
 
-# Security settings
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/hifiberry /etc
+# Share mount namespace with host
+PrivateMounts=no
+RootPropagation=shared
+
+# Capabilities needed for mount/unmount
+CapabilityBoundingSet=CAP_SYS_ADMIN
+DevicePolicy=auto
+
+# Security
+NoNewPrivileges=false
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
