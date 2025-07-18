@@ -269,15 +269,38 @@ def is_mounted(mountpoint: str) -> bool:
     Returns:
         True if mounted, False otherwise
     """
+    if not mountpoint:
+        return False
+        
     try:
+        # Normalize the mountpoint path
+        normalized_mountpoint = os.path.abspath(mountpoint)
+        
+        # Check /proc/mounts for exact mountpoint match
         with open('/proc/mounts', 'r') as f:
             for line in f:
-                if mountpoint in line:
-                    return True
+                # Split the line: device mountpoint filesystem options
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    mount_path = parts[1]
+                    # Compare normalized paths
+                    if os.path.abspath(mount_path) == normalized_mountpoint:
+                        logger.debug(f"Found mount for {mountpoint} in /proc/mounts")
+                        return True
+        
+        # Also check using os.path.ismount as backup
+        is_mount = os.path.ismount(normalized_mountpoint)
+        logger.debug(f"Mount check for {mountpoint}: /proc/mounts=False, os.path.ismount={is_mount}")
+        return is_mount
+        
     except Exception as e:
-        logger.debug(f"Error checking mount status: {e}")
-    
-    return os.path.ismount(mountpoint)
+        logger.debug(f"Error checking mount status for {mountpoint}: {e}")
+        # Fallback to os.path.ismount only
+        try:
+            return os.path.ismount(mountpoint)
+        except Exception as e2:
+            logger.debug(f"Error in fallback mount check for {mountpoint}: {e2}")
+            return False
 
 def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optional[str] = None,
                     password: Optional[str] = None, version: Optional[str] = None,

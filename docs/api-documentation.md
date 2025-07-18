@@ -49,9 +49,9 @@ Get version information and available endpoints.
     "smb_shares": "/api/v1/smb/shares/<server>",
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount": "/api/v1/smb/mount",
-    "smb_unmount": "/api/v1/smb/unmount/<server>/<share>",
-    "smb_mount_by_id": "/api/v1/smb/mount/<id>",
-    "smb_unmount_by_id": "/api/v1/smb/unmount/<id>"
+    "smb_unmount": "/api/v1/smb/unmount",
+    "smb_mount_by_id": "/api/v1/smb/mount/id",
+    "smb_unmount_by_id": "/api/v1/smb/unmount/id"
   }
 }
 ```
@@ -523,13 +523,21 @@ Add and mount a new SMB share for music access.
 }
 ```
 
-#### `POST /api/v1/smb/unmount/{server}/{share}`
+#### `POST /api/v1/smb/unmount`
 
 Unmount and remove an SMB share configuration.
 
-**Parameters:**
-- **server** (path, required): Server IP address or hostname
-- **share** (path, required): Share name to unmount
+**Request Body:**
+```json
+{
+  "server": "192.168.1.100",
+  "share": "music"
+}
+```
+
+**Required Fields:**
+- **server**: Server IP address or hostname
+- **share**: Share name to unmount
 
 **Response (Success):**
 ```json
@@ -553,12 +561,19 @@ Unmount and remove an SMB share configuration.
 }
 ```
 
-#### `POST /api/v1/smb/mount/{id}`
+#### `POST /api/v1/smb/mount/id`
 
 Mount a specific SMB share by its configuration ID.
 
-**Parameters:**
-- **id** (path, required): Mount configuration ID
+**Request Body:**
+```json
+{
+  "id": 1
+}
+```
+
+**Required Fields:**
+- **id**: Mount configuration ID
 
 **Response (Success):**
 ```json
@@ -583,12 +598,19 @@ Mount a specific SMB share by its configuration ID.
 }
 ```
 
-#### `POST /api/v1/smb/unmount/{id}`
+#### `POST /api/v1/smb/unmount/id`
 
 Unmount a specific SMB share by its configuration ID.
 
-**Parameters:**
-- **id** (path, required): Mount configuration ID
+**Request Body:**
+```json
+{
+  "id": 1
+}
+```
+
+**Required Fields:**
+- **id**: Mount configuration ID
 
 **Response (Success):**
 ```json

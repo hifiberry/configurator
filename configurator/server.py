@@ -79,9 +79,9 @@ class ConfigAPIServer:
                     'smb_shares': '/api/v1/smb/shares/<server>',
                     'smb_mounts': '/api/v1/smb/mounts',
                     'smb_mount': '/api/v1/smb/mount',
-                    'smb_unmount': '/api/v1/smb/unmount/<server>/<share>',
-                    'smb_mount_by_id': '/api/v1/smb/mount/<id>',
-                    'smb_unmount_by_id': '/api/v1/smb/unmount/<id>'
+                    'smb_unmount': '/api/v1/smb/unmount',
+                    'smb_mount_by_id': '/api/v1/smb/mount/id',
+                    'smb_unmount_by_id': '/api/v1/smb/unmount/id'
                 }
             })
         
@@ -168,20 +168,20 @@ class ConfigAPIServer:
             """Create and mount a new SMB share"""
             return self.smb_handler.handle_create_mount()
         
-        @self.app.route('/api/v1/smb/unmount/<server>/<share>', methods=['POST'])
-        def remove_smb_mount(server, share):
+        @self.app.route('/api/v1/smb/unmount', methods=['POST'])
+        def remove_smb_mount():
             """Unmount and remove an SMB share configuration"""
-            return self.smb_handler.handle_remove_mount(server, share)
+            return self.smb_handler.handle_remove_mount()
 
-        @self.app.route('/api/v1/smb/mount/<int:mount_id>', methods=['POST'])
-        def mount_smb_share_by_id(mount_id):
+        @self.app.route('/api/v1/smb/mount/id', methods=['POST'])
+        def mount_smb_share_by_id():
             """Mount an SMB share by configuration ID"""
-            return self.smb_handler.handle_mount_by_id(mount_id)
+            return self.smb_handler.handle_mount_by_id()
 
-        @self.app.route('/api/v1/smb/unmount/<int:mount_id>', methods=['POST'])
-        def unmount_smb_share_by_id(mount_id):
+        @self.app.route('/api/v1/smb/unmount/id', methods=['POST'])
+        def unmount_smb_share_by_id():
             """Unmount an SMB share by configuration ID"""
-            return self.smb_handler.handle_unmount_by_id(mount_id)
+            return self.smb_handler.handle_unmount_by_id()
 
         # Error handlers
         @self.app.errorhandler(400)
