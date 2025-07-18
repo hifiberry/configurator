@@ -76,7 +76,7 @@ class ConfigAPIServer:
                     'systemd_operation': '/api/v1/systemd/service/<service>/<operation>',
                     'smb_servers': '/api/v1/smb/servers',
                     'smb_server_test': '/api/v1/smb/test/<server>',
-                    'smb_shares': '/api/v1/smb/shares/<server>',
+                    'smb_shares': '/api/v1/smb/shares',
                     'smb_mounts': '/api/v1/smb/mounts',
                     'smb_mount': '/api/v1/smb/mount',
                     'smb_unmount': '/api/v1/smb/unmount',
@@ -153,10 +153,10 @@ class ConfigAPIServer:
             """Test connection to an SMB server"""
             return self.smb_handler.handle_test_connection(server)
         
-        @self.app.route('/api/v1/smb/shares/<server>', methods=['POST'])
-        def list_smb_shares(server):
+        @self.app.route('/api/v1/smb/shares', methods=['POST'])
+        def list_smb_shares():
             """List shares on an SMB server"""
-            return self.smb_handler.handle_list_shares(server)
+            return self.smb_handler.handle_list_shares()
         
         @self.app.route('/api/v1/smb/mounts', methods=['GET'])
         def list_smb_mounts():

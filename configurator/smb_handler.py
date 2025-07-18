@@ -119,28 +119,31 @@ class SMBHandler:
                 }
             })
     
-    def handle_list_shares(self, server: str) -> Dict[str, Any]:
+    def handle_list_shares(self) -> Dict[str, Any]:
         """
-        Handle POST /api/v1/smb/shares/<server>
+        Handle POST /api/v1/smb/shares
         List shares on an SMB server
         """
         try:
-            # Get authentication from POST body
+            # Get all parameters from POST body
             data = request.get_json() or {}
+            server = data.get('server')
             username = data.get('username')
             password = data.get('password')
             detailed = data.get('detailed', False)
             
-            # Server can be provided in request body or URL path
-            # Request body takes precedence over URL path
-            server_from_body = data.get('server')
-            target_server = server_from_body if server_from_body else server
+            # Validate required parameters
+            if not server:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Missing required parameter: server'
+                }), 400
             
-            logger.debug(f"Listing shares on SMB server: {target_server}")
+            logger.debug(f"Listing shares on SMB server: {server}")
             
             # List shares
             shares, detected_version = list_smb_shares(
-                server=target_server,
+                server=server,
                 username=username,
                 password=password
             )
@@ -160,7 +163,7 @@ class SMBHandler:
                 share_list.append(share_info)
             
             response_data = {
-                'server': target_server,
+                'server': server,
                 'shares': share_list,
                 'count': len(share_list)
             }
@@ -174,9 +177,9 @@ class SMBHandler:
             })
             
         except Exception as e:
-            # Use the server from body if available, otherwise fall back to URL path
+            # Get server from request body
             data = request.get_json() or {}
-            target_server = data.get('server', server)
+            target_server = data.get('server', 'unknown')
             
             logger.error(f"Error listing shares on {target_server}: {e}")
             logger.debug(traceback.format_exc())
