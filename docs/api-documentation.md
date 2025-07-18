@@ -544,20 +544,60 @@ Add and mount a new SMB share for music access.
 }
 ```
 
-**Response (Error - 400 Bad Request):**
+**Response (Missing Content-Type):**
+- HTTP 400 Bad Request
 ```json
 {
   "status": "error",
-  "message": "Failed to mount SMB share",
-  "error": "Mount configuration for 192.168.1.100/music already exists or mount failed",
-  "details": "The share configuration already exists in the database or the mount operation failed"
+  "message": "Content-Type must be application/json"
 }
 ```
 
-**Response (Error - 500 Internal Server Error):**
+**Response (Missing Request Body):**
+- HTTP 400 Bad Request
 ```json
 {
-  "status": "error", 
+  "status": "error",
+  "message": "Missing request body"
+}
+```
+
+**Response (Missing Required Fields):**
+- HTTP 400 Bad Request
+```json
+{
+  "status": "error",
+  "message": "Missing required fields: server and share"
+}
+```
+
+**Response (Configuration Already Exists):**
+- HTTP 400 Bad Request
+```json
+{
+  "status": "error",
+  "message": "Mount configuration already exists",
+  "error": "configuration_exists",
+  "details": "Mount configuration for 192.168.1.100/music already exists"
+}
+```
+
+**Response (Configuration Save Failed):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
+  "message": "Failed to save mount configuration",
+  "error": "configuration_save_failed",
+  "details": "Failed to save mount configuration for 192.168.1.100/music"
+}
+```
+
+**Response (Internal Server Error):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
   "message": "Failed to mount SMB share",
   "error": "Permission denied",
   "details": "An internal server error occurred while creating the mount"
@@ -594,7 +634,35 @@ Unmount and remove an SMB share configuration.
 }
 ```
 
-**Response (Error - 404 Not Found):**
+**Response (Missing Content-Type):**
+- HTTP 400 Bad Request
+```json
+{
+  "status": "error",
+  "message": "Content-Type must be application/json"
+}
+```
+
+**Response (Missing Request Body):**
+- HTTP 400 Bad Request
+```json
+{
+  "status": "error",
+  "message": "Missing request body"
+}
+```
+
+**Response (Missing Required Fields):**
+- HTTP 400 Bad Request
+```json
+{
+  "status": "error",
+  "message": "Missing required fields: server and share"
+}
+```
+
+**Response (Configuration Not Found):**
+- HTTP 404 Not Found
 ```json
 {
   "status": "error",
@@ -604,7 +672,8 @@ Unmount and remove an SMB share configuration.
 }
 ```
 
-**Response (Error - 500 Internal Server Error):**
+**Response (Internal Server Error):**
+- HTTP 500 Internal Server Error
 ```json
 {
   "status": "error",
@@ -658,9 +727,27 @@ POST /api/v1/smb/mounts/mount/1
 ```json
 {
   "status": "error",
+  "message": "mount error(13): Permission denied",
+  "error": "mount error(13): Permission denied",
+  "details": "Mount operation failed for 192.168.1.100/music",
+  "data": {
+    "id": 1,
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "mounted": false
+  }
+}
+```
+
+**Response (Internal Server Error):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
   "message": "Failed to mount SMB share",
-  "error": "mount_failed",
-  "details": "mount error(13): Permission denied"
+  "error": "Unexpected error occurred",
+  "details": "An internal server error occurred while mounting the share"
 }
 ```
 
@@ -708,9 +795,27 @@ POST /api/v1/smb/mounts/unmount/1
 ```json
 {
   "status": "error",
+  "message": "umount: /data/music: target is busy",
+  "error": "umount: /data/music: target is busy",
+  "details": "Unmount operation failed for 192.168.1.100/music",
+  "data": {
+    "id": 1,
+    "server": "192.168.1.100",
+    "share": "music",
+    "mountpoint": "/data/music",
+    "mounted": true
+  }
+}
+```
+
+**Response (Internal Server Error):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
   "message": "Failed to unmount SMB share",
-  "error": "unmount_failed",
-  "details": "umount: /data/music: target is busy"
+  "error": "Unexpected error occurred",
+  "details": "An internal server error occurred while unmounting the share"
 }
 ```
 

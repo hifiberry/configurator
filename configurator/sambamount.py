@@ -152,7 +152,7 @@ def write_mount_config(mounts: List[Dict[str, str]]) -> bool:
             db.delete(f"{prefix}.share")
             db.delete(f"{prefix}.mountpoint")
             db.delete(f"{prefix}.user")
-            db.delete(f"{prefix}.password", secure=True)
+            db.delete(f"{prefix}.password")
             db.delete(f"{prefix}.version")
             db.delete(f"{prefix}.options")
             index += 1
@@ -176,7 +176,7 @@ def write_mount_config(mounts: List[Dict[str, str]]) -> bool:
 
 def add_mount_config(server: str, share: str, mountpoint: Optional[str] = None,
                     user: Optional[str] = None, password: Optional[str] = None,
-                    version: Optional[str] = None, options: Optional[str] = None) -> bool:
+                    version: Optional[str] = None, options: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
     Add a mount configuration to the configuration database.
     
@@ -190,7 +190,7 @@ def add_mount_config(server: str, share: str, mountpoint: Optional[str] = None,
         options: Additional mount options
         
     Returns:
-        True if successful, False otherwise
+        Tuple of (success: bool, error_message: Optional[str])
     """
     # Read existing configurations
     mounts = read_mount_config(secure=True)
@@ -202,8 +202,9 @@ def add_mount_config(server: str, share: str, mountpoint: Optional[str] = None,
     # Check if configuration already exists
     for mount in mounts:
         if mount['server'] == server and mount['share'] == share:
-            logger.error(f"Mount configuration for {server}/{share} already exists")
-            return False
+            error_msg = f"Mount configuration for {server}/{share} already exists"
+            logger.error(error_msg)
+            return False, error_msg
     
     # Create new configuration
     new_mount = {
@@ -219,8 +220,33 @@ def add_mount_config(server: str, share: str, mountpoint: Optional[str] = None,
     # Add to list
     mounts.append(new_mount)
     
-    # Write back to database
-    return write_mount_config(mounts)
+    # Write the new mount configuration directly to the database
+    try:
+        db = ConfigDB()
+        
+        # Find the next available ID by checking which slots are free
+        next_id = 1
+        while db.get(f"smbmount.{next_id}.server", None) is not None:
+            next_id += 1
+        
+        prefix = f"smbmount.{next_id}"
+        
+        # Write the new mount configuration directly
+        db.set(f"{prefix}.server", new_mount['server'])
+        db.set(f"{prefix}.share", new_mount['share'])
+        db.set(f"{prefix}.mountpoint", new_mount['mountpoint'])
+        db.set(f"{prefix}.user", new_mount['user'])
+        db.set(f"{prefix}.password", new_mount['password'], secure=True)  # Encrypt password
+        db.set(f"{prefix}.version", new_mount['version'])
+        db.set(f"{prefix}.options", new_mount['options'])
+        
+        logger.debug(f"Added mount configuration {next_id} for {server}/{share} to configdb")
+        return True, None
+        
+    except Exception as e:
+        error_msg = f"Failed to save mount configuration for {server}/{share}: {e}"
+        logger.error(error_msg)
+        return False, error_msg
 
 def remove_mount_config(server: str, share: str) -> Tuple[bool, Optional[str]]:
     """
@@ -387,17 +413,64 @@ def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optiona
             logger.info(f"Successfully mounted {server}/{share} at {mountpoint}")
             return True, None
         else:
-            error_msg = f"Failed to mount {server}/{share}: {result.stderr.strip()}"
-            logger.error(error_msg)
+            # Parse the error output to provide more specific error information
+            stderr_output = result.stderr.strip()
+            stdout_output = result.stdout.strip()
+            
+            # Log detailed error information
+            logger.error(f"Mount command failed for {server}/{share} -> {mountpoint}")
+            logger.error(f"Mount command return code: {result.returncode}")
+            if stderr_output:
+                logger.error(f"Mount stderr: {stderr_output}")
+            if stdout_output:
+                logger.error(f"Mount stdout: {stdout_output}")
+            
+            # Analyze common error patterns and provide helpful information
+            error_lower = stderr_output.lower()
+            if "permission denied" in error_lower or "access denied" in error_lower:
+                logger.error(f"Authentication failed for {server}/{share} - check username/password")
+                error_msg = f"Authentication failed for {server}/{share}: {stderr_output}"
+            elif "no such file or directory" in error_lower or "not found" in error_lower:
+                logger.error(f"Share {share} not found on server {server}")
+                error_msg = f"Share not found: {server}/{share}: {stderr_output}"
+            elif "network is unreachable" in error_lower or "no route to host" in error_lower:
+                logger.error(f"Network connection failed to server {server}")
+                error_msg = f"Network connection failed to {server}: {stderr_output}"
+            elif "connection refused" in error_lower or "connection timed out" in error_lower:
+                logger.error(f"SMB service unavailable on server {server}")
+                error_msg = f"SMB service unavailable on {server}: {stderr_output}"
+            elif "mount error(13)" in stderr_output:
+                logger.error(f"Permission denied mounting {server}/{share} - check credentials and share permissions")
+                error_msg = f"Permission denied: {stderr_output}"
+            elif "mount error(2)" in stderr_output:
+                logger.error(f"Share {share} does not exist on server {server}")
+                error_msg = f"Share does not exist: {stderr_output}"
+            elif "mount error(112)" in stderr_output:
+                logger.error(f"Host {server} is down or unreachable")
+                error_msg = f"Host unreachable: {stderr_output}"
+            elif "mount error(115)" in stderr_output:
+                logger.error(f"Operation timed out connecting to {server}")
+                error_msg = f"Connection timeout: {stderr_output}"
+            else:
+                logger.error(f"Unknown mount error for {server}/{share}: {stderr_output}")
+                error_msg = f"Mount failed: {stderr_output}"
+            
             return False, error_msg
     
     except subprocess.TimeoutExpired:
-        error_msg = f"Mount operation timed out for {server}/{share}"
+        error_msg = f"Mount operation timed out after 30 seconds for {server}/{share}"
         logger.error(error_msg)
+        logger.error(f"Mount command may be hanging - check network connectivity to {server}")
         return False, error_msg
     except subprocess.SubprocessError as e:
-        error_msg = f"Error mounting {server}/{share}: {e}"
+        error_msg = f"Subprocess error while mounting {server}/{share}: {e}"
         logger.error(error_msg)
+        logger.error(f"Failed to execute mount command for {server}/{share}")
+        return False, error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error while mounting {server}/{share}: {e}"
+        logger.error(error_msg)
+        logger.exception(f"Unexpected exception during mount operation for {server}/{share}")
         return False, error_msg
     
     return False, "Unknown error occurred during mount operation"
@@ -437,33 +510,70 @@ def unmount_share(mountpoint: str, lazy_fallback: bool = False) -> tuple[bool, O
             logger.info(f"Successfully unmounted {mountpoint}")
             return True, None
         else:
-            error_msg = f"Failed to unmount {mountpoint}: {result.stderr.strip()}"
-            logger.error(error_msg)
+            # Parse the error output to provide more specific error information
+            stderr_output = result.stderr.strip()
+            stdout_output = result.stdout.strip()
+            
+            # Log detailed error information
+            logger.error(f"Unmount command failed for {mountpoint}")
+            logger.error(f"Unmount command return code: {result.returncode}")
+            if stderr_output:
+                logger.error(f"Unmount stderr: {stderr_output}")
+            if stdout_output:
+                logger.error(f"Unmount stdout: {stdout_output}")
+            
+            # Analyze common unmount error patterns
+            error_lower = stderr_output.lower()
+            if "target is busy" in error_lower or "device is busy" in error_lower:
+                logger.error(f"Mountpoint {mountpoint} is busy - files or processes may be using it")
+                error_msg = f"Device busy: {stderr_output}"
+            elif "not mounted" in error_lower or "not found" in error_lower:
+                logger.warning(f"Mountpoint {mountpoint} is not currently mounted")
+                error_msg = f"Not mounted: {stderr_output}"
+            elif "permission denied" in error_lower:
+                logger.error(f"Permission denied unmounting {mountpoint} - check privileges")
+                error_msg = f"Permission denied: {stderr_output}"
+            else:
+                logger.error(f"Unknown unmount error for {mountpoint}: {stderr_output}")
+                error_msg = f"Unmount failed: {stderr_output}"
             
             # If normal unmount fails, try lazy unmount as fallback (only if enabled)
-            if lazy_fallback and ("target is busy" in result.stderr.lower() or "device is busy" in result.stderr.lower()):
+            if lazy_fallback and ("target is busy" in error_lower or "device is busy" in error_lower):
                 logger.warning(f"Mount point busy, attempting lazy unmount for {mountpoint}")
                 lazy_cmd = ['umount', '-l', mountpoint]  # -l for lazy unmount
                 logger.debug(f"Running lazy unmount: {' '.join(lazy_cmd)}")
                 
-                lazy_result = subprocess.run(lazy_cmd, capture_output=True, text=True, timeout=10)
-                if lazy_result.returncode == 0:
-                    logger.info(f"Successfully performed lazy unmount of {mountpoint}")
-                    return True, None
-                else:
-                    error_msg = f"Lazy unmount also failed for {mountpoint}: {lazy_result.stderr.strip()}"
-                    logger.error(error_msg)
-                    return False, error_msg
+                try:
+                    lazy_result = subprocess.run(lazy_cmd, capture_output=True, text=True, timeout=10)
+                    if lazy_result.returncode == 0:
+                        logger.info(f"Successfully performed lazy unmount of {mountpoint}")
+                        return True, None
+                    else:
+                        lazy_stderr = lazy_result.stderr.strip()
+                        logger.error(f"Lazy unmount also failed for {mountpoint}")
+                        logger.error(f"Lazy unmount stderr: {lazy_stderr}")
+                        error_msg = f"Lazy unmount also failed: {lazy_stderr}"
+                        return False, error_msg
+                except Exception as e:
+                    logger.error(f"Exception during lazy unmount of {mountpoint}: {e}")
+                    return False, f"Lazy unmount exception: {e}"
             
             return False, error_msg
     
     except subprocess.TimeoutExpired:
-        error_msg = f"Unmount operation timed out for {mountpoint}"
+        error_msg = f"Unmount operation timed out after 10 seconds for {mountpoint}"
         logger.error(error_msg)
+        logger.error(f"Unmount command may be hanging for {mountpoint} - the mountpoint may be busy")
         return False, error_msg
     except subprocess.SubprocessError as e:
-        error_msg = f"Error unmounting {mountpoint}: {e}"
+        error_msg = f"Subprocess error while unmounting {mountpoint}: {e}"
         logger.error(error_msg)
+        logger.error(f"Failed to execute unmount command for {mountpoint}")
+        return False, error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error while unmounting {mountpoint}: {e}"
+        logger.error(error_msg)
+        logger.exception(f"Unexpected exception during unmount operation for {mountpoint}")
         return False, error_msg
     
     return False, "Unknown error occurred during unmount operation"
@@ -497,8 +607,10 @@ def mount_all_shares() -> Dict[str, Any]:
         logger.info(f"Mounting {server}/{share} at {mountpoint}")
         mount_success, error_msg = mount_cifs_share(server, share, mountpoint, user, password, version, options)
         if mount_success:
+            logger.info(f"Successfully mounted {server}/{share} at {mountpoint}")
             results["succeeded"].append(f"{server}/{share} at {mountpoint}")
         else:
+            logger.error(f"Failed to mount {server}/{share} at {mountpoint}: {error_msg}")
             error_detail = f"{server}/{share} at {mountpoint}: {error_msg}" if error_msg else f"{server}/{share} at {mountpoint}"
             results["failed"].append(error_detail)
 
@@ -575,7 +687,8 @@ def mount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
         mount_success, error_msg = mount_cifs_share(server, share, mountpoint, user, password, version, options)
         
         if not mount_success:
-            logger.error(f"Failed to mount ID {mount_id} ({server}/{share}): {error_msg}")
+            logger.error(f"Mount operation failed for ID {mount_id} ({server}/{share} -> {mountpoint})")
+            logger.error(f"Mount failure reason: {error_msg}")
             return False, error_msg
         
         # Verify the mount succeeded by checking again
@@ -585,11 +698,13 @@ def mount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
         else:
             error_msg = f"Mount command succeeded but verification failed for ID {mount_id} ({server}/{share})"
             logger.error(error_msg)
+            logger.error(f"Mountpoint {mountpoint} is not showing as mounted after successful mount command")
             return False, error_msg
             
     except Exception as e:
-        error_msg = f"Error mounting ID {mount_id}: {e}"
+        error_msg = f"Unexpected error mounting ID {mount_id}: {e}"
         logger.error(error_msg)
+        logger.exception(f"Exception occurred while mounting ID {mount_id}")
         return False, error_msg
 
 def unmount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
@@ -629,12 +744,14 @@ def unmount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
             logger.info(f"Successfully unmounted ID {mount_id} ({server}/{share}) from {mountpoint}")
             return True, None
         else:
-            logger.error(f"Failed to unmount ID {mount_id} ({server}/{share}): {error_msg}")
+            logger.error(f"Unmount operation failed for ID {mount_id} ({server}/{share} from {mountpoint})")
+            logger.error(f"Unmount failure reason: {error_msg}")
             return False, error_msg
             
     except Exception as e:
-        error_msg = f"Error unmounting ID {mount_id}: {e}"
+        error_msg = f"Unexpected error unmounting ID {mount_id}: {e}"
         logger.error(error_msg)
+        logger.exception(f"Exception occurred while unmounting ID {mount_id}")
         return False, error_msg
 
 def mount_smb_share(server: str, share: str) -> bool:
@@ -674,7 +791,8 @@ def mount_smb_share(server: str, share: str) -> bool:
         mount_success, error_msg = mount_cifs_share(server, share, mountpoint, user, password, version, options)
         
         if not mount_success:
-            logger.error(f"Failed to mount {server}/{share}: {error_msg}")
+            logger.error(f"Mount operation failed for {server}/{share} -> {mountpoint}")
+            logger.error(f"Mount failure reason: {error_msg}")
             return False
         
         # Verify the mount succeeded by checking again
@@ -683,10 +801,12 @@ def mount_smb_share(server: str, share: str) -> bool:
             return True
         else:
             logger.error(f"Mount command succeeded but verification failed for {server}/{share}")
+            logger.error(f"Mountpoint {mountpoint} is not showing as mounted after successful mount command")
             return False
             
     except Exception as e:
-        logger.error(f"Error mounting {server}/{share}: {e}")
+        logger.error(f"Unexpected error mounting {server}/{share}: {e}")
+        logger.exception(f"Exception occurred while mounting {server}/{share}")
         return False
 
 def unmount_smb_share(server: str, share: str) -> bool:
@@ -725,11 +845,13 @@ def unmount_smb_share(server: str, share: str) -> bool:
             logger.info(f"Successfully unmounted {server}/{share} from {mountpoint}")
             return True
         else:
-            logger.error(f"Failed to unmount {server}/{share}: {error_msg}")
+            logger.error(f"Unmount operation failed for {server}/{share} from {mountpoint}")
+            logger.error(f"Unmount failure reason: {error_msg}")
             return False
             
     except Exception as e:
-        logger.error(f"Error unmounting {server}/{share}: {e}")
+        logger.error(f"Unexpected error unmounting {server}/{share}: {e}")
+        logger.exception(f"Exception occurred while unmounting {server}/{share}")
         return False
 
 def list_configured_mounts() -> List[Dict[str, str]]:
@@ -771,7 +893,7 @@ def main():
             sys.exit(1)
         
         # Add mount configuration
-        success = add_mount_config(
+        success, error_msg = add_mount_config(
             args.server, 
             args.share, 
             args.mountpoint,
@@ -785,7 +907,7 @@ def main():
             logger.info(f"Successfully added mount configuration for {args.server}/{args.share}")
             sys.exit(0)
         else:
-            logger.error(f"Failed to add mount configuration for {args.server}/{args.share}")
+            logger.error(f"Failed to add mount configuration for {args.server}/{args.share}: {error_msg}")
             sys.exit(1)
     
     elif args.remove_mount:

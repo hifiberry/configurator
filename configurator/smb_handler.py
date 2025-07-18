@@ -272,7 +272,7 @@ class SMBHandler:
             logger.debug(f"Creating SMB mount for {server}/{share}")
             
             # Add mount configuration
-            success = add_mount_config(
+            success, error_msg = add_mount_config(
                 server=server,
                 share=share,
                 mountpoint=mountpoint,
@@ -297,12 +297,21 @@ class SMBHandler:
                     }
                 })
             else:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to mount SMB share',
-                    'error': f'Mount configuration for {server}/{share} already exists or mount failed',
-                    'details': 'The share configuration already exists in the database or the mount operation failed'
-                }), 400
+                # Distinguish between different types of errors
+                if "already exists" in error_msg:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Mount configuration already exists',
+                        'error': 'configuration_exists',
+                        'details': error_msg
+                    }), 400
+                else:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to save mount configuration',
+                        'error': 'configuration_save_failed',
+                        'details': error_msg
+                    }), 500
                 
         except Exception as e:
             logger.error(f"Error creating SMB mount: {e}")
