@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 1.8.0**
+**Version 1.9.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -32,7 +32,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -50,8 +50,7 @@ Get version information and available endpoints.
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount": "/api/v1/smb/mount",
     "smb_unmount": "/api/v1/smb/unmount",
-    "smb_mount_by_id": "/api/v1/smb/mounts/mount/<int:mount_id>",
-    "smb_unmount_by_id": "/api/v1/smb/mounts/unmount/<int:mount_id>"
+    "smb_mount_all": "/api/v1/smb/mount-all"
   }
 }
 ```
@@ -325,11 +324,24 @@ Execute a systemd operation on a service.
 
 The SMB/CIFS API provides functionality for discovering and mounting network shares containing music files. This enables accessing music libraries stored on NAS devices, Windows shares, or other SMB-compatible file servers.
 
+**Version 1.9.0 Changes:**
+- Mount operations are now handled by the systemd service for better reliability
+- Individual mount/unmount by ID endpoints have been removed
+- New `/api/v1/smb/mount-all` endpoint triggers the sambamount systemd service
+- Mount and unmount endpoints now only manage configurations, not active mounts
+
+**Workflow:**
+1. Use `/api/v1/smb/mount` to create share configurations
+2. Use `/api/v1/smb/mount-all` to mount all configured shares via systemd service
+3. Use `/api/v1/smb/unmount` to remove configurations
+4. Restart sambamount service to apply configuration changes to active mounts
+
 **Security Features:**
 - Passwords are automatically encrypted using the secure configuration store
 - All credentials are stored securely and never exposed in plain text
 - Mount configurations persist across system reboots
 - Support for various SMB protocol versions (SMB1, SMB2, SMB3)
+- Systemd service runs with proper permissions for system-wide mount visibility
 
 #### `GET /api/v1/smb/servers`
 
@@ -502,7 +514,9 @@ List all configured SMB mount points for music access with real-time mount statu
 
 #### `POST /api/v1/smb/mount`
 
-Add and mount a new SMB share for music access.
+Create a new SMB share configuration.
+
+> **Note:** This endpoint only creates the configuration. To mount all configured shares, use the `/api/v1/smb/mount-all` endpoint.
 
 **Request Body:**
 ```json
@@ -534,12 +548,12 @@ Add and mount a new SMB share for music access.
 ```json
 {
   "status": "success",
-  "message": "SMB share mounted successfully",
+  "message": "SMB share configuration created successfully",
   "data": {
     "server": "192.168.1.100",
     "share": "music",
     "mountpoint": "/data/music",
-    "mounted": true
+    "note": "Configuration saved. Use /api/v1/smb/mount-all to mount all configured shares."
   }
 }
 ```
@@ -606,7 +620,9 @@ Add and mount a new SMB share for music access.
 
 #### `POST /api/v1/smb/unmount`
 
-Unmount and remove an SMB share configuration.
+Remove an SMB share configuration.
+
+> **Note:** This endpoint only removes the configuration. To unmount active shares, restart the sambamount systemd service.
 
 **Request Body:**
 ```json
@@ -618,18 +634,18 @@ Unmount and remove an SMB share configuration.
 
 **Required Fields:**
 - **server**: Server IP address or hostname
-- **share**: Share name to unmount
+- **share**: Share name to remove
 
 **Response (Success):**
 ```json
 {
   "status": "success",
-  "message": "SMB share unmounted successfully",
+  "message": "SMB share configuration removed successfully",
   "data": {
     "server": "192.168.1.100",
     "share": "music",
     "mountpoint": "/data/music",
-    "unmounted": true
+    "note": "Configuration removed. Restart sambamount service to apply changes to active mounts."
   }
 }
 ```
@@ -677,66 +693,72 @@ Unmount and remove an SMB share configuration.
 ```json
 {
   "status": "error",
-  "message": "Failed to unmount SMB share",
-  "error": "Device or resource busy",
-  "details": "An internal server error occurred while removing the mount"
+  "message": "Failed to remove SMB share configuration",
+  "error": "Database connection failed",
+  "details": "An internal server error occurred while removing the mount configuration"
 }
 ```
 
-#### `POST /api/v1/smb/mounts/mount/<mount_id>`
+#### `POST /api/v1/smb/mount-all`
 
-Mount a specific SMB share by its configuration ID.
+Mount all configured Samba shares by triggering the sambamount systemd service.
 
-**URL Parameters:**
-- **mount_id**: Mount configuration ID (integer)
+> **Note:** This endpoint starts the sambamount.service which will mount all configured SMB shares. The service runs with proper permissions to make mounts visible system-wide.
 
-**Example Request:**
-```
-POST /api/v1/smb/mounts/mount/1
-```
+**Request Body:** None required
 
 **Response (Success):**
-- HTTP 200 OK
 ```json
 {
   "status": "success",
-  "message": "SMB share mounted successfully",
+  "message": "Samba mount service started successfully",
   "data": {
-    "id": 1,
-    "server": "192.168.1.100",
-    "share": "music",
-    "mountpoint": "/data/music",
-    "mounted": true
+    "service": "sambamount.service",
+    "action": "started",
+    "configurations": [
+      {
+        "server": "192.168.1.100",
+        "share": "music",
+        "mountpoint": "/data/music",
+        "id": 1
+      },
+      {
+        "server": "192.168.1.27",
+        "share": "data",
+        "mountpoint": "/mnt/data",
+        "id": 2
+      }
+    ],
+    "count": 2,
+    "note": "Check service logs with: journalctl -u sambamount.service -f"
   }
 }
 ```
 
-**Response (Not Found):**
-- HTTP 404 Not Found
-```json
-{
-  "status": "error",
-  "message": "Mount configuration with ID 1 not found",
-  "error": "mount_not_found",
-  "details": "No mount configuration exists with the provided ID"
-}
-```
-
-**Response (Mount Failed):**
+**Response (Service Start Failed):**
 - HTTP 500 Internal Server Error
 ```json
 {
   "status": "error",
-  "message": "mount error(13): Permission denied",
-  "error": "mount error(13): Permission denied",
-  "details": "Mount operation failed for 192.168.1.100/music",
+  "message": "Failed to start Samba mount service",
+  "error": "Service start failed",
+  "details": "Job for sambamount.service failed because the control process exited with error code",
   "data": {
-    "id": 1,
-    "server": "192.168.1.100",
-    "share": "music",
-    "mountpoint": "/data/music",
-    "mounted": false
+    "service": "sambamount.service",
+    "action": "start_failed",
+    "return_code": 1
   }
+}
+```
+
+**Response (Service Start Timeout):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
+  "message": "Timeout starting Samba mount service",
+  "error": "Service start timeout",
+  "details": "Timeout starting sambamount.service after 30 seconds"
 }
 ```
 
@@ -745,59 +767,11 @@ POST /api/v1/smb/mounts/mount/1
 ```json
 {
   "status": "error",
-  "message": "Failed to mount SMB share",
+  "message": "Failed to start Samba mount service",
   "error": "Unexpected error occurred",
-  "details": "An internal server error occurred while mounting the share"
+  "details": "An internal server error occurred while starting the service"
 }
 ```
-
-#### `POST /api/v1/smb/mounts/unmount/<mount_id>`
-
-Unmount a specific SMB share by its configuration ID.
-
-**URL Parameters:**
-- **mount_id**: Mount configuration ID (integer)
-
-**Example Request:**
-```
-POST /api/v1/smb/mounts/unmount/1
-```
-
-**Response (Success):**
-- HTTP 200 OK
-```json
-{
-  "status": "success",
-  "message": "SMB share unmounted successfully",
-  "data": {
-    "id": 1,
-    "server": "192.168.1.100",
-    "share": "music",
-    "mountpoint": "/data/music",
-    "unmounted": true
-  }
-}
-```
-
-**Response (Not Found):**
-- HTTP 404 Not Found
-```json
-{
-  "status": "error",
-  "message": "Mount configuration with ID 1 not found",
-  "error": "mount_not_found",
-  "details": "No mount configuration exists with the provided ID"
-}
-```
-
-**Response (Unmount Failed):**
-- HTTP 500 Internal Server Error
-```json
-{
-  "status": "error",
-  "message": "umount: /data/music: target is busy",
-  "error": "umount: /data/music: target is busy",
-  "details": "Unmount operation failed for 192.168.1.100/music",
   "data": {
     "id": 1,
     "server": "192.168.1.100",
@@ -979,7 +953,7 @@ curl "http://localhost:1081/api/v1/smb/shares/192.168.1.100?detailed=true"
 curl http://localhost:1081/api/v1/smb/mounts
 ```
 
-**Mount a music share:**
+**Create a music share configuration:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{
@@ -994,7 +968,7 @@ curl -X POST -H "Content-Type: application/json" \
      http://localhost:1081/api/v1/smb/mount
 ```
 
-**Mount with minimal configuration (guest access):**
+**Create configuration with minimal settings (guest access):**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{
@@ -1004,7 +978,12 @@ curl -X POST -H "Content-Type: application/json" \
      http://localhost:1081/api/v1/smb/mount
 ```
 
-**Unmount a share:**
+**Mount all configured shares via systemd service:**
+```bash
+curl -X POST http://localhost:1081/api/v1/smb/mount-all
+```
+
+**Remove a share configuration:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{
@@ -1012,16 +991,6 @@ curl -X POST -H "Content-Type: application/json" \
        "share": "music"
      }' \
      http://localhost:1081/api/v1/smb/unmount
-```
-
-**Mount a share by ID:**
-```bash
-curl -X POST http://localhost:1081/api/v1/smb/mounts/mount/1
-```
-
-**Unmount a share by ID:**
-```bash
-curl -X POST http://localhost:1081/api/v1/smb/mounts/unmount/1
 ```
 
 ## Error Responses
@@ -1043,4 +1012,4 @@ curl -X POST http://localhost:1081/api/v1/smb/mounts/unmount/1
 
 ---
 
-*HiFiBerry Configuration API v1.8.0*
+*HiFiBerry Configuration API v1.9.0*
