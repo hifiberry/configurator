@@ -8,11 +8,12 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081
+ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose
 Restart=always
 RestartSec=5
 User=root
 Group=root
+PrivateMounts=no
 
 # Security settings
 NoNewPrivileges=true

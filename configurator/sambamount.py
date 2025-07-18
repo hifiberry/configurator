@@ -282,6 +282,7 @@ def is_mounted(mountpoint: str) -> bool:
             with open('/proc/mounts', 'r') as f:
                 for line in f:
                     # Split the line: device mountpoint filesystem options
+                    logging.debug(f"/proc/mounts: {line.strip()}")
                     parts = line.strip().split()
                     if len(parts) >= 3:
                         device = parts[0]
@@ -393,12 +394,13 @@ def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optiona
     
     return False
 
-def unmount_share(mountpoint: str) -> bool:
+def unmount_share(mountpoint: str, lazy_fallback: bool = False) -> bool:
     """
     Unmount a share.
     
     Args:
         mountpoint: Path to the mountpoint
+        lazy_fallback: If True, attempt lazy unmount as fallback when normal unmount fails
         
     Returns:
         True if successful, False otherwise
@@ -428,8 +430,8 @@ def unmount_share(mountpoint: str) -> bool:
         else:
             logger.error(f"Failed to unmount {mountpoint}: {result.stderr}")
             
-            # If normal unmount fails, try lazy unmount as fallback
-            if "target is busy" in result.stderr.lower() or "device is busy" in result.stderr.lower():
+            # If normal unmount fails, try lazy unmount as fallback (only if enabled)
+            if lazy_fallback and ("target is busy" in result.stderr.lower() or "device is busy" in result.stderr.lower()):
                 logger.warning(f"Mount point busy, attempting lazy unmount for {mountpoint}")
                 lazy_cmd = ['umount', '-l', mountpoint]  # -l for lazy unmount
                 logger.debug(f"Running lazy unmount: {' '.join(lazy_cmd)}")
@@ -601,7 +603,7 @@ def unmount_smb_share_by_id(mount_id: int) -> bool:
             return True
         
         # Attempt to unmount
-        unmount_success = unmount_share(mountpoint)
+        unmount_success = unmount_share(mountpoint, lazy_fallback=True)  # Enable lazy fallback for command-line usage
         
         if unmount_success:
             logger.info(f"Successfully unmounted ID {mount_id} ({server}/{share}) from {mountpoint}")
@@ -696,7 +698,7 @@ def unmount_smb_share(server: str, share: str) -> bool:
             return True
         
         # Attempt to unmount
-        unmount_success = unmount_share(mountpoint)
+        unmount_success = unmount_share(mountpoint, lazy_fallback=True)  # Enable lazy fallback for command-line usage
         
         if unmount_success:
             logger.info(f"Successfully unmounted {server}/{share} from {mountpoint}")
