@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+import subprocess
 from flask import jsonify, request
 from typing import Dict, List, Any, Optional, Tuple
 import traceback
@@ -12,13 +13,8 @@ from configurator.sambaclient import (
 )
 from configurator.sambamount import (
     read_mount_config,
-    write_mount_config,
     add_mount_config,
     remove_mount_config,
-    is_mounted,
-    mount_smb_share_by_id,
-    unmount_smb_share_by_id,
-    find_mount_by_id,
     list_configured_mounts
 )
 
@@ -235,7 +231,7 @@ class SMBHandler:
     def handle_create_mount(self) -> Dict[str, Any]:
         """
         Handle POST /api/v1/smb/mount
-        Create and mount a new SMB share
+        Create a new SMB share configuration (does not mount it)
         """
         try:
             # Get JSON data from request
@@ -269,9 +265,9 @@ class SMBHandler:
             version = data.get('version')
             options = data.get('options')
             
-            logger.debug(f"Creating SMB mount for {server}/{share}")
+            logger.debug(f"Creating SMB mount configuration for {server}/{share}")
             
-            # Add mount configuration
+            # Add mount configuration (but don't mount it)
             success, error_msg = add_mount_config(
                 server=server,
                 share=share,
@@ -288,12 +284,12 @@ class SMBHandler:
                 
                 return jsonify({
                     'status': 'success',
-                    'message': 'SMB share mounted successfully',
+                    'message': 'SMB share configuration created successfully',
                     'data': {
                         'server': server,
                         'share': share,
                         'mountpoint': final_mountpoint,
-                        'mounted': True
+                        'note': 'Configuration saved. Use /api/v1/smb/mount-all to mount all configured shares.'
                     }
                 })
             else:
@@ -318,15 +314,15 @@ class SMBHandler:
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to mount SMB share',
+                'message': 'Failed to create SMB share configuration',
                 'error': str(e),
-                'details': 'An internal server error occurred while creating the mount'
+                'details': 'An internal server error occurred while creating the mount configuration'
             }), 500
     
     def handle_remove_mount(self) -> Dict[str, Any]:
         """
         Handle POST /api/v1/smb/unmount
-        Unmount and remove an SMB share configuration
+        Remove an SMB share configuration (does not unmount running shares)
         """
         try:
             # Get JSON data from request
@@ -353,20 +349,20 @@ class SMBHandler:
                     'message': 'Missing required fields: server and share'
                 }), 400
             
-            logger.debug(f"Removing SMB mount for {server}/{share}")
+            logger.debug(f"Removing SMB mount configuration for {server}/{share}")
             
-            # Remove mount configuration
+            # Remove mount configuration (but don't unmount)
             success, mountpoint = remove_mount_config(server, share)
             
             if success:
                 return jsonify({
                     'status': 'success',
-                    'message': 'SMB share unmounted successfully',
+                    'message': 'SMB share configuration removed successfully',
                     'data': {
                         'server': server,
                         'share': share,
                         'mountpoint': mountpoint,
-                        'unmounted': True
+                        'note': 'Configuration removed. Restart sambamount service to apply changes to active mounts.'
                     }
                 })
             else:
@@ -382,123 +378,111 @@ class SMBHandler:
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to unmount SMB share',
+                'message': 'Failed to remove SMB share configuration',
                 'error': str(e),
-                'details': 'An internal server error occurred while removing the mount'
+                'details': 'An internal server error occurred while removing the mount configuration'
             }), 500
 
-    def handle_mount_by_id(self, mount_id: int) -> Dict[str, Any]:
+    def handle_mount_all_samba(self) -> Dict[str, Any]:
         """
-        Handle POST /api/v1/smb/mounts/<mount_id>/mount
-        Mount an SMB share by its configuration ID
+        Handle POST /api/v1/smb/mount-all
+        Mount all configured Samba shares by triggering the sambamount systemd service
         """
         try:
-            logger.debug(f"Mounting SMB share by ID: {mount_id}")
+            logger.debug("Starting sambamount systemd service to mount all Samba shares")
             
-            # Find the mount configuration
-            mount_config = find_mount_by_id(mount_id)
-            if not mount_config:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Mount configuration with ID {mount_id} not found',
-                    'error': 'Configuration not found',
-                    'details': f'No mount configuration exists with ID {mount_id}'
-                }), 404
+            # Start the sambamount service
+            result = subprocess.run(
+                ['systemctl', 'start', 'sambamount.service'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
             
-            # Mount the share
-            success, error_msg = mount_smb_share_by_id(mount_id)
-            
-            if success:
-                return jsonify({
-                    'status': 'success',
-                    'message': 'SMB share mounted successfully',
-                    'data': {
-                        'id': mount_id,
-                        'server': mount_config['server'],
-                        'share': mount_config['share'],
-                        'mountpoint': mount_config['mountpoint'],
-                        'mounted': True
-                    }
-                })
+            if result.returncode == 0:
+                logger.info("sambamount.service started successfully")
+                
+                # Get the current mount configurations to show what should be mounted
+                try:
+                    mounts = list_configured_mounts()
+                    mount_list = []
+                    for mount in mounts:
+                        mount_list.append({
+                            'server': mount['server'],
+                            'share': mount['share'],
+                            'mountpoint': mount['mountpoint'],
+                            'id': mount.get('id', '?')
+                        })
+                    
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Samba mount service started successfully',
+                        'data': {
+                            'service': 'sambamount.service',
+                            'action': 'started',
+                            'configurations': mount_list,
+                            'count': len(mount_list),
+                            'note': 'Check service logs with: journalctl -u sambamount.service -f'
+                        }
+                    })
+                except Exception as list_error:
+                    logger.warning(f"Service started but failed to list configurations: {list_error}")
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Samba mount service started successfully',
+                        'data': {
+                            'service': 'sambamount.service',
+                            'action': 'started',
+                            'note': 'Check service logs with: journalctl -u sambamount.service -f'
+                        }
+                    })
             else:
+                stderr_output = result.stderr.strip()
+                stdout_output = result.stdout.strip()
+                
+                logger.error(f"Failed to start sambamount.service: {stderr_output}")
+                logger.error(f"systemctl start return code: {result.returncode}")
+                if stdout_output:
+                    logger.error(f"systemctl start stdout: {stdout_output}")
+                
                 return jsonify({
                     'status': 'error',
-                    'message': error_msg or f'Failed to mount SMB share with ID {mount_id}',
-                    'error': error_msg or 'Mount operation failed',
-                    'details': f'Mount operation failed for {mount_config["server"]}/{mount_config["share"]}',
+                    'message': 'Failed to start Samba mount service',
+                    'error': 'Service start failed',
+                    'details': stderr_output or f'systemctl returned exit code {result.returncode}',
                     'data': {
-                        'id': mount_id,
-                        'server': mount_config['server'],
-                        'share': mount_config['share'],
-                        'mountpoint': mount_config['mountpoint'],
-                        'mounted': False
+                        'service': 'sambamount.service',
+                        'action': 'start_failed',
+                        'return_code': result.returncode
                     }
                 }), 500
                 
-        except Exception as e:
-            logger.error(f"Error mounting SMB share by ID: {e}")
-            logger.debug(traceback.format_exc())
+        except subprocess.TimeoutExpired:
+            error_msg = "Timeout starting sambamount.service after 30 seconds"
+            logger.error(error_msg)
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to mount SMB share',
-                'error': str(e),
-                'details': 'An internal server error occurred while mounting the share'
+                'message': 'Timeout starting Samba mount service',
+                'error': 'Service start timeout',
+                'details': error_msg
             }), 500
-
-    def handle_unmount_by_id(self, mount_id: int) -> Dict[str, Any]:
-        """
-        Handle POST /api/v1/smb/mounts/unmount/<mount_id>
-        Unmount an SMB share by its configuration ID
-        """
-        try:
-            logger.debug(f"Unmounting SMB share by ID: {mount_id}")
             
-            # Find the mount configuration
-            mount_config = find_mount_by_id(mount_id)
-            if not mount_config:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Mount configuration with ID {mount_id} not found',
-                    'error': 'Configuration not found',
-                    'details': f'No mount configuration exists with ID {mount_id}'
-                }), 404
+        except subprocess.SubprocessError as e:
+            error_msg = f"Subprocess error starting sambamount.service: {e}"
+            logger.error(error_msg)
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to start Samba mount service',
+                'error': 'Subprocess error',
+                'details': str(e)
+            }), 500
             
-            # Unmount the share
-            success, error_msg = unmount_smb_share_by_id(mount_id)
-            
-            if success:
-                return jsonify({
-                    'status': 'success',
-                    'message': 'SMB share unmounted successfully',
-                    'data': {
-                        'id': mount_id,
-                        'server': mount_config['server'],
-                        'share': mount_config['share'],
-                        'mountpoint': mount_config['mountpoint'],
-                        'mounted': False
-                    }
-                })
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': error_msg or f'Failed to unmount SMB share with ID {mount_id}',
-                    'error': error_msg or 'Unmount operation failed',
-                    'details': f'Unmount operation failed for {mount_config["server"]}/{mount_config["share"]}',
-                    'data': {
-                        'id': mount_id,
-                        'server': mount_config['server'],
-                        'share': mount_config['share'],
-                        'mountpoint': mount_config['mountpoint'],
-                        'mounted': True
-                    }
-                }), 500
-                
         except Exception as e:
-            logger.error(f"Error unmounting SMB share by ID: {e}")
+            logger.error(f"Error starting sambamount service: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to unmount SMB share',
+                'message': 'Failed to start Samba mount service',
                 'error': str(e),
-                'details': 'An internal server error occurred while unmounting the share'
+                'details': 'An internal server error occurred while starting the service'
             }), 500

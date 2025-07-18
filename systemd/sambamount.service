@@ -6,8 +6,44 @@ Before=mpd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/config-sambamount --mount-all
+ExecStartPre=/bin/bash -c 'echo "sambamount.service: Starting SMB mount service at $(date)"'
+ExecStartPre=/bin/bash -c 'echo "sambamount.service: Current user: $(whoami), UID: $(id -u), GID: $(id -g)"'
+ExecStartPre=/bin/bash -c 'echo "sambamount.service: Checking for config-sambamount binary at /usr/bin/config-sambamount"'
+ExecStartPre=/bin/bash -c 'ls -la /usr/bin/config-sambamount || echo "sambamount.service: ERROR - config-sambamount binary not found"'
+ExecStartPre=/bin/bash -c 'echo "sambamount.service: Listing current mount configurations..."'
+ExecStartPre=/usr/bin/config-sambamount --list-mounts --verbose
+ExecStart=/bin/bash -c 'echo "sambamount.service: Executing mount-all command..." && /usr/bin/config-sambamount --mount-all --verbose'
+ExecStartPost=/bin/bash -c 'echo "sambamount.service: Mount command completed with exit code $?"'
+ExecStartPost=/bin/bash -c 'echo "sambamount.service: Current mounts after operation:" && /usr/bin/config-sambamount --list-mounted-dirs'
+ExecStop=/bin/bash -c 'echo "sambamount.service: Stopping - unmounting all SMB shares..." && for mp in $(/usr/bin/config-sambamount --list-mounted-dirs); do echo "sambamount.service: Unmounting $mp"; umount "$mp" 2>/dev/null || echo "sambamount.service: Failed to unmount $mp"; done'
+ExecStopPost=/bin/bash -c 'echo "sambamount.service: Service stopped at $(date)"'
 RemainAfterExit=yes
+User=root
+Group=root
+WorkingDirectory=/
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/usr/lib/python3/dist-packages"
+
+# Share mount namespace with host - this is the key setting for making mounts visible system-wide
+PrivateMounts=no
+
+# Capabilities needed for mount/unmount operations
+CapabilityBoundingSet=CAP_SYS_ADMIN
+DevicePolicy=auto
+
+# Security - minimal restrictions for mount operations
+NoNewPrivileges=false
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectControlGroups=false
+
+# Logging configuration
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sambamount
+
+# Restart policy
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

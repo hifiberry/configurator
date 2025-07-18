@@ -278,11 +278,8 @@ def remove_mount_config(server: str, share: str) -> Tuple[bool, Optional[str]]:
         logger.error(f"Mount configuration for {server}/{share} not found")
         return False, None
     
-    # Unmount the share if it's mounted
-    if mountpoint and os.path.ismount(mountpoint):
-        unmount_success, error_msg = unmount_share(mountpoint)
-        if not unmount_success:
-            logger.warning(f"Failed to unmount {mountpoint}: {error_msg}")
+    # Note: We don't automatically unmount here since the systemd service handles mounting/unmounting
+    logger.debug(f"Removing mount configuration for {server}/{share} from configdb (mountpoint: {mountpoint})")
     
     # Write back to database
     success = write_mount_config(new_mounts)
