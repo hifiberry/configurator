@@ -27,8 +27,7 @@ Environment="PYTHONPATH=/usr/lib/python3/dist-packages"
 # Share mount namespace with host - this is the key setting for making mounts visible system-wide
 PrivateMounts=no
 
-# Capabilities needed for mount/unmount operations
-CapabilityBoundingSet=CAP_SYS_ADMIN
+# Allow access to mount utilities - no specific capabilities needed since mount.cifs is setuid
 DevicePolicy=auto
 
 # Security - minimal restrictions for mount operations

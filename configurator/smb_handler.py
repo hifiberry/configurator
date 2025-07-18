@@ -374,18 +374,18 @@ class SMBHandler:
         Mount all configured Samba shares by triggering the sambamount systemd service
         """
         try:
-            logger.debug("Starting sambamount systemd service to mount all Samba shares")
+            logger.debug("Restarting sambamount systemd service to mount all Samba shares")
             
-            # Start the sambamount service
+            # Restart the sambamount service
             result = subprocess.run(
-                ['systemctl', 'start', 'sambamount.service'],
+                ['systemctl', 'restart', 'sambamount.service'],
                 capture_output=True,
                 text=True,
                 timeout=30
             )
             
             if result.returncode == 0:
-                logger.info("sambamount.service started successfully")
+                logger.info("sambamount.service restarted successfully")
                 
                 # Get the current mount configurations to show what should be mounted
                 try:
@@ -401,23 +401,23 @@ class SMBHandler:
                     
                     return jsonify({
                         'status': 'success',
-                        'message': 'Samba mount service started successfully',
+                        'message': 'Samba mount service restarted successfully',
                         'data': {
                             'service': 'sambamount.service',
-                            'action': 'started',
+                            'action': 'restarted',
                             'configurations': mount_list,
                             'count': len(mount_list),
                             'note': 'Check service logs with: journalctl -u sambamount.service -f'
                         }
                     })
                 except Exception as list_error:
-                    logger.warning(f"Service started but failed to list configurations: {list_error}")
+                    logger.warning(f"Service restarted but failed to list configurations: {list_error}")
                     return jsonify({
                         'status': 'success',
-                        'message': 'Samba mount service started successfully',
+                        'message': 'Samba mount service restarted successfully',
                         'data': {
                             'service': 'sambamount.service',
-                            'action': 'started',
+                            'action': 'restarted',
                             'note': 'Check service logs with: journalctl -u sambamount.service -f'
                         }
                     })
@@ -425,49 +425,49 @@ class SMBHandler:
                 stderr_output = result.stderr.strip()
                 stdout_output = result.stdout.strip()
                 
-                logger.error(f"Failed to start sambamount.service: {stderr_output}")
-                logger.error(f"systemctl start return code: {result.returncode}")
+                logger.error(f"Failed to restart sambamount.service: {stderr_output}")
+                logger.error(f"systemctl restart return code: {result.returncode}")
                 if stdout_output:
-                    logger.error(f"systemctl start stdout: {stdout_output}")
+                    logger.error(f"systemctl restart stdout: {stdout_output}")
                 
                 return jsonify({
                     'status': 'error',
-                    'message': 'Failed to start Samba mount service',
-                    'error': 'Service start failed',
+                    'message': 'Failed to restart Samba mount service',
+                    'error': 'Service restart failed',
                     'details': stderr_output or f'systemctl returned exit code {result.returncode}',
                     'data': {
                         'service': 'sambamount.service',
-                        'action': 'start_failed',
+                        'action': 'restart_failed',
                         'return_code': result.returncode
                     }
                 }), 500
                 
         except subprocess.TimeoutExpired:
-            error_msg = "Timeout starting sambamount.service after 30 seconds"
+            error_msg = "Timeout restarting sambamount.service after 30 seconds"
             logger.error(error_msg)
             return jsonify({
                 'status': 'error',
-                'message': 'Timeout starting Samba mount service',
-                'error': 'Service start timeout',
+                'message': 'Timeout restarting Samba mount service',
+                'error': 'Service restart timeout',
                 'details': error_msg
             }), 500
             
         except subprocess.SubprocessError as e:
-            error_msg = f"Subprocess error starting sambamount.service: {e}"
+            error_msg = f"Subprocess error restarting sambamount.service: {e}"
             logger.error(error_msg)
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to start Samba mount service',
+                'message': 'Failed to restart Samba mount service',
                 'error': 'Subprocess error',
                 'details': str(e)
             }), 500
             
         except Exception as e:
-            logger.error(f"Error starting sambamount service: {e}")
+            logger.error(f"Error restarting sambamount service: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': 'Failed to start Samba mount service',
+                'message': 'Failed to restart Samba mount service',
                 'error': str(e),
                 'details': 'An internal server error occurred while starting the service'
             }), 500

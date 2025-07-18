@@ -334,9 +334,9 @@ The SMB/CIFS API provides functionality for discovering and mounting network sha
 
 **Workflow:**
 1. Use `/api/v1/smb/mount` with `"action": "add"` to create share configurations
-2. Use `/api/v1/smb/mount-all` to mount all configured shares via systemd service
+2. Use `/api/v1/smb/mount-all` to restart sambamount service and mount all configured shares
 3. Use `/api/v1/smb/mount` with `"action": "remove"` to remove configurations
-4. Restart sambamount service to apply configuration changes to active mounts
+4. Use `/api/v1/smb/mount-all` again to restart sambamount service and apply configuration changes to active mounts
 
 **Security Features:**
 - Passwords are automatically encrypted using the secure configuration store
@@ -718,9 +718,9 @@ Create or remove SMB share configurations.
 
 #### `POST /api/v1/smb/mount-all`
 
-Mount all configured Samba shares by triggering the sambamount systemd service.
+Mount all configured Samba shares by restarting the sambamount systemd service.
 
-> **Note:** This endpoint starts the sambamount.service which will mount all configured SMB shares. The service runs with proper permissions to make mounts visible system-wide.
+> **Note:** This endpoint restarts the sambamount.service which will mount all configured SMB shares. Restarting ensures a fresh mount operation and applies any new configurations. The service runs with proper permissions to make mounts visible system-wide.
 
 **Request Body:** None required
 
@@ -728,10 +728,10 @@ Mount all configured Samba shares by triggering the sambamount systemd service.
 ```json
 {
   "status": "success",
-  "message": "Samba mount service started successfully",
+  "message": "Samba mount service restarted successfully",
   "data": {
     "service": "sambamount.service",
-    "action": "started",
+    "action": "restarted",
     "configurations": [
       {
         "server": "192.168.1.100",
@@ -752,30 +752,30 @@ Mount all configured Samba shares by triggering the sambamount systemd service.
 }
 ```
 
-**Response (Service Start Failed):**
+**Response (Service Restart Failed):**
 - HTTP 500 Internal Server Error
 ```json
 {
   "status": "error",
-  "message": "Failed to start Samba mount service",
-  "error": "Service start failed",
+  "message": "Failed to restart Samba mount service",
+  "error": "Service restart failed",
   "details": "Job for sambamount.service failed because the control process exited with error code",
   "data": {
     "service": "sambamount.service",
-    "action": "start_failed",
+    "action": "restart_failed",
     "return_code": 1
   }
 }
 ```
 
-**Response (Service Start Timeout):**
+**Response (Service Restart Timeout):**
 - HTTP 500 Internal Server Error
 ```json
 {
   "status": "error",
-  "message": "Timeout starting Samba mount service",
-  "error": "Service start timeout",
-  "details": "Timeout starting sambamount.service after 30 seconds"
+  "message": "Timeout restarting Samba mount service",
+  "error": "Service restart timeout",
+  "details": "Timeout restarting sambamount.service after 30 seconds"
 }
 ```
 
@@ -784,9 +784,9 @@ Mount all configured Samba shares by triggering the sambamount systemd service.
 ```json
 {
   "status": "error",
-  "message": "Failed to start Samba mount service",
+  "message": "Failed to restart Samba mount service",
   "error": "Unexpected error occurred",
-  "details": "An internal server error occurred while starting the service"
+  "details": "An internal server error occurred while restarting the service"
 }
 ```
 
