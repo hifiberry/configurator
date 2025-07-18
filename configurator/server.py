@@ -80,8 +80,8 @@ class ConfigAPIServer:
                     'smb_mounts': '/api/v1/smb/mounts',
                     'smb_mount': '/api/v1/smb/mount',
                     'smb_unmount': '/api/v1/smb/unmount',
-                    'smb_mount_by_id': '/api/v1/smb/mount/id',
-                    'smb_unmount_by_id': '/api/v1/smb/unmount/id'
+                    'smb_mount_by_id': '/api/v1/smb/mounts/mount/<int:mount_id>',
+                    'smb_unmount_by_id': '/api/v1/smb/mounts/unmount/<int:mount_id>'
                 }
             })
         
@@ -173,15 +173,15 @@ class ConfigAPIServer:
             """Unmount and remove an SMB share configuration"""
             return self.smb_handler.handle_remove_mount()
 
-        @self.app.route('/api/v1/smb/mount/id', methods=['POST'])
-        def mount_smb_share_by_id():
+        @self.app.route('/api/v1/smb/mounts/mount/<int:mount_id>', methods=['POST'])
+        def mount_smb_share_by_id(mount_id):
             """Mount an SMB share by configuration ID"""
-            return self.smb_handler.handle_mount_by_id()
+            return self.smb_handler.handle_mount_by_id(mount_id)
 
-        @self.app.route('/api/v1/smb/unmount/id', methods=['POST'])
-        def unmount_smb_share_by_id():
+        @self.app.route('/api/v1/smb/mounts/unmount/<int:mount_id>', methods=['POST'])
+        def unmount_smb_share_by_id(mount_id):
             """Unmount an SMB share by configuration ID"""
-            return self.smb_handler.handle_unmount_by_id()
+            return self.smb_handler.handle_unmount_by_id(mount_id)
 
         # Error handlers
         @self.app.errorhandler(400)

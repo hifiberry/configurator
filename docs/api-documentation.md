@@ -50,8 +50,8 @@ Get version information and available endpoints.
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount": "/api/v1/smb/mount",
     "smb_unmount": "/api/v1/smb/unmount",
-    "smb_mount_by_id": "/api/v1/smb/mount/id",
-    "smb_unmount_by_id": "/api/v1/smb/unmount/id"
+    "smb_mount_by_id": "/api/v1/smb/mounts/mount/<int:mount_id>",
+    "smb_unmount_by_id": "/api/v1/smb/mounts/unmount/<int:mount_id>"
   }
 }
 ```
@@ -561,19 +561,17 @@ Unmount and remove an SMB share configuration.
 }
 ```
 
-#### `POST /api/v1/smb/mount/id`
+#### `POST /api/v1/smb/mounts/mount/<mount_id>`
 
 Mount a specific SMB share by its configuration ID.
 
-**Request Body:**
-```json
-{
-  "id": 1
-}
-```
+**URL Parameters:**
+- **mount_id**: Mount configuration ID (integer)
 
-**Required Fields:**
-- **id**: Mount configuration ID
+**Example Request:**
+```
+POST /api/v1/smb/mounts/mount/1
+```
 
 **Response (Success):**
 ```json
@@ -598,19 +596,17 @@ Mount a specific SMB share by its configuration ID.
 }
 ```
 
-#### `POST /api/v1/smb/unmount/id`
+#### `POST /api/v1/smb/mounts/unmount/<mount_id>`
 
 Unmount a specific SMB share by its configuration ID.
 
-**Request Body:**
-```json
-{
-  "id": 1
-}
-```
+**URL Parameters:**
+- **mount_id**: Mount configuration ID (integer)
 
-**Required Fields:**
-- **id**: Mount configuration ID
+**Example Request:**
+```
+POST /api/v1/smb/mounts/unmount/1
+```
 
 **Response (Success):**
 ```json
@@ -805,7 +801,22 @@ curl -X POST -H "Content-Type: application/json" \
 
 **Unmount a share:**
 ```bash
-curl -X DELETE http://localhost:1081/api/v1/smb/unmount/192.168.1.100/music
+curl -X POST -H "Content-Type: application/json" \
+     -d '{
+       "server": "192.168.1.100",
+       "share": "music"
+     }' \
+     http://localhost:1081/api/v1/smb/unmount
+```
+
+**Mount a share by ID:**
+```bash
+curl -X POST http://localhost:1081/api/v1/smb/mounts/mount/1
+```
+
+**Unmount a share by ID:**
+```bash
+curl -X POST http://localhost:1081/api/v1/smb/mounts/unmount/1
 ```
 
 ## Error Responses

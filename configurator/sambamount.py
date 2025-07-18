@@ -261,7 +261,7 @@ def remove_mount_config(server: str, share: str) -> Tuple[bool, Optional[str]]:
 
 def is_mounted(mountpoint: str) -> bool:
     """
-    Check if a mountpoint is mounted.
+    Check if a mountpoint is mounted by reading /proc/mounts.
     
     Args:
         mountpoint: Path to the mountpoint
@@ -275,32 +275,34 @@ def is_mounted(mountpoint: str) -> bool:
     try:
         # Normalize the mountpoint path
         normalized_mountpoint = os.path.abspath(mountpoint)
+        logger.debug(f"Checking mount status for: {mountpoint} (normalized: {normalized_mountpoint})")
         
         # Check /proc/mounts for exact mountpoint match
-        with open('/proc/mounts', 'r') as f:
-            for line in f:
-                # Split the line: device mountpoint filesystem options
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    mount_path = parts[1]
-                    # Compare normalized paths
-                    if os.path.abspath(mount_path) == normalized_mountpoint:
-                        logger.debug(f"Found mount for {mountpoint} in /proc/mounts")
-                        return True
+        try:
+            with open('/proc/mounts', 'r') as f:
+                for line in f:
+                    # Split the line: device mountpoint filesystem options
+                    parts = line.strip().split()
+                    if len(parts) >= 3:
+                        device = parts[0]
+                        mount_path = parts[1]
+                        filesystem = parts[2]
+                        
+                        # Compare normalized paths
+                        normalized_mount_path = os.path.abspath(mount_path)
+                        if normalized_mount_path == normalized_mountpoint:
+                            logger.debug(f"Found active mount: {device} -> {mount_path} ({filesystem})")
+                            return True
+                            
+        except Exception as proc_error:
+            logger.debug(f"Error reading /proc/mounts: {proc_error}")
         
-        # Also check using os.path.ismount as backup
-        is_mount = os.path.ismount(normalized_mountpoint)
-        logger.debug(f"Mount check for {mountpoint}: /proc/mounts=False, os.path.ismount={is_mount}")
-        return is_mount
+        logger.debug(f"No active mount found for: {mountpoint}")
+        return False
         
     except Exception as e:
         logger.debug(f"Error checking mount status for {mountpoint}: {e}")
-        # Fallback to os.path.ismount only
-        try:
-            return os.path.ismount(mountpoint)
-        except Exception as e2:
-            logger.debug(f"Error in fallback mount check for {mountpoint}: {e2}")
-            return False
+        return False
 
 def mount_cifs_share(server: str, share: str, mountpoint: str, username: Optional[str] = None,
                     password: Optional[str] = None, version: Optional[str] = None,
@@ -425,6 +427,20 @@ def unmount_share(mountpoint: str) -> bool:
             return True
         else:
             logger.error(f"Failed to unmount {mountpoint}: {result.stderr}")
+            
+            # If normal unmount fails, try lazy unmount as fallback
+            if "target is busy" in result.stderr.lower() or "device is busy" in result.stderr.lower():
+                logger.warning(f"Mount point busy, attempting lazy unmount for {mountpoint}")
+                lazy_cmd = ['umount', '-l', mountpoint]  # -l for lazy unmount
+                logger.debug(f"Running lazy unmount: {' '.join(lazy_cmd)}")
+                
+                lazy_result = subprocess.run(lazy_cmd, capture_output=True, text=True, timeout=10)
+                if lazy_result.returncode == 0:
+                    logger.info(f"Successfully performed lazy unmount of {mountpoint}")
+                    return True
+                else:
+                    logger.error(f"Lazy unmount also failed for {mountpoint}: {lazy_result.stderr}")
+            
             return False
     
     except subprocess.TimeoutExpired:
@@ -587,16 +603,11 @@ def unmount_smb_share_by_id(mount_id: int) -> bool:
         # Attempt to unmount
         unmount_success = unmount_share(mountpoint)
         
-        if not unmount_success:
-            logger.error(f"Failed to unmount ID {mount_id} ({server}/{share})")
-            return False
-        
-        # Verify the unmount succeeded by checking again
-        if not is_mounted(mountpoint):
-            logger.info(f"Successfully unmounted and verified ID {mount_id} ({server}/{share}) from {mountpoint}")
+        if unmount_success:
+            logger.info(f"Successfully unmounted ID {mount_id} ({server}/{share}) from {mountpoint}")
             return True
         else:
-            logger.error(f"Unmount command succeeded but verification failed for ID {mount_id} ({server}/{share})")
+            logger.error(f"Failed to unmount ID {mount_id} ({server}/{share})")
             return False
             
     except Exception as e:
@@ -687,16 +698,11 @@ def unmount_smb_share(server: str, share: str) -> bool:
         # Attempt to unmount
         unmount_success = unmount_share(mountpoint)
         
-        if not unmount_success:
-            logger.error(f"Failed to unmount {server}/{share}")
-            return False
-        
-        # Verify the unmount succeeded by checking again
-        if not is_mounted(mountpoint):
-            logger.info(f"Successfully unmounted and verified {server}/{share} from {mountpoint}")
+        if unmount_success:
+            logger.info(f"Successfully unmounted {server}/{share} from {mountpoint}")
             return True
         else:
-            logger.error(f"Unmount command succeeded but verification failed for {server}/{share}")
+            logger.error(f"Failed to unmount {server}/{share}")
             return False
             
     except Exception as e:

@@ -172,9 +172,9 @@ class SMBHandler:
         List all configured SMB mounts with mount status
         """
         try:
-            logger.debug("Listing SMB mount configurations with mount status")
+            logger.debug("Listing SMB mount configurations")
             
-            # Use the same function as CLI to ensure consistency
+            # Use the existing function that already reads from ConfigDB and checks mount status
             mounts = list_configured_mounts()
             
             # Collect statistics
@@ -350,44 +350,12 @@ class SMBHandler:
                 'error': str(e)
             }), 500
 
-    def handle_mount_by_id(self) -> Dict[str, Any]:
+    def handle_mount_by_id(self, mount_id: int) -> Dict[str, Any]:
         """
-        Handle POST /api/v1/smb/mount/id
+        Handle POST /api/v1/smb/mounts/<mount_id>/mount
         Mount an SMB share by its configuration ID
         """
         try:
-            # Get JSON data from request
-            if not request.is_json:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Content-Type must be application/json'
-                }), 400
-            
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing request body'
-                }), 400
-            
-            # Validate required fields
-            mount_id = data.get('id')
-            
-            if mount_id is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing required field: id'
-                }), 400
-            
-            # Ensure mount_id is an integer
-            try:
-                mount_id = int(mount_id)
-            except (ValueError, TypeError):
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Invalid id: must be an integer'
-                }), 400
-            
             logger.debug(f"Mounting SMB share by ID: {mount_id}")
             
             # Find the mount configuration
@@ -416,7 +384,14 @@ class SMBHandler:
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Failed to mount SMB share with ID {mount_id}'
+                    'message': f'Failed to mount SMB share with ID {mount_id}',
+                    'data': {
+                        'id': mount_id,
+                        'server': mount_config['server'],
+                        'share': mount_config['share'],
+                        'mountpoint': mount_config['mountpoint'],
+                        'mounted': False
+                    }
                 }), 500
                 
         except Exception as e:
@@ -428,44 +403,12 @@ class SMBHandler:
                 'error': str(e)
             }), 500
 
-    def handle_unmount_by_id(self) -> Dict[str, Any]:
+    def handle_unmount_by_id(self, mount_id: int) -> Dict[str, Any]:
         """
-        Handle POST /api/v1/smb/unmount/id
+        Handle POST /api/v1/smb/mounts/unmount/<mount_id>
         Unmount an SMB share by its configuration ID
         """
         try:
-            # Get JSON data from request
-            if not request.is_json:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Content-Type must be application/json'
-                }), 400
-            
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing request body'
-                }), 400
-            
-            # Validate required fields
-            mount_id = data.get('id')
-            
-            if mount_id is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Missing required field: id'
-                }), 400
-            
-            # Ensure mount_id is an integer
-            try:
-                mount_id = int(mount_id)
-            except (ValueError, TypeError):
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Invalid id: must be an integer'
-                }), 400
-            
             logger.debug(f"Unmounting SMB share by ID: {mount_id}")
             
             # Find the mount configuration
@@ -488,13 +431,20 @@ class SMBHandler:
                         'server': mount_config['server'],
                         'share': mount_config['share'],
                         'mountpoint': mount_config['mountpoint'],
-                        'unmounted': True
+                        'mounted': False
                     }
                 })
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Failed to unmount SMB share with ID {mount_id}'
+                    'message': f'Failed to unmount SMB share with ID {mount_id}',
+                    'data': {
+                        'id': mount_id,
+                        'server': mount_config['server'],
+                        'share': mount_config['share'],
+                        'mountpoint': mount_config['mountpoint'],
+                        'mounted': True
+                    }
                 }), 500
                 
         except Exception as e:
