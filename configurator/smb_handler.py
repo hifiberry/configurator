@@ -68,11 +68,16 @@ class SMBHandler:
             username = data.get('username')
             password = data.get('password')
             
-            logger.debug(f"Testing connection to SMB server: {server}")
+            # Server can be provided in request body or URL path
+            # Request body takes precedence over URL path
+            server_from_body = data.get('server')
+            test_server = server_from_body if server_from_body else server
+            
+            logger.debug(f"Testing connection to SMB server: {test_server}")
             
             # Test connection
             connected, error_msg = check_smb_connection(
-                server=server,
+                server=test_server,
                 username=username,
                 password=password
             )
@@ -81,7 +86,7 @@ class SMBHandler:
                 return jsonify({
                     'status': 'success',
                     'data': {
-                        'server': server,
+                        'server': test_server,
                         'connected': True,
                         'message': 'Connection successful'
                     }
@@ -91,20 +96,24 @@ class SMBHandler:
                     'status': 'error',
                     'message': 'Connection failed',
                     'data': {
-                        'server': server,
+                        'server': test_server,
                         'connected': False,
                         'error': error_msg or 'Unknown connection error'
                     }
                 })
                 
         except Exception as e:
-            logger.error(f"Error testing connection to {server}: {e}")
+            # Use the server from body if available, otherwise fall back to URL path
+            data = request.get_json() or {}
+            test_server = data.get('server', server)
+            
+            logger.error(f"Error testing connection to {test_server}: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
                 'message': 'Internal server error',
                 'data': {
-                    'server': server,
+                    'server': test_server,
                     'connected': False,
                     'error': str(e)
                 }

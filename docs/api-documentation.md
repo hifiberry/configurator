@@ -375,12 +375,14 @@ Test connection to a specific SMB server.
 **Request Body:**
 ```json
 {
+  "server": "192.168.1.100",
   "username": "myuser",
   "password": "mypass"
 }
 ```
 
 **Request Body Parameters:**
+- **server** (optional): Server IP address or hostname (overrides path parameter if provided)
 - **username** (optional): Username for authentication
 - **password** (optional): Password for authentication
 
@@ -762,10 +764,17 @@ curl -X POST http://localhost:1081/api/v1/systemd/service/shairport/disable
 curl http://localhost:1081/api/v1/smb/servers
 ```
 
-**Test connection to a server:**
+**Test connection to a server (using URL path):**
 ```bash
 curl -X POST http://localhost:1081/api/v1/smb/test/192.168.1.100 \
   -H "Content-Type: application/json"
+```
+
+**Test connection with server in request body:**
+```bash
+curl -X POST http://localhost:1081/api/v1/smb/test/placeholder \
+  -H "Content-Type: application/json" \
+  -d '{"server": "192.168.1.100"}'
 ```
 
 **Test connection with authentication:**
@@ -773,6 +782,13 @@ curl -X POST http://localhost:1081/api/v1/smb/test/192.168.1.100 \
 curl -X POST http://localhost:1081/api/v1/smb/test/192.168.1.100 \
   -H "Content-Type: application/json" \
   -d '{"username": "musicuser", "password": "mypass"}'
+```
+
+**Test connection with server and authentication in body:**
+```bash
+curl -X POST http://localhost:1081/api/v1/smb/test/placeholder \
+  -H "Content-Type: application/json" \
+  -d '{"server": "192.168.1.100", "username": "musicuser", "password": "mypass"}'
 ```
 
 **List shares on a server:**
