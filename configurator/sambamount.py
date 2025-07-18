@@ -64,6 +64,8 @@ def parse_arguments():
                         help='Unmount a specific share (requires --id OR --server and --share)')
     command_group.add_argument('--list-mounts', action='store_true',
                         help='List all configured mounts')
+    command_group.add_argument('--list-mounted-dirs', action='store_true',
+                        help='List only directories that are currently mounted (one per line)')
 
     # Mount configuration options
     parser.add_argument('--server', help='Server name or IP address (for mount operations)')
@@ -756,7 +758,11 @@ def main():
     args = parse_arguments()
     
     # Configure logging based on verbosity
-    setup_logging(args.verbose, args.quiet)
+    # For --list-mounted-dirs, force quiet mode to ensure clean output
+    if hasattr(args, 'list_mounted_dirs') and args.list_mounted_dirs:
+        setup_logging(verbose=False, quiet=True)
+    else:
+        setup_logging(args.verbose, args.quiet)
     
     if args.add_mount:
         # Check required arguments
@@ -897,6 +903,18 @@ def main():
                 print(f"[{mount_id}] [{status_icon} {status_text}] //{user_prefix}{server}/{share} -> {mountpoint} ({version}){password_suffix}")
         else:
             logger.warning("No mount configurations found in configdb")
+    
+    elif args.list_mounted_dirs:
+        # List only directories that are currently mounted (one per line)
+        mounts = list_configured_mounts()
+        
+        if mounts:
+            for mount in mounts:
+                mounted = mount.get('mounted', False)
+                if mounted:
+                    mountpoint = mount['mountpoint']
+                    print(mountpoint)
+        # No output if no mounted directories found
 
 if __name__ == "__main__":
     main()

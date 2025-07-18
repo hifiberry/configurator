@@ -300,7 +300,8 @@ class SMBHandler:
                 return jsonify({
                     'status': 'error',
                     'message': 'Failed to mount SMB share',
-                    'error': f'Mount configuration for {server}/{share} already exists or mount failed'
+                    'error': f'Mount configuration for {server}/{share} already exists or mount failed',
+                    'details': 'The share configuration already exists in the database or the mount operation failed'
                 }), 400
                 
         except Exception as e:
@@ -309,7 +310,8 @@ class SMBHandler:
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to mount SMB share',
-                'error': str(e)
+                'error': str(e),
+                'details': 'An internal server error occurred while creating the mount'
             }), 500
     
     def handle_remove_mount(self) -> Dict[str, Any]:
@@ -361,7 +363,9 @@ class SMBHandler:
             else:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Mount configuration not found for {server}/{share}'
+                    'message': f'Mount configuration not found for {server}/{share}',
+                    'error': 'Configuration not found',
+                    'details': f'No mount configuration exists for server {server} and share {share}'
                 }), 404
                 
         except Exception as e:
@@ -370,7 +374,8 @@ class SMBHandler:
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to unmount SMB share',
-                'error': str(e)
+                'error': str(e),
+                'details': 'An internal server error occurred while removing the mount'
             }), 500
 
     def handle_mount_by_id(self, mount_id: int) -> Dict[str, Any]:
@@ -386,7 +391,9 @@ class SMBHandler:
             if not mount_config:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Mount configuration with ID {mount_id} not found'
+                    'message': f'Mount configuration with ID {mount_id} not found',
+                    'error': 'Configuration not found',
+                    'details': f'No mount configuration exists with ID {mount_id}'
                 }), 404
             
             # Mount the share
@@ -408,6 +415,8 @@ class SMBHandler:
                 return jsonify({
                     'status': 'error',
                     'message': error_msg or f'Failed to mount SMB share with ID {mount_id}',
+                    'error': error_msg or 'Mount operation failed',
+                    'details': f'Mount operation failed for {mount_config["server"]}/{mount_config["share"]}',
                     'data': {
                         'id': mount_id,
                         'server': mount_config['server'],
@@ -423,7 +432,8 @@ class SMBHandler:
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to mount SMB share',
-                'error': str(e)
+                'error': str(e),
+                'details': 'An internal server error occurred while mounting the share'
             }), 500
 
     def handle_unmount_by_id(self, mount_id: int) -> Dict[str, Any]:
@@ -439,7 +449,9 @@ class SMBHandler:
             if not mount_config:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Mount configuration with ID {mount_id} not found'
+                    'message': f'Mount configuration with ID {mount_id} not found',
+                    'error': 'Configuration not found',
+                    'details': f'No mount configuration exists with ID {mount_id}'
                 }), 404
             
             # Unmount the share
@@ -461,6 +473,8 @@ class SMBHandler:
                 return jsonify({
                     'status': 'error',
                     'message': error_msg or f'Failed to unmount SMB share with ID {mount_id}',
+                    'error': error_msg or 'Unmount operation failed',
+                    'details': f'Unmount operation failed for {mount_config["server"]}/{mount_config["share"]}',
                     'data': {
                         'id': mount_id,
                         'server': mount_config['server'],
@@ -476,5 +490,6 @@ class SMBHandler:
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to unmount SMB share',
-                'error': str(e)
+                'error': str(e),
+                'details': 'An internal server error occurred while unmounting the share'
             }), 500

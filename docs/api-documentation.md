@@ -544,12 +544,23 @@ Add and mount a new SMB share for music access.
 }
 ```
 
-**Response (Error):**
+**Response (Error - 400 Bad Request):**
 ```json
 {
   "status": "error",
   "message": "Failed to mount SMB share",
-  "error": "Mount configuration for 192.168.1.100/music already exists"
+  "error": "Mount configuration for 192.168.1.100/music already exists or mount failed",
+  "details": "The share configuration already exists in the database or the mount operation failed"
+}
+```
+
+**Response (Error - 500 Internal Server Error):**
+```json
+{
+  "status": "error", 
+  "message": "Failed to mount SMB share",
+  "error": "Permission denied",
+  "details": "An internal server error occurred while creating the mount"
 }
 ```
 
@@ -583,11 +594,23 @@ Unmount and remove an SMB share configuration.
 }
 ```
 
-**Response (Not Found):**
+**Response (Error - 404 Not Found):**
 ```json
 {
   "status": "error",
-  "message": "Mount configuration not found for 192.168.1.100/music"
+  "message": "Mount configuration not found for 192.168.1.100/music",
+  "error": "Configuration not found",
+  "details": "No mount configuration exists for server 192.168.1.100 and share music"
+}
+```
+
+**Response (Error - 500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "message": "Failed to unmount SMB share",
+  "error": "Device or resource busy",
+  "details": "An internal server error occurred while removing the mount"
 }
 ```
 
@@ -604,6 +627,7 @@ POST /api/v1/smb/mounts/mount/1
 ```
 
 **Response (Success):**
+- HTTP 200 OK
 ```json
 {
   "status": "success",
@@ -619,10 +643,24 @@ POST /api/v1/smb/mounts/mount/1
 ```
 
 **Response (Not Found):**
+- HTTP 404 Not Found
 ```json
 {
   "status": "error",
-  "message": "Mount configuration with ID 1 not found"
+  "message": "Mount configuration with ID 1 not found",
+  "error": "mount_not_found",
+  "details": "No mount configuration exists with the provided ID"
+}
+```
+
+**Response (Mount Failed):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
+  "message": "Failed to mount SMB share",
+  "error": "mount_failed",
+  "details": "mount error(13): Permission denied"
 }
 ```
 
@@ -639,6 +677,7 @@ POST /api/v1/smb/mounts/unmount/1
 ```
 
 **Response (Success):**
+- HTTP 200 OK
 ```json
 {
   "status": "success",
@@ -654,10 +693,24 @@ POST /api/v1/smb/mounts/unmount/1
 ```
 
 **Response (Not Found):**
+- HTTP 404 Not Found
 ```json
 {
   "status": "error",
-  "message": "Mount configuration with ID 1 not found"
+  "message": "Mount configuration with ID 1 not found",
+  "error": "mount_not_found",
+  "details": "No mount configuration exists with the provided ID"
+}
+```
+
+**Response (Unmount Failed):**
+- HTTP 500 Internal Server Error
+```json
+{
+  "status": "error",
+  "message": "Failed to unmount SMB share",
+  "error": "unmount_failed",
+  "details": "umount: /data/music: target is busy"
 }
 ```
 
