@@ -121,20 +121,26 @@ class SMBHandler:
     
     def handle_list_shares(self, server: str) -> Dict[str, Any]:
         """
-        Handle GET /api/v1/smb/shares/<server>
+        Handle POST /api/v1/smb/shares/<server>
         List shares on an SMB server
         """
         try:
-            # Get optional authentication from query parameters
-            username = request.args.get('username')
-            password = request.args.get('password')
-            detailed = request.args.get('detailed', 'false').lower() == 'true'
+            # Get authentication from POST body
+            data = request.get_json() or {}
+            username = data.get('username')
+            password = data.get('password')
+            detailed = data.get('detailed', False)
             
-            logger.debug(f"Listing shares on SMB server: {server}")
+            # Server can be provided in request body or URL path
+            # Request body takes precedence over URL path
+            server_from_body = data.get('server')
+            target_server = server_from_body if server_from_body else server
+            
+            logger.debug(f"Listing shares on SMB server: {target_server}")
             
             # List shares
             shares, detected_version = list_smb_shares(
-                server=server,
+                server=target_server,
                 username=username,
                 password=password
             )
@@ -154,7 +160,7 @@ class SMBHandler:
                 share_list.append(share_info)
             
             response_data = {
-                'server': server,
+                'server': target_server,
                 'shares': share_list,
                 'count': len(share_list)
             }
@@ -168,11 +174,15 @@ class SMBHandler:
             })
             
         except Exception as e:
-            logger.error(f"Error listing shares on {server}: {e}")
+            # Use the server from body if available, otherwise fall back to URL path
+            data = request.get_json() or {}
+            target_server = data.get('server', server)
+            
+            logger.error(f"Error listing shares on {target_server}: {e}")
             logger.debug(traceback.format_exc())
             return jsonify({
                 'status': 'error',
-                'message': f'Failed to list shares on {server}',
+                'message': f'Failed to list shares on {target_server}',
                 'error': str(e)
             }), 500
     

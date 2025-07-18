@@ -378,10 +378,11 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
             return True, None
         else:
             logger.debug(f"Connection failed with return code {result.returncode}")
-            logger.debug(f"Error message: {result.stderr}")
+            logger.debug(f"Error message (stderr): {result.stderr}")
+            logger.debug(f"Output message (stdout): {result.stdout}")
             
-            # Analyze the error to provide specific feedback
-            error_output = result.stderr.lower()
+            # Analyze both stderr and stdout for error information
+            error_output = (result.stderr + " " + result.stdout).lower()
             
             if "connection refused" in error_output or "no route to host" in error_output:
                 return False, f"Server {server} is not reachable"
@@ -396,9 +397,19 @@ def check_smb_connection(server: str, username: Optional[str] = None, password: 
                     return False, "Authentication failed"
                 else:
                     return False, "Server requires authentication"
-            else:
-                # Generic error
+            elif "protocol negotiation failed" in error_output:
+                return False, "SMB protocol negotiation failed"
+            elif "tree connect failed" in error_output:
+                return False, "Failed to connect to server shares"
+            elif result.stderr.strip():
+                # Use stderr if it has content
                 return False, f"Connection failed: {result.stderr.strip()}"
+            elif result.stdout.strip():
+                # Fall back to stdout if stderr is empty
+                return False, f"Connection failed: {result.stdout.strip()}"
+            else:
+                # Generic error with return code
+                return False, f"Connection failed with error code {result.returncode}"
     
     except subprocess.TimeoutExpired:
         logger.error(f"Connection to {server} timed out")

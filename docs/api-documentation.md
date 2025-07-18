@@ -411,15 +411,25 @@ Test connection to a specific SMB server.
 }
 ```
 
-#### `GET /api/v1/smb/shares/{server}`
+#### `POST /api/v1/smb/shares`
 
 List available shares on a specific SMB server.
 
+**Request Body:**
+```json
+{
+  "server": "192.168.1.100",
+  "username": "test",
+  "password": "password123",
+  "detailed": true
+}
+```
+
 **Parameters:**
-- **server** (path, required): Server IP address or hostname
-- **username** (query, optional): Username for authentication
-- **password** (query, optional): Password for authentication
-- **detailed** (query, optional): Set to "true" for detailed share information
+- **server** (required): Server IP address or hostname
+- **username** (optional): Username for authentication
+- **password** (optional): Password for authentication
+- **detailed** (optional): Set to true for detailed share information
 
 **Response:**
 ```json

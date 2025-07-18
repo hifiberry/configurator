@@ -153,7 +153,7 @@ class ConfigAPIServer:
             """Test connection to an SMB server"""
             return self.smb_handler.handle_test_connection(server)
         
-        @self.app.route('/api/v1/smb/shares/<server>', methods=['GET'])
+        @self.app.route('/api/v1/smb/shares/<server>', methods=['POST'])
         def list_smb_shares(server):
             """List shares on an SMB server"""
             return self.smb_handler.handle_list_shares(server)
