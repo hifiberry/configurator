@@ -155,10 +155,12 @@ def find_smb_servers(broadcast_address: str) -> List[Dict[str, str]]:
                 if match:
                     ip = match.group(1)
                     name = match.group(2)
-                    logger.debug(f"Found server: {ip} ({name})")
+                    # Clean up the name by removing NetBIOS suffixes like <00>
+                    clean_name = re.sub(r'<[0-9a-fA-F]+>', '', name)
+                    logger.debug(f"Found server: {ip} ({clean_name})")
                     servers.append({
                         'ip': ip,
-                        'name': name,
+                        'workgroup': clean_name,
                         'broadcast': broadcast_address
                     })
     except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
@@ -289,6 +291,9 @@ def list_all_servers() -> List[Dict[str, str]]:
                 server['is_file_server'] = True
                 server['hostname'] = file_server_hostname
                 server['services'] = ['File Server']
+                # Keep the workgroup from initial discovery if not already set
+                if 'workgroup' not in server:
+                    server['workgroup'] = server.get('workgroup', '')
                 logger.info(f"Found file server: {server['ip']} ({file_server_hostname})")
             else:
                 server['is_file_server'] = False
@@ -298,7 +303,7 @@ def list_all_servers() -> List[Dict[str, str]]:
                 host_info = get_host_info(server['ip'])
                 server.update({
                     'hostname': host_info['hostname'],
-                    'workgroup': host_info['workgroup'],
+                    'workgroup': host_info['workgroup'] or server.get('workgroup', ''),
                     'services': host_info['services']
                 })
             
@@ -705,7 +710,7 @@ def main():
         
         if file_servers:
             for server in file_servers:
-                hostname = server['hostname'] if server['hostname'] else server['name']
+                hostname = server['hostname'] if server['hostname'] else server.get('workgroup', '')
                 print(f"{server['ip']}\t{hostname}")
         # No else clause - don't print anything if no file servers found
     
