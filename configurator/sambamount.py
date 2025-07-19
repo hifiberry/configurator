@@ -70,7 +70,6 @@ def parse_arguments():
     # Mount configuration options
     parser.add_argument('--server', help='Server name or IP address (for mount operations)')
     parser.add_argument('--share', help='Share name (for mount operations)')
-    parser.add_argument('--id', type=int, help='Mount ID from config database (alternative to --server/--share)')
     parser.add_argument('--user', help='Username for connection')
     parser.add_argument('--password', help='Password for connection')
     parser.add_argument('--mountpoint', help='Mount point (default: /data/server-share)')
@@ -613,22 +612,6 @@ def mount_all_shares() -> Dict[str, Any]:
 
     return results
 
-def find_mount_by_id(mount_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Find a mount configuration by its ID.
-    
-    Args:
-        mount_id: The mount ID to search for
-        
-    Returns:
-        Mount configuration dictionary or None if not found
-    """
-    mounts = read_mount_config(secure=True)
-    for mount in mounts:
-        if mount.get('id') == mount_id:
-            return mount
-    return None
-
 def find_mount_by_server_share(server: str, share: str) -> Optional[Dict[str, Any]]:
     """
     Find a mount configuration by server and share name.
@@ -645,111 +628,6 @@ def find_mount_by_server_share(server: str, share: str) -> Optional[Dict[str, An
         if mount['server'] == server and mount['share'] == share:
             return mount
     return None
-
-def mount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
-    """
-    Mount a specific SMB share by its configuration ID.
-    
-    Args:
-        mount_id: The mount ID from the configuration database
-        
-    Returns:
-        Tuple of (success: bool, error_message: Optional[str])
-    """
-    try:
-        # Find the mount configuration by ID
-        target_mount = find_mount_by_id(mount_id)
-        
-        if not target_mount:
-            error_msg = f"Mount configuration with ID {mount_id} not found"
-            logger.error(error_msg)
-            return False, error_msg
-        
-        server = target_mount['server']
-        share = target_mount['share']
-        mountpoint = target_mount['mountpoint']
-        user = target_mount['user'] if target_mount['user'] else None
-        password = target_mount['password'] if target_mount['password'] else None
-        version = target_mount['version'] if target_mount['version'] else None
-        options = target_mount['options'] if target_mount['options'] else None
-        
-        logger.info(f"Attempting to mount ID {mount_id}: {server}/{share} at {mountpoint}")
-        
-        # Check if already mounted
-        if is_mounted(mountpoint):
-            logger.info(f"ID {mount_id} ({server}/{share}) is already mounted at {mountpoint}")
-            return True, None
-        
-        # Attempt to mount
-        mount_success, error_msg = mount_cifs_share(server, share, mountpoint, user, password, version, options)
-        
-        if not mount_success:
-            logger.error(f"Mount operation failed for ID {mount_id} ({server}/{share} -> {mountpoint})")
-            logger.error(f"Mount failure reason: {error_msg}")
-            return False, error_msg
-        
-        # Verify the mount succeeded by checking again
-        if is_mounted(mountpoint):
-            logger.info(f"Successfully mounted and verified ID {mount_id} ({server}/{share}) at {mountpoint}")
-            return True, None
-        else:
-            error_msg = f"Mount command succeeded but verification failed for ID {mount_id} ({server}/{share})"
-            logger.error(error_msg)
-            logger.error(f"Mountpoint {mountpoint} is not showing as mounted after successful mount command")
-            return False, error_msg
-            
-    except Exception as e:
-        error_msg = f"Unexpected error mounting ID {mount_id}: {e}"
-        logger.error(error_msg)
-        logger.exception(f"Exception occurred while mounting ID {mount_id}")
-        return False, error_msg
-
-def unmount_smb_share_by_id(mount_id: int) -> tuple[bool, Optional[str]]:
-    """
-    Unmount a specific SMB share by its configuration ID.
-    
-    Args:
-        mount_id: The mount ID from the configuration database
-        
-    Returns:
-        Tuple of (success: bool, error_message: Optional[str])
-    """
-    try:
-        # Find the mount configuration by ID
-        target_mount = find_mount_by_id(mount_id)
-        
-        if not target_mount:
-            error_msg = f"Mount configuration with ID {mount_id} not found"
-            logger.error(error_msg)
-            return False, error_msg
-        
-        server = target_mount['server']
-        share = target_mount['share']
-        mountpoint = target_mount['mountpoint']
-        
-        logger.info(f"Attempting to unmount ID {mount_id}: {server}/{share} from {mountpoint}")
-        
-        # Check if actually mounted
-        if not is_mounted(mountpoint):
-            logger.info(f"ID {mount_id} ({server}/{share}) is not mounted at {mountpoint}")
-            return True, None
-        
-        # Attempt to unmount (DO NOT use lazy fallback for API calls)
-        unmount_success, error_msg = unmount_share(mountpoint, lazy_fallback=False)
-        
-        if unmount_success:
-            logger.info(f"Successfully unmounted ID {mount_id} ({server}/{share}) from {mountpoint}")
-            return True, None
-        else:
-            logger.error(f"Unmount operation failed for ID {mount_id} ({server}/{share} from {mountpoint})")
-            logger.error(f"Unmount failure reason: {error_msg}")
-            return False, error_msg
-            
-    except Exception as e:
-        error_msg = f"Unexpected error unmounting ID {mount_id}: {e}"
-        logger.error(error_msg)
-        logger.exception(f"Exception occurred while unmounting ID {mount_id}")
-        return False, error_msg
 
 def mount_smb_share(server: str, share: str) -> bool:
     """
@@ -951,16 +829,7 @@ def main():
     
     elif args.mount:
         # Mount a specific share
-        if args.id:
-            # Mount by ID
-            success, error_msg = mount_smb_share_by_id(args.id)
-            if success:
-                logger.info(f"Successfully mounted share with ID {args.id}")
-                sys.exit(0)
-            else:
-                logger.error(f"Failed to mount share with ID {args.id}: {error_msg}")
-                sys.exit(1)
-        elif args.server and args.share:
+        if args.server and args.share:
             # Mount by server/share
             success = mount_smb_share(args.server, args.share)
             if success:
@@ -970,21 +839,12 @@ def main():
                 logger.error(f"Failed to mount {args.server}/{args.share}")
                 sys.exit(1)
         else:
-            logger.error("--mount requires either --id or both --server and --share")
+            logger.error("--mount requires both --server and --share")
             sys.exit(1)
     
     elif args.unmount:
         # Unmount a specific share
-        if args.id:
-            # Unmount by ID
-            success, error_msg = unmount_smb_share_by_id(args.id)
-            if success:
-                logger.info(f"Successfully unmounted share with ID {args.id}")
-                sys.exit(0)
-            else:
-                logger.error(f"Failed to unmount share with ID {args.id}: {error_msg}")
-                sys.exit(1)
-        elif args.server and args.share:
+        if args.server and args.share:
             # Unmount by server/share
             success = unmount_smb_share(args.server, args.share)
             if success:
@@ -994,7 +854,7 @@ def main():
                 logger.error(f"Failed to unmount {args.server}/{args.share}")
                 sys.exit(1)
         else:
-            logger.error("--unmount requires either --id or both --server and --share")
+            logger.error("--unmount requires both --server and --share")
             sys.exit(1)
     
     elif args.list_mounts:
