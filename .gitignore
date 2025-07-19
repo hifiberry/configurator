@@ -3,3 +3,4 @@ deb_dist/
 configurator.egg-info/
 PACKAGEFILE
 configurator/__pycache__
+__pycache__/
