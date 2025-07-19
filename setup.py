@@ -52,10 +52,6 @@ setup(
         ('/usr/share/man/man7', [
             'man/hifiberry-configurator.7',
         ]),
-        ('/usr/share/doc/hifiberry-configurator', [
-            'docs/api-documentation.md',
-            'docs/README.md',
-        ]),
     ],
     entry_points={
         "console_scripts": [
