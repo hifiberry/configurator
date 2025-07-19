@@ -1,3 +1,16 @@
+hifiberry-configurator (2.0.0) stable; urgency=medium
+
+  * Added hostname management API endpoints (/api/v1/hostname)
+  * Support for setting system hostname and pretty hostname via hostnamectl
+  * Automatic hostname sanitization from pretty hostnames
+  * Simplified SMB mount/unmount operations - removed mount by ID functionality
+  * Improved mount status consistency - always reads from filesystem
+  * Removed artificial delays and retry logic from mount operations
+  * Enhanced API documentation with comprehensive hostname endpoint documentation
+  * Code cleanup and simplification for better maintainability
+
+ -- HiFiBerry <support@hifiberry.com>  Sat, 19 Jul 2025 10:00:00 +0000
+
 hifiberry-configurator (1.8.0) stable; urgency=medium
 
   * Added systeminfo.py module for collecting system information

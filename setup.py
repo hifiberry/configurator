@@ -1,13 +1,22 @@
 from setuptools import setup
 import os
 
+# Read version from version module
+def get_version():
+    version_file = os.path.join(os.path.dirname(__file__), 'configurator', '_version.py')
+    with open(version_file, 'r') as f:
+        for line in f:
+            if line.startswith('__version__'):
+                return line.split('=')[1].strip().strip('"\'')
+    raise RuntimeError('Unable to find version string.')
+
 # Read requirements from requirements.txt
 with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
     requirements = [line.strip() for line in f.readlines() if line.strip() and not line.startswith("#")]
 
 setup(
     name="configurator",
-    version="1.8.0",
+    version=get_version(),
     description="System configuration scripts",
     long_description="System configuration scripts",
     author="HiFiBerry",

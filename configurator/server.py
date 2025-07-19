@@ -21,6 +21,7 @@ from .systemd_handler import SystemdHandler
 from .systeminfo import SystemInfo
 from .smb_handler import SMBHandler
 from .hostname_handler import HostnameHandler
+from ._version import __version__
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ class ConfigAPIServer:
             """Get version information"""
             return jsonify({
                 'service': 'hifiberry-config-api',
-                'version': '1.8.0',
+                'version': __version__,
                 'api_version': 'v1',
                 'description': 'HiFiBerry Configuration Server',
                 'endpoints': {
