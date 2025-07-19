@@ -60,7 +60,7 @@ Get version information and available endpoints.
 
 #### `GET /api/v1/systeminfo`
 
-Get system information including Pi model, HAT details, sound card information, and system UUID.
+Get system information including Pi model, HAT details, sound card information, system UUID, and hostname information.
 
 **Response:**
 ```json
@@ -87,7 +87,9 @@ Get system information including Pi model, HAT details, sound card information, 
     "card_type": ["DAC"]
   },
   "system": {
-    "uuid": "abcd1234-5678-90ef-1234-567890abcdef"
+    "uuid": "abcd1234-5678-90ef-1234-567890abcdef",
+    "hostname": "hifiberry-player",
+    "pretty_hostname": "HiFiBerry Music Player"
   },
   "status": "success"
 }
@@ -96,9 +98,34 @@ Get system information including Pi model, HAT details, sound card information, 
 **Response (Error):**
 ```json
 {
+  "pi_model": {
+    "name": "unknown",
+    "version": "unknown"
+  },
+  "hat_info": {
+    "vendor": null,
+    "product": null,
+    "uuid": null,
+    "vendor_card": "unknown:unknown"
+  },
+  "soundcard": {
+    "name": "unknown",
+    "volume_control": null,
+    "hardware_index": null,
+    "output_channels": 0,
+    "input_channels": 0,
+    "features": [],
+    "hat_name": null,
+    "supports_dsp": false,
+    "card_type": []
+  },
+  "system": {
+    "uuid": null,
+    "hostname": null,
+    "pretty_hostname": null
+  },
   "status": "error",
-  "message": "Failed to retrieve system information",
-  "error": "Error details"
+  "error": "Failed to collect system info"
 }
 ```
 
