@@ -20,6 +20,7 @@ from .configdb import ConfigDB
 from .systemd_handler import SystemdHandler
 from .systeminfo import SystemInfo
 from .smb_handler import SMBHandler
+from .hostname_handler import HostnameHandler
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class ConfigAPIServer:
         self.systemd_handler = SystemdHandler()
         self.systeminfo = SystemInfo()
         self.smb_handler = SMBHandler()
+        self.hostname_handler = HostnameHandler()
         
         # Configure Flask logging
         if not debug:
@@ -79,7 +81,8 @@ class ConfigAPIServer:
                     'smb_shares': '/api/v1/smb/shares',
                     'smb_mounts': '/api/v1/smb/mounts',
                     'smb_mount_config': '/api/v1/smb/mount',
-                    'smb_mount_all': '/api/v1/smb/mount-all'
+                    'smb_mount_all': '/api/v1/smb/mount-all',
+                    'hostname': '/api/v1/hostname'
                 }
             })
         
@@ -170,6 +173,17 @@ class ConfigAPIServer:
         def mount_all_samba_shares():
             """Mount all configured Samba shares via systemd service"""
             return self.smb_handler.handle_mount_all_samba()
+
+        # Hostname endpoints
+        @self.app.route('/api/v1/hostname', methods=['GET'])
+        def get_hostname():
+            """Get current system and pretty hostnames"""
+            return self.hostname_handler.handle_get_hostname()
+        
+        @self.app.route('/api/v1/hostname', methods=['POST'])
+        def set_hostname():
+            """Set system hostname and/or pretty hostname"""
+            return self.hostname_handler.handle_set_hostname()
 
         # Error handlers
         @self.app.errorhandler(400)
