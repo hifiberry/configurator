@@ -8,6 +8,7 @@
   - [Configuration Management](#configuration-management)
   - [System Service Management](#system-service-management)
   - [SMB/CIFS Management](#smbcifs-management)
+  - [Hostname Management](#hostname-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -49,7 +50,8 @@ Get version information and available endpoints.
     "smb_shares": "/api/v1/smb/shares/<server>",
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount_config": "/api/v1/smb/mount",
-    "smb_mount_all": "/api/v1/smb/mount-all"
+    "smb_mount_all": "/api/v1/smb/mount-all",
+    "hostname": "/api/v1/hostname"
   }
 }
 ```
@@ -807,6 +809,101 @@ Mount all configured Samba shares by restarting the sambamount systemd service.
   "message": "Failed to restart Samba mount service",
   "error": "Unexpected error occurred",
   "details": "An internal server error occurred while restarting the service"
+}
+```
+
+## Hostname Management
+
+### `GET /api/v1/hostname`
+
+Get current system hostname and pretty hostname.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "hostname": "hifiberry",
+    "pretty_hostname": "My HiFiBerry System"
+  }
+}
+```
+
+**Response Fields:**
+- **hostname**: Current system hostname (DNS-compatible, lowercase, max 16 chars)
+- **pretty_hostname**: Current pretty hostname (human-readable, can be null if not set)
+
+### `POST /api/v1/hostname`
+
+Set system hostname and/or pretty hostname.
+
+**Request Body:**
+```json
+{
+  "hostname": "new-hostname",
+  "pretty_hostname": "My New HiFiBerry System"
+}
+```
+
+**Request Parameters:**
+- **hostname** (optional): System hostname to set (max 16 chars, lowercase ASCII, no special chars except hyphens)
+- **pretty_hostname** (optional): Pretty hostname to set (max 64 chars, printable ASCII characters)
+
+**Notes:**
+- You must provide at least one of `hostname` or `pretty_hostname`
+- If only `pretty_hostname` is provided, the system hostname will be automatically derived from it
+- The derived hostname will be sanitized (lowercase, spaces become hyphens, special chars removed)
+
+**Example Request - Set both:**
+```json
+{
+  "hostname": "music-server",
+  "pretty_hostname": "Music Server"
+}
+```
+
+**Example Request - Set only pretty hostname:**
+```json
+{
+  "pretty_hostname": "My HiFiBerry Music System"
+}
+```
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "Hostname updated successfully",
+  "data": {
+    "hostname": "music-server",
+    "pretty_hostname": "Music Server"
+  }
+}
+```
+
+**Error Responses:**
+
+Invalid hostname format:
+```json
+{
+  "status": "error",
+  "message": "Invalid hostname format (max 16 chars, lowercase ASCII, no special chars except hyphens)"
+}
+```
+
+Invalid pretty hostname:
+```json
+{
+  "status": "error",
+  "message": "Invalid pretty hostname format"
+}
+```
+
+Missing parameters:
+```json
+{
+  "status": "error",
+  "message": "Must provide either hostname or pretty_hostname"
 }
 ```
 
