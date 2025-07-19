@@ -194,6 +194,10 @@ class HostnameHandler:
                     'message': 'Failed to retrieve hostname information'
                 }), 500
             
+            # If no pretty hostname is set, use the normal hostname
+            if pretty_hostname is None:
+                pretty_hostname = hostname
+            
             return jsonify({
                 'status': 'success',
                 'data': {

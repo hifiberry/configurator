@@ -9,12 +9,14 @@ Provides both simple text output and structured data for REST API consumption.
 import logging
 import sys
 import argparse
-from typing import Dict, Any, Optional
+import subprocess
+from typing import Dict, Any, Optional, Tuple
 
 # Import from other configurator modules
 from .pimodel import PiModel
 from .hattools import get_hat_info
 from .soundcard import Soundcard
+from .hostname_handler import HostnameHandler
 
 class SystemInfo:
     """Collects and provides system information from various sources"""
@@ -26,6 +28,7 @@ class SystemInfo:
         self._hat_info = None
         self._system_uuid = None
         self._soundcard = None
+        self._hostname_handler = None
         
     def _get_pi_model(self) -> PiModel:
         """Get Pi model information (cached)"""
@@ -58,6 +61,27 @@ class SystemInfo:
         if self._soundcard is None:
             self._soundcard = Soundcard()
         return self._soundcard
+    
+    def _get_hostname_handler(self) -> HostnameHandler:
+        """Get hostname handler (cached)"""
+        if self._hostname_handler is None:
+            self._hostname_handler = HostnameHandler()
+        return self._hostname_handler
+    
+    def _get_hostname_info(self) -> Tuple[Optional[str], Optional[str]]:
+        """Get hostname information (cached)"""
+        try:
+            hostname_handler = self._get_hostname_handler()
+            hostname, pretty_hostname = hostname_handler._get_hostnames()
+            
+            # If no pretty hostname is set, use the normal hostname
+            if pretty_hostname is None:
+                pretty_hostname = hostname
+                
+            return hostname, pretty_hostname
+        except Exception as e:
+            self.logger.error(f"Error getting hostnames: {e}")
+            return None, None
     
     def get_pi_model_name(self) -> str:
         """Get the Pi model name"""
@@ -93,6 +117,14 @@ class SystemInfo:
         except Exception as e:
             self.logger.error(f"Failed to get system UUID: {e}")
             return None
+    
+    def get_hostnames(self) -> Tuple[Optional[str], Optional[str]]:
+        """Get both system hostname and pretty hostname (falls back to hostname if not set)"""
+        try:
+            return self._get_hostname_info()
+        except Exception as e:
+            self.logger.error(f"Failed to get hostnames: {e}")
+            return None, None
     
     def get_soundcard_info(self) -> dict:
         """Get sound card information as a dictionary"""
@@ -156,6 +188,7 @@ class SystemInfo:
             hat_info = self._get_hat_info()
             system_uuid = self._get_system_uuid()
             soundcard_info = self.get_soundcard_info()
+            hostname, pretty_hostname = self._get_hostname_info()
             
             return {
                 'pi_model': {
@@ -170,7 +203,9 @@ class SystemInfo:
                 },
                 'soundcard': soundcard_info,
                 'system': {
-                    'uuid': system_uuid
+                    'uuid': system_uuid,
+                    'hostname': hostname,
+                    'pretty_hostname': pretty_hostname
                 },
                 'status': 'success'
             }
@@ -199,7 +234,9 @@ class SystemInfo:
                     'card_type': []
                 },
                 'system': {
-                    'uuid': None
+                    'uuid': None,
+                    'hostname': None,
+                    'pretty_hostname': None
                 },
                 'status': 'error',
                 'error': str(e)
@@ -212,6 +249,7 @@ class SystemInfo:
             hat_info = self._get_hat_info()
             system_uuid = self._get_system_uuid()
             soundcard_info = self.get_soundcard_info()
+            hostname, pretty_hostname = self._get_hostname_info()
             
             # Build Pi Model string (name + version)
             pi_model_name = pi_model.get_model_name().strip('\x00')  # Remove null characters
@@ -230,7 +268,9 @@ class SystemInfo:
                 'Pi Model': pi_model_full,
                 'HAT': hat_full,
                 'Sound Card': soundcard_info.get('name', 'unknown'),
-                'UUID': system_uuid or 'unknown'
+                'UUID': system_uuid or 'unknown',
+                'Hostname': hostname or 'unknown',
+                'Pretty Hostname': pretty_hostname or 'not set'
             }
             
             return flat_dict
@@ -240,7 +280,9 @@ class SystemInfo:
                 'Pi Model': 'unknown',
                 'HAT': 'unknown',
                 'Sound Card': 'unknown',
-                'UUID': 'unknown'
+                'UUID': 'unknown',
+                'Hostname': 'unknown',
+                'Pretty Hostname': 'unknown'
             }
     
     def get_simple_output(self) -> str:
