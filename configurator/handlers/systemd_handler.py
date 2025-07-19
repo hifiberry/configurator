@@ -11,7 +11,7 @@ import logging
 import subprocess
 from flask import request, jsonify
 from typing import Dict, Any, Optional, List
-from .config_parser import get_config_section
+from ..config_parser import get_config_section
 
 # Set up logging
 logger = logging.getLogger(__name__)

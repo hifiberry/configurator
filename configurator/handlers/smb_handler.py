@@ -9,12 +9,12 @@ from flask import jsonify, request
 from typing import Dict, List, Any, Optional, Tuple
 import traceback
 
-from configurator.sambaclient import (
+from ..sambaclient import (
     list_all_servers, 
     check_smb_connection, 
     list_smb_shares
 )
-from configurator.sambamount import (
+from ..sambamount import (
     read_mount_config,
     add_mount_config,
     remove_mount_config,

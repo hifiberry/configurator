@@ -17,10 +17,8 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .systemd_handler import SystemdHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler
 from .systeminfo import SystemInfo
-from .smb_handler import SMBHandler
-from .hostname_handler import HostnameHandler
 from ._version import __version__
 
 # Set up logging

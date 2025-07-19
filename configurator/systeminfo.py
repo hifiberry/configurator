@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Tuple
 from .pimodel import PiModel
 from .hattools import get_hat_info
 from .soundcard import Soundcard
-from .hostname_handler import HostnameHandler
+from .hostname_utils import get_hostnames_with_fallback
 
 class SystemInfo:
     """Collects and provides system information from various sources"""
@@ -28,7 +28,6 @@ class SystemInfo:
         self._hat_info = None
         self._system_uuid = None
         self._soundcard = None
-        self._hostname_handler = None
         
     def _get_pi_model(self) -> PiModel:
         """Get Pi model information (cached)"""
@@ -62,23 +61,10 @@ class SystemInfo:
             self._soundcard = Soundcard()
         return self._soundcard
     
-    def _get_hostname_handler(self) -> HostnameHandler:
-        """Get hostname handler (cached)"""
-        if self._hostname_handler is None:
-            self._hostname_handler = HostnameHandler()
-        return self._hostname_handler
-    
     def _get_hostname_info(self) -> Tuple[Optional[str], Optional[str]]:
-        """Get hostname information (cached)"""
+        """Get hostname information"""
         try:
-            hostname_handler = self._get_hostname_handler()
-            hostname, pretty_hostname = hostname_handler._get_hostnames()
-            
-            # If no pretty hostname is set, use the normal hostname
-            if pretty_hostname is None:
-                pretty_hostname = hostname
-                
-            return hostname, pretty_hostname
+            return get_hostnames_with_fallback()
         except Exception as e:
             self.logger.error(f"Error getting hostnames: {e}")
             return None, None
