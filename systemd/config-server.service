@@ -17,7 +17,7 @@ PrivateMounts=no
 
 # Share mount namespace with host
 PrivateMounts=no
-RootPropagation=shared
+MountPropagation=shared
 
 # Capabilities needed for mount/unmount
 CapabilityBoundingSet=CAP_SYS_ADMIN
