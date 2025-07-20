@@ -5,9 +5,15 @@ import subprocess
 import json
 import os
 import tempfile
-from flask import jsonify, request
 from typing import Dict, List, Any, Optional, Tuple
 import traceback
+
+try:
+    from flask import jsonify, request
+except ImportError:
+    # Flask not available - likely during testing or installation
+    jsonify = None
+    request = None
 
 from ..sambaclient import (
     list_all_servers, 

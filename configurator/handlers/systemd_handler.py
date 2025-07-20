@@ -9,8 +9,15 @@ import os
 import json
 import logging
 import subprocess
-from flask import request, jsonify
 from typing import Dict, Any, Optional, List
+
+try:
+    from flask import request, jsonify
+except ImportError:
+    # Flask not available - likely during testing or installation
+    request = None
+    jsonify = None
+
 from ..config_parser import get_config_section
 
 # Set up logging

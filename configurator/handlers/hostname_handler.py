@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 
 import logging
-from flask import jsonify, request
 from typing import Dict, Any
 import traceback
+
+try:
+    from flask import jsonify, request
+except ImportError:
+    # Flask not available - likely during testing or installation
+    jsonify = None
+    request = None
 
 from ..hostname_utils import (
     get_hostnames_with_fallback,

@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 import os
 
 # Read version from version module
@@ -22,7 +22,7 @@ setup(
     author="HiFiBerry",
     author_email="support@hifiberry.com",
     license="MIT",
-    packages=["configurator"],
+    packages=find_packages(),
     install_requires=requirements,
     data_files=[
         ('/usr/lib/systemd/system', [
