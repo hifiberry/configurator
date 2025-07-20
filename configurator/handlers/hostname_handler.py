@@ -10,9 +10,9 @@ from ..hostname_utils import (
     sanitize_hostname,
     validate_hostname,
     validate_pretty_hostname,
-    set_hostname,
     set_pretty_hostname
 )
+from ..hostconfig import set_hostname_with_hosts_update
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class HostnameHandler:
             if hostname and not validate_hostname(hostname):
                 return jsonify({
                     'status': 'error',
-                    'message': 'Invalid hostname format (max 16 chars, lowercase ASCII, no special chars except hyphens)'
+                    'message': 'Invalid hostname format (max 64 chars, ASCII letters/numbers/hyphens, no leading/trailing hyphens)'
                 }), 400
             
             logger.debug(f"Setting hostnames - hostname: {hostname}, pretty: {pretty_hostname}")
@@ -111,7 +111,7 @@ class HostnameHandler:
             success = True
             
             if hostname:
-                if not set_hostname(hostname):
+                if not set_hostname_with_hosts_update(hostname):
                     success = False
             
             if pretty_hostname and success:

@@ -873,13 +873,15 @@ Set system hostname and/or pretty hostname.
 ```
 
 **Request Parameters:**
-- **hostname** (optional): System hostname to set (max 16 chars, lowercase ASCII, no special chars except hyphens)
+- **hostname** (optional): System hostname to set (max 64 chars, ASCII letters/numbers/hyphens, no leading/trailing hyphens)
 - **pretty_hostname** (optional): Pretty hostname to set (max 64 chars, printable ASCII characters)
 
 **Notes:**
 - You must provide at least one of `hostname` or `pretty_hostname`
 - If only `pretty_hostname` is provided, the system hostname will be automatically derived from it
 - The derived hostname will be sanitized (lowercase, spaces become hyphens, special chars removed)
+- When setting a hostname, `/etc/hosts` is automatically updated to include the new hostname as 127.0.0.1
+- Old hostname entries are removed from `/etc/hosts` when changing hostnames
 
 **Example Request - Set both:**
 ```json
@@ -914,7 +916,7 @@ Invalid hostname format:
 ```json
 {
   "status": "error",
-  "message": "Invalid hostname format (max 16 chars, lowercase ASCII, no special chars except hyphens)"
+  "message": "Invalid hostname format (max 64 chars, ASCII letters/numbers/hyphens, no leading/trailing hyphens)"
 }
 ```
 

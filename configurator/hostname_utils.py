@@ -10,6 +10,12 @@ import re
 import subprocess
 from typing import Tuple, Optional
 
+from .hostconfig import (
+    set_hostname_with_hosts_update,
+    validate_hostname as validate_hostname_format,
+    sanitize_hostname as sanitize_hostname_format
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +52,7 @@ def get_hostnames() -> Tuple[Optional[str], Optional[str]]:
 def sanitize_hostname(pretty_hostname: str) -> str:
     """
     Convert pretty hostname to valid system hostname.
-    Rules: max 16 chars, lowercase, ASCII only, no special chars except hyphens
+    Rules: max 64 chars, ASCII only, no special chars except hyphens
     
     Args:
         pretty_hostname: The pretty hostname to convert
@@ -54,27 +60,7 @@ def sanitize_hostname(pretty_hostname: str) -> str:
     Returns:
         Sanitized hostname suitable for system use
     """
-    # Convert to lowercase and replace spaces with hyphens
-    hostname = pretty_hostname.lower().replace(' ', '-')
-    
-    # Keep only ASCII letters, numbers, and hyphens
-    hostname = re.sub(r'[^a-z0-9-]', '', hostname)
-    
-    # Remove leading/trailing hyphens and multiple consecutive hyphens
-    hostname = re.sub(r'-+', '-', hostname).strip('-')
-    
-    # Limit to 16 characters
-    hostname = hostname[:16]
-    
-    # Ensure it doesn't end with a hyphen
-    hostname = hostname.rstrip('-')
-    
-    # If empty or starts with hyphen, use fallback
-    if not hostname or hostname.startswith('-'):
-        hostname = 'hifiberry'
-    
-    logger.debug(f"Sanitized '{pretty_hostname}' to '{hostname}'")
-    return hostname
+    return sanitize_hostname_format(pretty_hostname, max_length=64)
 
 
 def validate_hostname(hostname: str) -> bool:
@@ -87,18 +73,7 @@ def validate_hostname(hostname: str) -> bool:
     Returns:
         True if valid, False otherwise
     """
-    if not hostname or len(hostname) > 16:
-        return False
-    
-    # Must be lowercase ASCII letters, numbers, and hyphens only
-    if not re.match(r'^[a-z0-9-]+$', hostname):
-        return False
-    
-    # Cannot start or end with hyphen
-    if hostname.startswith('-') or hostname.endswith('-'):
-        return False
-    
-    return True
+    return validate_hostname_format(hostname)
 
 
 def validate_pretty_hostname(pretty_hostname: str) -> bool:
@@ -131,7 +106,7 @@ def validate_pretty_hostname(pretty_hostname: str) -> bool:
 
 def set_hostname(hostname: str) -> bool:
     """
-    Set system hostname using hostnamectl.
+    Set system hostname using hostnamectl and update /etc/hosts.
     
     Args:
         hostname: The hostname to set
@@ -139,20 +114,7 @@ def set_hostname(hostname: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    try:
-        result = subprocess.run(['hostnamectl', 'set-hostname', hostname], 
-                              capture_output=True, text=True, timeout=10)
-        
-        if result.returncode == 0:
-            logger.info(f"Successfully set hostname to: {hostname}")
-            return True
-        else:
-            logger.error(f"Failed to set hostname: {result.stderr}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error setting hostname: {e}")
-        return False
+    return set_hostname_with_hosts_update(hostname)
 
 
 def set_pretty_hostname(pretty_hostname: str) -> bool:
