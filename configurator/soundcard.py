@@ -17,6 +17,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC", "ADC"],
+        "dtoverlay": "hifiberry-dac8x",
+        "is_pro": False,
     },
     "DAC8x": {
         "aplay_contains": "DAC8x",
@@ -27,6 +29,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC"],
+        "dtoverlay": "hifiberry-dac8x",
+        "is_pro": False,
     },
     "Digi2 Pro": {
         "hat_name": "Digi2 Pro",
@@ -36,6 +40,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["dsp"],
         "supports_dsp": True,
         "card_type": ["Digi"],
+        "dtoverlay": "hifiberry-digi-pro",
+        "is_pro": True,
     },
     "Amp100": {
         "hat_name": "Amp100",
@@ -45,6 +51,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["spdifnoclock", "toslink"],
         "supports_dsp": False,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-amp100,automute",
+        "is_pro": True,
     },
     "Amp3": {
         "aplay_contains": "Amp3",
@@ -55,6 +63,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["usehwvolume"],
         "supports_dsp": False,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-amp3",
+        "is_pro": False,
     },
     "Amp4": {
         "hat_name": "Amp4",
@@ -64,6 +74,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["usehwvolume"],
         "supports_dsp": True,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-dacplus-std",
+        "is_pro": False,
     },
     "Amp4 Pro": {
         "aplay_contains": "Amp4 Pro",
@@ -74,6 +86,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["usehwvolume"],
         "supports_dsp": True,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-amp4pro",
+        "is_pro": True,
     },
     "DSP 2x4": {
         "aplay_contains": "DSP 2x4",
@@ -84,6 +98,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["dsp"],
         "supports_dsp": False,
         "card_type": ["DAC", "ADC", "Digi"],
+        "dtoverlay": "hifiberry-dacplusdsp",
+        "is_pro": False,
     },
     "DAC+ ADC Pro": {
         "aplay_contains": "DAC+ADC Pro",
@@ -94,6 +110,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["analoginput"],
         "supports_dsp": False,
         "card_type": ["DAC", "ADC"],
+        "dtoverlay": "hifiberry-dacplusadcpro",
+        "is_pro": True,
     },
     "DAC+ ADC": {
         "aplay_contains": "DAC+ ADC",
@@ -104,6 +122,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["analoginput"],
         "supports_dsp": False,
         "card_type": ["DAC", "ADC"],
+        "dtoverlay": "hifiberry-dacplusadc",
+        "is_pro": False,
     },
     "DAC2 ADC Pro": {
         "aplay_contains": "DAC2 ADC Pro",
@@ -114,6 +134,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["analoginput"],
         "supports_dsp": True,
         "card_type": ["DAC", "ADC"],
+        "dtoverlay": "hifiberry-dacplusadcpro",
+        "is_pro": True,
     },
     "DAC2 HD": {
         "aplay_contains": "DAC2 HD",
@@ -124,6 +146,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": True,
         "card_type": ["DAC"],
+        "dtoverlay": "hifiberry-dacplushd",
+        "is_pro": True,
     },
     "DAC+ DSP": {
         "aplay_contains": "DAC+DSP",
@@ -134,6 +158,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["toslink"],
         "supports_dsp": False,
         "card_type": ["DAC", "Digi"],
+        "dtoverlay": "hifiberry-dacplusdsp",
+        "is_pro": True,
     },
     "DAC+/Amp2": {
         "aplay_contains": "DAC+",
@@ -144,6 +170,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC"],
+        "dtoverlay": "hifiberry-dacplus-std",
+        "is_pro": False,
     },
     "DAC2 Pro": {
         "hat_name": "DAC2 Pro",
@@ -153,6 +181,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC", "Headphone"],
+        "dtoverlay": "hifiberry-dacplus-std",
+        "is_pro": True,
     },
     "Amp+": {
         "aplay_contains": "AMP",
@@ -163,6 +193,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-amp",
+        "is_pro": False,
     },
     "Digi+ Pro": {
         "aplay_contains": "Digi Pro",
@@ -173,6 +205,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["digi"],
         "supports_dsp": True,
         "card_type": ["Digi"],
+        "dtoverlay": "hifiberry-digi-pro",
+        "is_pro": True,
     },
     "Digi+": {
         "aplay_contains": "Digi",
@@ -183,6 +217,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["digi"],
         "supports_dsp": False,
         "card_type": ["Digi"],
+        "dtoverlay": "hifiberry-digi",
+        "is_pro": False,
     },
     "Beocreate 4-Channel Amplifier": {
         "aplay_contains": "beocreate",
@@ -193,6 +229,8 @@ SOUND_CARD_DEFINITIONS = {
         "features": ["dsp", "toslink"],
         "supports_dsp": True,
         "card_type": ["Amp"],
+        "dtoverlay": "hifiberry-dac",
+        "is_pro": True,
     },
     "DAC+ Zero/Light/MiniAmp": {
         "aplay_contains": "snd_rpi_hifiberry_dac",
@@ -203,8 +241,46 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC"],
+        "dtoverlay": "hifiberry-dac",
+        "is_pro": False,
     },
 }
+
+
+def list_all_sound_cards(output_format="table"):
+    """
+    List all available HiFiBerry sound cards with their device tree overlays.
+    
+    Args:
+        output_format: Output format - "table" or "csv"
+    """
+    if output_format == "csv":
+        # CSV format output
+        print("Name,DT Overlay,Volume Control,Output Channels,Input Channels,Features,Supports DSP,Card Type")
+        for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+            dtoverlay = attributes.get("dtoverlay", "unknown")
+            volume_control = attributes.get("volume_control") or ""
+            features = ";".join(attributes.get("features", []))
+            card_types = ";".join(attributes.get("card_type", []))
+            supports_dsp = "Yes" if attributes.get("supports_dsp", False) else "No"
+            
+            print(f'"{card_name}","{dtoverlay}","{volume_control}",'
+                  f'{attributes.get("output_channels", 0)},{attributes.get("input_channels", 0)},'
+                  f'"{features}","{supports_dsp}","{card_types}"')
+    
+    else:
+        # Table format (default)
+        print("Available HiFiBerry Sound Cards:")
+        print("=" * 70)
+        print(f"{'Sound Card Name':<30} {'Device Tree Overlay':<30}")
+        print("-" * 70)
+        
+        for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+            dtoverlay = attributes.get("dtoverlay", "unknown")
+            print(f"{card_name:<30} {dtoverlay:<30}")
+        
+        print("-" * 70)
+        print(f"Total: {len(SOUND_CARD_DEFINITIONS)} sound cards")
 
 
 class Soundcard:
@@ -411,6 +487,17 @@ def main():
         help="Enable very verbose logging (DEBUG level).",
     )
     parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List all available HiFiBerry sound cards with their device tree overlays.",
+    )
+    parser.add_argument(
+        "--list-format",
+        choices=["table", "csv"],
+        default="table",
+        help="Output format for --list option (default: table).",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output in JSON format.",
@@ -464,6 +551,11 @@ def main():
         logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     else:
         logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+    # Handle list functionality first (no need for sound card detection)
+    if args.list:
+        list_all_sound_cards(args.list_format)
+        return
 
     card = Soundcard(no_eeprom=args.no_eeprom)
 
