@@ -263,7 +263,7 @@ class Soundcard:
             # Use get_hat_info function to get HAT information (unless disabled)
             if not no_eeprom:
                 try:
-                    hat_info = get_hat_info()
+                    hat_info = get_hat_info(verbose=False)
                     vendor = hat_info.get("vendor")
                     product = hat_info.get("product")
                     

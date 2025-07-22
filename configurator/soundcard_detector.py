@@ -28,8 +28,8 @@ class SoundcardDetector:
         found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
 
         if not found:
-            # Use the imported get_hat_info function
-            hat_info = get_hat_info()
+            # Use the imported get_hat_info function (silent mode for detection)
+            hat_info = get_hat_info(verbose=False)
             hat_card = hat_info.get("product")
             logging.info(f"Retrieved HAT info: {hat_info}")
             self.detected_card = self._map_hat_to_overlay(hat_card)
