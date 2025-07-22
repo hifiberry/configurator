@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.0.0**
+**Version 2.1.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -34,7 +34,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -1312,4 +1312,4 @@ curl -X POST -H "Content-Type: application/json" \
 
 ---
 
-*HiFiBerry Configuration API v2.0.0*
+*HiFiBerry Configuration API v2.1.0*
