@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -45,6 +45,7 @@ class ConfigAPIServer:
         self.systeminfo = SystemInfo()
         self.smb_handler = SMBHandler()
         self.hostname_handler = HostnameHandler()
+        self.soundcard_handler = SoundcardHandler()
         
         # Configure Flask logging
         if not debug:
@@ -81,7 +82,9 @@ class ConfigAPIServer:
                     'smb_mounts': '/api/v1/smb/mounts',
                     'smb_mount_config': '/api/v1/smb/mount',
                     'smb_mount_all': '/api/v1/smb/mount-all',
-                    'hostname': '/api/v1/hostname'
+                    'hostname': '/api/v1/hostname',
+                    'soundcards': '/api/v1/soundcards',
+                    'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay'
                 }
             })
         
@@ -183,6 +186,17 @@ class ConfigAPIServer:
         def set_hostname():
             """Set system hostname and/or pretty hostname"""
             return self.hostname_handler.handle_set_hostname()
+
+        # Soundcard endpoints
+        @self.app.route('/api/v1/soundcards', methods=['GET'])
+        def list_soundcards():
+            """List all available HiFiBerry sound cards"""
+            return self.soundcard_handler.handle_list_soundcards()
+        
+        @self.app.route('/api/v1/soundcard/dtoverlay', methods=['POST'])
+        def set_dtoverlay():
+            """Set device tree overlay for sound card configuration"""
+            return self.soundcard_handler.handle_set_dtoverlay()
 
         # Error handlers
         @self.app.errorhandler(400)
