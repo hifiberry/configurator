@@ -9,6 +9,7 @@
   - [System Service Management](#system-service-management)
   - [SMB/CIFS Management](#smbcifs-management)
   - [Hostname Management](#hostname-management)
+  - [Soundcard Management](#soundcard-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -51,7 +52,9 @@ Get version information and available endpoints.
     "smb_mounts": "/api/v1/smb/mounts",
     "smb_mount_config": "/api/v1/smb/mount",
     "smb_mount_all": "/api/v1/smb/mount-all",
-    "hostname": "/api/v1/hostname"
+    "hostname": "/api/v1/hostname",
+    "soundcards": "/api/v1/soundcards",
+    "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay"
   }
 }
 ```
@@ -935,6 +938,157 @@ Missing parameters:
   "message": "Must provide either hostname or pretty_hostname"
 }
 ```
+
+## Soundcard Management
+
+### `GET /api/v1/soundcards`
+
+List all available HiFiBerry sound cards with their specifications and device tree overlay information.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "soundcards": [
+      {
+        "name": "DAC8x/ADC8x",
+        "dtoverlay": "hifiberry-dac8x",
+        "volume_control": null,
+        "output_channels": 8,
+        "input_channels": 8,
+        "features": [],
+        "supports_dsp": false,
+        "card_type": ["DAC", "ADC"],
+        "is_pro": false
+      },
+      {
+        "name": "Digi2 Pro",
+        "dtoverlay": "hifiberry-digi-pro",
+        "volume_control": "Softvol",
+        "output_channels": 2,
+        "input_channels": 0,
+        "features": ["dsp"],
+        "supports_dsp": true,
+        "card_type": ["Digi"],
+        "is_pro": true
+      }
+    ],
+    "count": 20
+  }
+}
+```
+
+**Response Fields:**
+- **soundcards**: Array of sound card objects
+- **count**: Total number of available sound cards
+
+**Sound Card Object Fields:**
+- **name**: Display name of the sound card
+- **dtoverlay**: Device tree overlay required in config.txt
+- **volume_control**: Volume control method (null if no hardware volume control)
+- **output_channels**: Number of output audio channels
+- **input_channels**: Number of input audio channels
+- **features**: Array of special features (e.g., "dsp", "toslink", "analoginput")
+- **supports_dsp**: Boolean indicating if the card supports DSP processing
+- **card_type**: Array of card types (e.g., "DAC", "ADC", "Amp", "Digi")
+- **is_pro**: Boolean indicating if this is a professional-grade card
+
+### `POST /api/v1/soundcard/dtoverlay`
+
+Set the device tree overlay in config.txt for sound card configuration. This endpoint only accepts valid HiFiBerry sound card overlays.
+
+**Request Body:**
+```json
+{
+  "dtoverlay": "hifiberry-dac",
+  "remove_existing": true
+}
+```
+
+**Request Parameters:**
+- **dtoverlay** (required): Device tree overlay name (must be from the supported HiFiBerry sound cards list)
+- **remove_existing** (optional): Remove existing HiFiBerry overlays before setting new one (default: true)
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "Successfully set dtoverlay to 'hifiberry-dac' (removed existing HiFiBerry overlays)",
+  "data": {
+    "dtoverlay": "hifiberry-dac",
+    "changes_made": true,
+    "reboot_required": true
+  }
+}
+```
+
+**Success Response (No Changes):**
+```json
+{
+  "status": "success",
+  "message": "dtoverlay 'hifiberry-dac' was already configured",
+  "data": {
+    "dtoverlay": "hifiberry-dac",
+    "changes_made": false,
+    "reboot_required": false
+  }
+}
+```
+
+**Response Fields:**
+- **dtoverlay**: The overlay that was set
+- **changes_made**: Boolean indicating if config.txt was modified
+- **reboot_required**: Boolean indicating if a system reboot is needed
+
+**Error Responses:**
+
+Missing dtoverlay parameter:
+```json
+{
+  "status": "error",
+  "message": "dtoverlay parameter is required"
+}
+```
+
+Invalid dtoverlay:
+```json
+{
+  "status": "error",
+  "message": "Invalid dtoverlay 'invalid-overlay'. Must be one of the supported HiFiBerry overlays.",
+  "valid_overlays": [
+    "hifiberry-amp",
+    "hifiberry-amp100,automute",
+    "hifiberry-amp3",
+    "hifiberry-amp4pro",
+    "hifiberry-dac",
+    "hifiberry-dac8x",
+    "hifiberry-dacplus-std",
+    "hifiberry-dacplushd",
+    "hifiberry-dacplusadc",
+    "hifiberry-dacplusadcpro",
+    "hifiberry-dacplusdsp",
+    "hifiberry-digi",
+    "hifiberry-digi-pro"
+  ]
+}
+```
+
+Permission error:
+```json
+{
+  "status": "error",
+  "message": "Failed to set dtoverlay",
+  "error": "Permission denied: /boot/firmware/config.txt"
+}
+```
+
+**Notes:**
+- This endpoint validates that the requested dtoverlay is from a supported HiFiBerry sound card
+- The list of valid overlays can be retrieved from the `/api/v1/soundcards` endpoint
+- Changes to config.txt require a system reboot to take effect
+- The API automatically creates a backup of config.txt before making changes
+- If `remove_existing` is true (default), existing HiFiBerry overlays will be removed first
 
 ## Configuration File
 
