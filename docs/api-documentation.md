@@ -10,6 +10,7 @@
   - [SMB/CIFS Management](#smbcifs-management)
   - [Hostname Management](#hostname-management)
   - [Soundcard Management](#soundcard-management)
+  - [System Management](#system-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -54,7 +55,9 @@ Get version information and available endpoints.
     "smb_mount_all": "/api/v1/smb/mount-all",
     "hostname": "/api/v1/hostname",
     "soundcards": "/api/v1/soundcards",
-    "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay"
+    "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay",
+    "system_reboot": "/api/v1/system/reboot",
+    "system_shutdown": "/api/v1/system/shutdown"
   }
 }
 ```
@@ -1090,6 +1093,121 @@ Permission error:
 - The API automatically creates a backup of config.txt before making changes
 - If `remove_existing` is true (default), existing HiFiBerry overlays will be removed first
 
+## System Management
+
+### `POST /api/v1/system/reboot`
+
+Reboot the system after an optional delay. This endpoint provides a safe way to restart the system remotely.
+
+**Request Body (Optional):**
+```json
+{
+  "delay": 10
+}
+```
+
+**Request Parameters:**
+- **delay** (optional): Number of seconds to wait before rebooting (0-300 seconds, default: 5)
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "System reboot scheduled in 5 seconds",
+  "data": {
+    "delay": 5,
+    "scheduled": true
+  }
+}
+```
+
+**Error Responses:**
+
+Invalid delay value:
+```json
+{
+  "status": "error",
+  "message": "Delay must be between 0 and 300 seconds"
+}
+```
+
+Invalid delay format:
+```json
+{
+  "status": "error",
+  "message": "Delay must be a valid integer"
+}
+```
+
+Server error:
+```json
+{
+  "status": "error",
+  "message": "Failed to schedule system reboot",
+  "error": "Permission denied"
+}
+```
+
+### `POST /api/v1/system/shutdown`
+
+Shutdown the system after an optional delay. This endpoint provides a safe way to power off the system remotely.
+
+**Request Body (Optional):**
+```json
+{
+  "delay": 10
+}
+```
+
+**Request Parameters:**
+- **delay** (optional): Number of seconds to wait before shutting down (0-300 seconds, default: 5)
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "System shutdown scheduled in 5 seconds",
+  "data": {
+    "delay": 5,
+    "scheduled": true
+  }
+}
+```
+
+**Error Responses:**
+
+Invalid delay value:
+```json
+{
+  "status": "error",
+  "message": "Delay must be between 0 and 300 seconds"
+}
+```
+
+Invalid delay format:
+```json
+{
+  "status": "error",
+  "message": "Delay must be a valid integer"
+}
+```
+
+Server error:
+```json
+{
+  "status": "error",
+  "message": "Failed to schedule system shutdown",
+  "error": "Permission denied"
+}
+```
+
+**Notes:**
+- Both endpoints execute the operation in a background thread to allow the API response to be sent before the system shuts down
+- The delay parameter allows time for the API response to be delivered and any cleanup operations to complete
+- Operations require sudo privileges and will fail if the API server doesn't have the necessary permissions
+- The system will log the operation before executing it
+- Maximum delay is 5 minutes (300 seconds) for safety
+
 ## Configuration File
 
 The systemd API is controlled by `/etc/configserver/configserver.json`:
@@ -1291,6 +1409,32 @@ curl -X POST -H "Content-Type: application/json" \
        "share": "music"
      }' \
      http://localhost:1081/api/v1/smb/mount
+```
+
+### System Management
+
+**Reboot the system immediately:**
+```bash
+curl -X POST http://localhost:1081/api/v1/system/reboot
+```
+
+**Reboot the system with 30 second delay:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"delay": 30}' \
+     http://localhost:1081/api/v1/system/reboot
+```
+
+**Shutdown the system immediately:**
+```bash
+curl -X POST http://localhost:1081/api/v1/system/shutdown
+```
+
+**Shutdown the system with 60 second delay:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"delay": 60}' \
+     http://localhost:1081/api/v1/system/shutdown
 ```
 
 ## Error Responses

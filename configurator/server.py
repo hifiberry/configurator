@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -46,6 +46,7 @@ class ConfigAPIServer:
         self.smb_handler = SMBHandler()
         self.hostname_handler = HostnameHandler()
         self.soundcard_handler = SoundcardHandler()
+        self.system_handler = SystemHandler()
         
         # Configure Flask logging
         if not debug:
@@ -84,7 +85,9 @@ class ConfigAPIServer:
                     'smb_mount_all': '/api/v1/smb/mount-all',
                     'hostname': '/api/v1/hostname',
                     'soundcards': '/api/v1/soundcards',
-                    'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay'
+                    'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
+                    'system_reboot': '/api/v1/system/reboot',
+                    'system_shutdown': '/api/v1/system/shutdown'
                 }
             })
         
@@ -197,6 +200,17 @@ class ConfigAPIServer:
         def set_dtoverlay():
             """Set device tree overlay for sound card configuration"""
             return self.soundcard_handler.handle_set_dtoverlay()
+
+        # System endpoints
+        @self.app.route('/api/v1/system/reboot', methods=['POST'])
+        def reboot_system():
+            """Reboot the system with optional delay"""
+            return self.system_handler.handle_reboot()
+        
+        @self.app.route('/api/v1/system/shutdown', methods=['POST'])
+        def shutdown_system():
+            """Shutdown the system with optional delay"""
+            return self.system_handler.handle_shutdown()
 
         # Error handlers
         @self.app.errorhandler(400)
