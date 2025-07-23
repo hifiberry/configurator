@@ -5,5 +5,10 @@
         "mpd": "all",
         "squeezelite": "all",
         "librespot": "all"
+    },
+    "filesystem": {
+        "allowed_symlink_destinations": [
+            "/var/lib/mpd/music/"
+        ]
     }
 }

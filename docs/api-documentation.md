@@ -11,6 +11,7 @@
   - [Hostname Management](#hostname-management)
   - [Soundcard Management](#soundcard-management)
   - [System Management](#system-management)
+  - [Filesystem Management](#filesystem-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -57,7 +58,8 @@ Get version information and available endpoints.
     "soundcards": "/api/v1/soundcards",
     "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay",
     "system_reboot": "/api/v1/system/reboot",
-    "system_shutdown": "/api/v1/system/shutdown"
+    "system_shutdown": "/api/v1/system/shutdown",
+    "filesystem_symlinks": "/api/v1/filesystem/symlinks"
   }
 }
 ```
@@ -1436,6 +1438,142 @@ curl -X POST -H "Content-Type: application/json" \
      -d '{"delay": 60}' \
      http://localhost:1081/api/v1/system/shutdown
 ```
+
+### Filesystem Management
+
+**List symlinks in MPD music directory:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"directory": "/var/lib/mpd/music/"}' \
+     http://localhost:1081/api/v1/filesystem/symlinks
+```
+
+**List symlinks with error handling:**
+```bash
+# This will fail if directory is not in allowed destinations
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"directory": "/unauthorized/path/"}' \
+     http://localhost:1081/api/v1/filesystem/symlinks
+```
+
+### Filesystem Management
+
+#### `POST /api/v1/filesystem/symlinks`
+
+List all symlinks in a specified directory, including their destinations. The directory must be configured in the server's allowed destinations list.
+
+**Security:** Access is restricted to directories listed in `allowed_symlink_destinations` configuration. Without configuration, no directories are accessible.
+
+**Request Body:**
+```json
+{
+  "directory": "/var/lib/mpd/music/"
+}
+```
+
+**Parameters:**
+- `directory` (string, required): Directory path to scan for symlinks. Must be in allowed destinations list.
+
+**Success Response (200):**
+```json
+{
+  "status": "success",
+  "message": "Symlinks listed successfully",
+  "data": {
+    "directory": "/var/lib/mpd/music/",
+    "symlinks": [
+      {
+        "name": "MyMusic",
+        "path": "/var/lib/mpd/music/MyMusic",
+        "target": "/data/nas-music/collection",
+        "absolute_target": "/data/nas-music/collection",
+        "target_exists": true,
+        "modified": 1642781234.567,
+        "permissions": "755"
+      },
+      {
+        "name": "Archive",
+        "path": "/var/lib/mpd/music/Archive",
+        "target": "../backup/old-music",
+        "absolute_target": "/var/lib/mpd/backup/old-music",
+        "target_exists": false,
+        "modified": 1642781134.432,
+        "permissions": "755"
+      }
+    ],
+    "count": 2
+  }
+}
+```
+
+**Error Response (403 - Directory Not Allowed):**
+```json
+{
+  "status": "error",
+  "message": "Directory is not in allowed destinations",
+  "error": "directory_not_allowed",
+  "data": {
+    "directory": "/unauthorized/path/",
+    "allowed_destinations": ["/var/lib/mpd/music/"]
+  }
+}
+```
+
+**Error Response (404 - Directory Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Directory does not exist",
+  "data": {
+    "directory": "/nonexistent/path/"
+  }
+}
+```
+
+**Error Response (403 - No Configuration):**
+```json
+{
+  "status": "error",
+  "message": "Directory access is not allowed - no destinations configured",
+  "error": "directory_access_not_allowed"
+}
+```
+
+**Response Fields:**
+- `name`: Symlink filename
+- `path`: Full path to the symlink
+- `target`: Raw symlink target (as stored in the symlink)
+- `absolute_target`: Resolved absolute path of the target
+- `target_exists`: Boolean indicating if the target exists
+- `modified`: Unix timestamp of symlink modification time
+- `permissions`: Octal permission string
+- `error`: Error message if symlink details cannot be accessed
+
+## Configuration File
+
+The server configuration file `/usr/share/hifiberry/configserver.json` controls which destinations are allowed for filesystem operations:
+
+```json
+{
+  "systemd": {
+    "shairport": "all",
+    "raat": "all",
+    "mpd": "all",
+    "squeezelite": "all",
+    "librespot": "all"
+  },
+  "filesystem": {
+    "allowed_symlink_destinations": [
+      "/var/lib/mpd/music/"
+    ]
+  }
+}
+```
+
+**Filesystem Configuration:**
+- `allowed_symlink_destinations`: Array of directory paths where symlink operations are permitted
+- Without this configuration, no filesystem operations are allowed
+- Directory paths should end with `/` for clarity
 
 ## Error Responses
 

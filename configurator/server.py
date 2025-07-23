@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -47,6 +47,7 @@ class ConfigAPIServer:
         self.hostname_handler = HostnameHandler()
         self.soundcard_handler = SoundcardHandler()
         self.system_handler = SystemHandler()
+        self.filesystem_handler = FilesystemHandler()
         
         # Configure Flask logging
         if not debug:
@@ -87,7 +88,8 @@ class ConfigAPIServer:
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'system_reboot': '/api/v1/system/reboot',
-                    'system_shutdown': '/api/v1/system/shutdown'
+                    'system_shutdown': '/api/v1/system/shutdown',
+                    'filesystem_symlinks': '/api/v1/filesystem/symlinks'
                 }
             })
         
@@ -211,6 +213,12 @@ class ConfigAPIServer:
         def shutdown_system():
             """Shutdown the system with optional delay"""
             return self.system_handler.handle_shutdown()
+
+        # Filesystem endpoints
+        @self.app.route('/api/v1/filesystem/symlinks', methods=['POST'])
+        def list_symlinks():
+            """List all symlinks in a given directory including their destinations"""
+            return self.filesystem_handler.handle_list_symlinks()
 
         # Error handlers
         @self.app.errorhandler(400)
