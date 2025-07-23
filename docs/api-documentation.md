@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.1.0**
+**Version 2.2.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -12,6 +12,7 @@
   - [Soundcard Management](#soundcard-management)
   - [System Management](#system-management)
   - [Filesystem Management](#filesystem-management)
+  - [Script Management](#script-management)
 - [Configuration File](#configuration-file)
 - [Examples](#examples)
 - [Error Codes](#error-codes)
@@ -36,7 +37,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -59,7 +60,10 @@ Get version information and available endpoints.
     "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay",
     "system_reboot": "/api/v1/system/reboot",
     "system_shutdown": "/api/v1/system/shutdown",
-    "filesystem_symlinks": "/api/v1/filesystem/symlinks"
+    "filesystem_symlinks": "/api/v1/filesystem/symlinks",
+    "scripts": "/api/v1/scripts",
+    "script_info": "/api/v1/scripts/<script_id>",
+    "script_execute": "/api/v1/scripts/<script_id>/execute"
   }
 }
 ```
@@ -1210,24 +1214,219 @@ Server error:
 - The system will log the operation before executing it
 - Maximum delay is 5 minutes (300 seconds) for safety
 
+### Script Management
+
+The script management API allows execution of predefined scripts configured in the server configuration file. This provides a secure way to execute system administration scripts through the API.
+
+#### `GET /api/v1/scripts`
+
+List all configured scripts available for execution.
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "message": "Scripts listed successfully",
+  "data": {
+    "scripts": [
+      {
+        "id": "resetsystem",
+        "name": "Reset System Configuration",
+        "description": "Reset system to base configuration",
+        "path": "/usr/sbin/hifiberry-baseconfig",
+        "args": ["--force"]
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+#### `GET /api/v1/scripts/{script_id}`
+
+Get detailed information about a specific script, including availability status.
+
+**Parameters:**
+- `script_id` (string): The unique identifier of the script
+
+**Success Response (200):**
+```json
+{
+  "status": "success",
+  "message": "Script information retrieved successfully",
+  "data": {
+    "id": "resetsystem",
+    "name": "Reset System Configuration",
+    "description": "Reset system to base configuration",
+    "path": "/usr/sbin/hifiberry-baseconfig",
+    "args": ["--force"],
+    "path_exists": true,
+    "path_executable": true,
+    "ready": true
+  }
+}
+```
+
+**Error Response (404 - Script Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Script \"nonexistent\" not found in configuration",
+  "error": "script_not_found",
+  "data": {
+    "script_id": "nonexistent",
+    "available_scripts": ["resetsystem"]
+  }
+}
+```
+
+#### `POST /api/v1/scripts/{script_id}/execute`
+
+Execute a configured script. Supports both synchronous and background execution modes.
+
+**Parameters:**
+- `script_id` (string): The unique identifier of the script to execute
+
+**Request Body (Optional):**
+```json
+{
+  "background": false,
+  "timeout": 300
+}
+```
+
+**Request Parameters:**
+- `background` (boolean, optional): Execute in background mode (default: false)
+- `timeout` (number, optional): Timeout in seconds for synchronous execution (default: 300, max: 3600)
+
+**Success Response - Synchronous Execution (200):**
+```json
+{
+  "status": "success",
+  "message": "Script \"Reset System Configuration\" executed successfully",
+  "data": {
+    "script_id": "resetsystem",
+    "script_name": "Reset System Configuration",
+    "command": "/usr/sbin/hifiberry-baseconfig --force",
+    "exit_code": 0,
+    "execution_time": 12.34,
+    "stdout": "System configuration reset successfully\n",
+    "stderr": "",
+    "success": true
+  }
+}
+```
+
+**Success Response - Background Execution (200):**
+```json
+{
+  "status": "success",
+  "message": "Script \"Reset System Configuration\" started in background",
+  "data": {
+    "script_id": "resetsystem",
+    "script_name": "Reset System Configuration",
+    "command": "/usr/sbin/hifiberry-baseconfig --force",
+    "execution_mode": "background",
+    "note": "Script is running in background. Check system logs for completion status."
+  }
+}
+```
+
+**Error Response (404 - Script Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Script \"nonexistent\" not found in configuration",
+  "error": "script_not_found",
+  "data": {
+    "script_id": "nonexistent",
+    "available_scripts": ["resetsystem"]
+  }
+}
+```
+
+**Error Response (404 - Script Path Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Script path does not exist: /usr/sbin/nonexistent-script",
+  "error": "script_path_not_found",
+  "data": {
+    "script_id": "resetsystem",
+    "script_path": "/usr/sbin/nonexistent-script"
+  }
+}
+```
+
+**Error Response (500 - Execution Timeout):**
+```json
+{
+  "status": "error",
+  "message": "Script \"Reset System Configuration\" execution timed out",
+  "error": "execution_timeout",
+  "data": {
+    "script_id": "resetsystem",
+    "script_name": "Reset System Configuration",
+    "timeout": 300
+  }
+}
+```
+
+**Notes:**
+- Only scripts explicitly configured in the server configuration file can be executed
+- Script paths are validated for existence and execute permissions before execution
+- Synchronous execution waits for completion and returns full output
+- Background execution starts the script and returns immediately
+- Execution timeout applies only to synchronous execution
+- Background scripts have a maximum timeout of 1 hour
+- All script executions are logged for audit purposes
+
 ## Configuration File
 
-The systemd API is controlled by `/etc/configserver/configserver.json`:
+The server configuration file `/usr/share/hifiberry/configserver.json` controls system behavior and API permissions:
 
 ```json
 {
   "systemd": {
     "shairport": "all",
     "raat": "all",
-    "mpd": "all"
+    "mpd": "all",
+    "squeezelite": "all",
+    "librespot": "all"
+  },
+  "filesystem": {
+    "allowed_symlink_destinations": [
+      "/var/lib/mpd/music/"
+    ]
+  },
+  "scripts": {
+    "resetsystem": {
+      "name": "Reset System Configuration",
+      "path": "/usr/sbin/hifiberry-baseconfig",
+      "args": ["--force"],
+      "description": "Reset system to base configuration"
+    }
   }
 }
 ```
 
-**Permission Levels:**
+**Systemd Configuration:**
 - `"all"` - Allows all operations: start, stop, restart, enable, disable, status
 - `"status"` - Allows only status checking
 - No entry - Defaults to "status" only
+
+**Filesystem Configuration:**
+- `allowed_symlink_destinations`: Array of directory paths where symlink operations are permitted
+- Without this configuration, no filesystem operations are allowed
+- Directory paths should end with `/` for clarity
+
+**Script Configuration:**
+- Each script requires a unique identifier as the key
+- `name`: Human-readable name for the script
+- `path`: Full path to the executable script
+- `args`: Array of command-line arguments (optional)
+- `description`: Description of what the script does (optional)
+- Only configured scripts can be executed through the API
 
 The configuration file is managed by the `ConfigParser` class, which provides centralized configuration management for all components.
 
@@ -1575,6 +1774,37 @@ The server configuration file `/usr/share/hifiberry/configserver.json` controls 
 - Without this configuration, no filesystem operations are allowed
 - Directory paths should end with `/` for clarity
 
+### Script Management
+
+**List all available scripts:**
+```bash
+curl http://localhost:1081/api/v1/scripts
+```
+
+**Get information about a specific script:**
+```bash
+curl http://localhost:1081/api/v1/scripts/resetsystem
+```
+
+**Execute a script synchronously:**
+```bash
+curl -X POST http://localhost:1081/api/v1/scripts/resetsystem/execute
+```
+
+**Execute a script in background:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"background": true}' \
+     http://localhost:1081/api/v1/scripts/resetsystem/execute
+```
+
+**Execute a script with custom timeout:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"timeout": 600}' \
+     http://localhost:1081/api/v1/scripts/resetsystem/execute
+```
+
 ## Error Responses
 
 | HTTP Code | Description | Example Response |
@@ -1588,10 +1818,13 @@ The server configuration file `/usr/share/hifiberry/configserver.json` controls 
 
 - The configuration server runs with elevated privileges to manage system services
 - Service operations are strictly controlled by the configuration file permissions
-- Only services explicitly configured in `/etc/configserver/configserver.json` can be controlled
+- Only services explicitly configured in `/usr/share/hifiberry/configserver.json` can be controlled
 - Services not listed or marked as "status" only allow status checking
 - All systemd operations have a 30-second timeout to prevent hanging requests
+- Filesystem operations are restricted to configured allowed destinations
+- Script execution is limited to predefined scripts in the configuration file
+- Script paths are validated for existence and execute permissions before execution
 
 ---
 
-*HiFiBerry Configuration API v2.1.0*
+*HiFiBerry Configuration API v2.2.0*

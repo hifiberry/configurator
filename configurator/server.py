@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -48,6 +48,7 @@ class ConfigAPIServer:
         self.soundcard_handler = SoundcardHandler()
         self.system_handler = SystemHandler()
         self.filesystem_handler = FilesystemHandler()
+        self.script_handler = ScriptHandler()
         
         # Configure Flask logging
         if not debug:
@@ -89,7 +90,10 @@ class ConfigAPIServer:
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'system_reboot': '/api/v1/system/reboot',
                     'system_shutdown': '/api/v1/system/shutdown',
-                    'filesystem_symlinks': '/api/v1/filesystem/symlinks'
+                    'filesystem_symlinks': '/api/v1/filesystem/symlinks',
+                    'scripts': '/api/v1/scripts',
+                    'script_info': '/api/v1/scripts/<script_id>',
+                    'script_execute': '/api/v1/scripts/<script_id>/execute'
                 }
             })
         
@@ -219,6 +223,22 @@ class ConfigAPIServer:
         def list_symlinks():
             """List all symlinks in a given directory including their destinations"""
             return self.filesystem_handler.handle_list_symlinks()
+
+        # Script endpoints
+        @self.app.route('/api/v1/scripts', methods=['GET'])
+        def list_scripts():
+            """List all configured scripts"""
+            return self.script_handler.handle_list_scripts()
+        
+        @self.app.route('/api/v1/scripts/<script_id>', methods=['GET'])
+        def get_script_info(script_id):
+            """Get information about a specific script"""
+            return self.script_handler.handle_get_script_info(script_id)
+        
+        @self.app.route('/api/v1/scripts/<script_id>/execute', methods=['POST'])
+        def execute_script(script_id):
+            """Execute a configured script"""
+            return self.script_handler.handle_execute_script(script_id)
 
         # Error handlers
         @self.app.errorhandler(400)

@@ -10,5 +10,13 @@
         "allowed_symlink_destinations": [
             "/var/lib/mpd/music/"
         ]
+    },
+    "scripts": {
+        "resetsystem": {
+            "name": "Reset System Configuration",
+            "path": "/usr/sbin/hifiberry-baseconfig",
+            "args": ["--force"],
+            "description": "Reset system to base configuration"
+        }
     }
 }

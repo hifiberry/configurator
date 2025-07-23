@@ -1,17 +1,38 @@
+hifiberry-configurator (2.2.0) stable; urgency=medium
+
+  * Added filesystem management API
+  * - Added /api/v1/filesystem/symlinks endpoint to list symlinks in allowed directories
+  * - Implemented directory access control via configuration file
+  * - Only directories listed in allowed_symlink_destinations are accessible
+  * - Enhanced security with path validation and permission checks
+  * Added script execution API for predefined system scripts
+  * - Added /api/v1/scripts endpoint to list available configured scripts
+  * - Added /api/v1/scripts/{script_id} endpoint for script information
+  * - Added /api/v1/scripts/{script_id}/execute endpoint for secure script execution
+  * - Support for both synchronous and background script execution modes
+  * - Configurable timeouts and comprehensive error handling
+  * - Added "resetsystem" script configuration for hifiberry-baseconfig --force
+  * Enhanced configuration file structure with filesystem and scripts sections
+  * Updated API documentation to v2.2.0 with comprehensive examples
+  * Improved security considerations for filesystem and script operations
+  * All new features follow secure-by-default principles with explicit configuration
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 23 Jul 2025 12:00:00 +0000
+
 hifiberry-configurator (2.1.0) stable; urgency=medium
 
   * Added comprehensive soundcard management API
   * - Added /api/v1/soundcards endpoint to list all HiFiBerry sound cards with specifications
   * - Added /api/v1/soundcard/dtoverlay endpoint to configure device tree overlays
-  * - Extended soundcard detection with device tree overlay information and is_pro attribute
-  * - Enhanced config-soundcard tool with dtoverlay listing and table output format
-  * - Added support for silent HAT EEPROM detection to suppress error messages
-  * - Implemented comprehensive hostname management with /etc/hosts integration
-  * - Created host configuration module with 64-character hostname support and backup creation
-  * - Split DAC+ Zero/Light/MiniAmp into three separate sound card entries
-  * - Added comprehensive API validation for soundcard dtoverlay configurations
-  * - Updated API documentation with detailed soundcard management endpoints
-  * - Improved sound card database with dtoverlay field for all 22 supported cards
+  * Extended soundcard detection with device tree overlay information and is_pro attribute
+  * Enhanced config-soundcard tool with dtoverlay listing and table output format
+  * Added support for silent HAT EEPROM detection to suppress error messages
+  * Implemented comprehensive hostname management with /etc/hosts integration
+  * Created host configuration module with 64-character hostname support and backup creation
+  * Split DAC+ Zero/Light/MiniAmp into three separate sound card entries
+  * Added comprehensive API validation for soundcard dtoverlay configurations
+  * Updated API documentation with detailed soundcard management endpoints
+  * Improved sound card database with dtoverlay field for all 22 supported cards
 
  -- HiFiBerry <support@hifiberry.com>  Tue, 22 Jul 2025 19:44:25 +0000
 
