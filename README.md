@@ -1,6 +1,8 @@
 # HiFiBerry Configurator
 
-A comprehensive system configuration toolkit for HiFiBerry audio devices, providing both command-line tools and a REST API for managing system settings.
+A comprehensive system configuration toolkit for HiFiBerry audio devices, providing both command-line tools and a REST API for managing system settings. This is the backend for HiFiBerryOS 
+that handles all system configuration. While it's possible to use it standalone, it's only goal is to provide the functionalities required for the HiFiBerryOS system configuration. 
+It's not designed to be a general standalone config tool.
 
 ## Features
 
