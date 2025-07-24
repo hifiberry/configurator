@@ -1,3 +1,12 @@
+hifiberry-configurator (2.2.1) stable; urgency=medium
+
+  * Enhanced config-configtxt --default-config to disable I2C_ARM interface
+  * Added fallback overlay support to --autodetect-overlay (uses hifiberry-dac when no card detected)
+  * Added "detectsoundcard" script to configserver.json for automated sound card detection
+  * Script runs: config-configtxt --default-config --autodetect-overlay
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 24 Jul 2025 09:15:00 +0000
+
 hifiberry-configurator (2.2.0) stable; urgency=medium
 
   * Added filesystem management API

@@ -23,6 +23,12 @@
             "path": "/usr/bin/config-configtxt",
             "args": ["--default-config", "--autodetect-overlay"],
             "description": "Apply default configuration and auto-detect sound card overlay"
+        },
+        "reboot": {
+            "name": "Reboot System",
+            "path": "/usr/sbin/reboot",
+            "args": [],
+            "description": "Restart the system"
         }
     }
 }
