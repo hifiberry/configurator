@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.2.1**
+**Version 2.2.2**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)

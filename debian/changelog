@@ -1,3 +1,13 @@
+hifiberry-configurator (2.2.2) stable; urgency=medium
+
+  * Added /api/v1/soundcard/detect endpoint for automatic sound card detection
+  * Fixed JSON parsing errors in script execution API (handles empty/invalid JSON gracefully)
+  * Fixed system reboot/shutdown commands to work without sudo (config server runs as root)
+  * Added config-detect script to configserver.json for sound card detection via API
+  * Updated API documentation to include new soundcard detection endpoint
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 24 Jul 2025 14:00:00 +0000
+
 hifiberry-configurator (2.2.1) stable; urgency=medium
 
   * Enhanced config-configtxt --default-config to disable I2C_ARM interface
