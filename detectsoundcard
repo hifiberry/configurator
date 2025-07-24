@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# detectsoundcard tool
+# Automatically configures the system with default settings and detects the sound card
+
+config-configtxt --default-config --autodetect-overlay

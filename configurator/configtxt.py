@@ -128,7 +128,7 @@ class ConfigTxt:
         self.disable_hdmi_sound()
         self.enable_eeprom()
         self.enable_spi()
-        self.enable_i2c()
+        self.disable_i2c()
         self.disable_hat_i2c()
         logging.info("Default configuration applied.")
 
@@ -174,7 +174,10 @@ class ConfigTxt:
                 else:
                     logging.warning(f"Auto-detected sound card '{soundcard.name}' but no overlay found in definitions.")
             else:
-                logging.warning("No sound card detected for auto-overlay configuration.")
+                # Fallback to hifiberry-dac if no sound card is detected
+                fallback_overlay = "hifiberry-dac"
+                self.enable_overlay(fallback_overlay)
+                logging.info(f"No sound card detected, using fallback overlay '{fallback_overlay}'.")
         except Exception as e:
             logging.error(f"Failed to auto-detect overlay: {e}")
             raise
