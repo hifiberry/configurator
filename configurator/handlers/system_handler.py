@@ -56,7 +56,7 @@ class SystemHandler:
                     logger.info(f"Waiting {delay} seconds before reboot...")
                     time.sleep(delay)
                     logger.info("Executing system reboot...")
-                    subprocess.run(['sudo', 'reboot'], check=True)
+                    subprocess.run(['/usr/sbin/reboot'], check=True)
                 except Exception as e:
                     logger.error(f"Failed to execute reboot: {e}")
             
@@ -115,7 +115,7 @@ class SystemHandler:
                     logger.info(f"Waiting {delay} seconds before shutdown...")
                     time.sleep(delay)
                     logger.info("Executing system shutdown...")
-                    subprocess.run(['sudo', 'shutdown', 'now'], check=True)
+                    subprocess.run(['/usr/sbin/shutdown', 'now'], check=True)
                 except Exception as e:
                     logger.error(f"Failed to execute shutdown: {e}")
             
