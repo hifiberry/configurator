@@ -497,6 +497,8 @@ class Soundcard:
 
 
 def main():
+    # Configure logging FIRST, before any other operations
+    import sys
     parser = argparse.ArgumentParser(description="Detect and display sound card details.")
     parser.add_argument(
         "-v",
@@ -568,13 +570,20 @@ def main():
     )
     args = parser.parse_args()
 
-    # Configure logging to send WARNING and ERROR to stderr
+    # Configure logging immediately after parsing args
+    # Remove any existing handlers and configure from scratch
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
     if args.very_verbose:
-        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr, force=True)
     elif args.verbose:
-        logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+        logging.basicConfig(level=logging.INFO, stream=sys.stderr, force=True)
     else:
-        logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+        logging.basicConfig(level=logging.ERROR, stream=sys.stderr, force=True)
+        # Also set the root logger level explicitly
+        logging.getLogger().setLevel(logging.ERROR)
 
     # Handle list functionality first (no need for sound card detection)
     if args.list:
