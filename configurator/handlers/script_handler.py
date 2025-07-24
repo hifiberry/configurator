@@ -125,7 +125,11 @@ class ScriptHandler:
                 }), 403
             
             # Get optional parameters from request body
-            data = request.get_json() or {}
+            try:
+                data = request.get_json() or {}
+            except Exception:
+                # Handle cases where JSON parsing fails (empty body, invalid JSON, etc.)
+                data = {}
             background = data.get('background', False)
             timeout = data.get('timeout', 300)  # Default 5 minutes
             

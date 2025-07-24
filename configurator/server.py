@@ -88,6 +88,7 @@ class ConfigAPIServer:
                     'hostname': '/api/v1/hostname',
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
+                    'soundcard_detect': '/api/v1/soundcard/detect',
                     'system_reboot': '/api/v1/system/reboot',
                     'system_shutdown': '/api/v1/system/shutdown',
                     'filesystem_symlinks': '/api/v1/filesystem/symlinks',
@@ -206,6 +207,11 @@ class ConfigAPIServer:
         def set_dtoverlay():
             """Set device tree overlay for sound card configuration"""
             return self.soundcard_handler.handle_set_dtoverlay()
+
+        @self.app.route('/api/v1/soundcard/detect', methods=['GET'])
+        def detect_soundcard():
+            """Detect current sound card and return name and dtoverlay"""
+            return self.soundcard_handler.handle_detect_soundcard()
 
         # System endpoints
         @self.app.route('/api/v1/system/reboot', methods=['POST'])

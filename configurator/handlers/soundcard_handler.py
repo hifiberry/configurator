@@ -153,3 +153,50 @@ class SoundcardHandler:
                 "message": "Failed to set dtoverlay",
                 "error": str(e)
             }), 500
+
+    def handle_detect_soundcard(self):
+        """
+        Handle GET /api/v1/soundcard/detect - Detect current sound card
+        
+        Returns:
+            JSON response with detected sound card name and dtoverlay
+        """
+        try:
+            from ..soundcard import Soundcard
+            
+            soundcard = Soundcard()
+            
+            if soundcard.name:
+                # Get the sound card definition
+                card_def = SOUND_CARD_DEFINITIONS.get(soundcard.name)
+                dtoverlay = card_def.get("dtoverlay") if card_def else "unknown"
+                
+                return jsonify({
+                    "status": "success",
+                    "message": "Sound card detected successfully",
+                    "data": {
+                        "card_name": soundcard.name,
+                        "dtoverlay": dtoverlay,
+                        "card_detected": True,
+                        "definition_found": card_def is not None
+                    }
+                })
+            else:
+                return jsonify({
+                    "status": "success",
+                    "message": "No sound card detected",
+                    "data": {
+                        "card_name": None,
+                        "dtoverlay": None,
+                        "card_detected": False,
+                        "definition_found": False
+                    }
+                })
+                
+        except Exception as e:
+            logger.error(f"Error detecting soundcard: {e}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to detect sound card",
+                "error": str(e)
+            }), 500

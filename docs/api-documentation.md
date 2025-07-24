@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.2.0**
+**Version 2.2.1**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -58,6 +58,7 @@ Get version information and available endpoints.
     "hostname": "/api/v1/hostname",
     "soundcards": "/api/v1/soundcards",
     "soundcard_dtoverlay": "/api/v1/soundcard/dtoverlay",
+    "soundcard_detect": "/api/v1/soundcard/detect",
     "system_reboot": "/api/v1/system/reboot",
     "system_shutdown": "/api/v1/system/shutdown",
     "filesystem_symlinks": "/api/v1/filesystem/symlinks",
@@ -1098,6 +1099,61 @@ Permission error:
 - Changes to config.txt require a system reboot to take effect
 - The API automatically creates a backup of config.txt before making changes
 - If `remove_existing` is true (default), existing HiFiBerry overlays will be removed first
+
+### `GET /api/v1/soundcard/detect`
+
+Detect the currently connected sound card and return its name and corresponding device tree overlay.
+
+**Response:**
+
+Sound card detected:
+```json
+{
+  "status": "success",
+  "message": "Sound card detected successfully",
+  "data": {
+    "card_name": "DAC+ Light",
+    "dtoverlay": "hifiberry-dac",
+    "card_detected": true,
+    "definition_found": true
+  }
+}
+```
+
+No sound card detected:
+```json
+{
+  "status": "success",
+  "message": "No sound card detected",
+  "data": {
+    "card_name": null,
+    "dtoverlay": null,
+    "card_detected": false,
+    "definition_found": false
+  }
+}
+```
+
+Error response:
+```json
+{
+  "status": "error",
+  "message": "Failed to detect sound card",
+  "error": "Hardware detection failed"
+}
+```
+
+**Response Data Fields:**
+- **card_name**: Name of the detected sound card (or null if none detected)
+- **dtoverlay**: Required device tree overlay for the detected card (or null if none detected)
+- **card_detected**: Boolean indicating if a sound card was detected
+- **definition_found**: Boolean indicating if the detected card is in the known definitions
+
+**Notes:**
+- This endpoint attempts to detect sound cards using multiple methods (HAT EEPROM, aplay -l, etc.)
+- If no sound card is detected, card_name and dtoverlay will be null
+- The detection works with both HiFiBerry HATs with EEPROM and cards without EEPROM
+- Use the returned dtoverlay value with the `/api/v1/soundcard/dtoverlay` endpoint to configure the system
 
 ## System Management
 
