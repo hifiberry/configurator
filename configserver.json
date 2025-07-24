@@ -17,18 +17,6 @@
             "path": "/usr/sbin/hifiberry-baseconfig",
             "args": ["--force"],
             "description": "Reset system to base configuration"
-        },
-        "detectsoundcard": {
-            "name": "Detect Sound Card",
-            "path": "/usr/bin/config-configtxt",
-            "args": ["--default-config", "--autodetect-overlay"],
-            "description": "Apply default configuration and auto-detect sound card overlay"
-        },
-        "reboot": {
-            "name": "Reboot System",
-            "path": "/usr/sbin/reboot",
-            "args": [],
-            "description": "Restart the system"
         }
     }
 }
