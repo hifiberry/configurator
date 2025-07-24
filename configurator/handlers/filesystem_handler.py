@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class FilesystemHandler:
     """Handler for filesystem related API endpoints"""
     
-    def __init__(self, config_file="/usr/share/hifiberry/configserver.json"):
+    def __init__(self, config_file="/etc/configserver/configserver.json"):
         """Initialize the filesystem handler"""
         logger.debug("Initializing FilesystemHandler")
         self.config_file = config_file

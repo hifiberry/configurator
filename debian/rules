@@ -5,5 +5,5 @@
 
 override_dh_install:
 	dh_install
-	# Install config files
-	install -D -m 644 configserver.json.default $(CURDIR)/debian/hifiberry-configurator/etc/configserver/configserver.json.default
+	# Install config file as main configuration file
+	install -D -m 644 configserver.json.default $(CURDIR)/debian/hifiberry-configurator/etc/configserver/configserver.json

@@ -1383,7 +1383,7 @@ Execute a configured script. Supports both synchronous and background execution 
 
 ## Configuration File
 
-The server configuration file `/usr/share/hifiberry/configserver.json` controls system behavior and API permissions:
+The server configuration file `/etc/configserver/configserver.json` controls system behavior and API permissions:
 
 ```json
 {
@@ -1750,7 +1750,7 @@ List all symlinks in a specified directory, including their destinations. The di
 
 ## Configuration File
 
-The server configuration file `/usr/share/hifiberry/configserver.json` controls which destinations are allowed for filesystem operations:
+The server configuration file `/etc/configserver/configserver.json` controls which destinations are allowed for filesystem operations:
 
 ```json
 {
@@ -1818,7 +1818,7 @@ curl -X POST -H "Content-Type: application/json" \
 
 - The configuration server runs with elevated privileges to manage system services
 - Service operations are strictly controlled by the configuration file permissions
-- Only services explicitly configured in `/usr/share/hifiberry/configserver.json` can be controlled
+- Only services explicitly configured in `/etc/configserver/configserver.json` can be controlled
 - Services not listed or marked as "status" only allow status checking
 - All systemd operations have a 30-second timeout to prevent hanging requests
 - Filesystem operations are restricted to configured allowed destinations
