@@ -6,6 +6,7 @@ import hashlib
 import logging
 import argparse
 from typing import Optional
+from .soundcard import Soundcard
 
 
 class ConfigTxt:
@@ -156,12 +157,35 @@ class ConfigTxt:
         if len(self.lines) < original_length:
             logging.info("HAT I2C overlay disabled.")
 
+    def autodetect_overlay(self):
+        """
+        Detect the current sound card and automatically add the appropriate overlay.
+        """
+        try:
+            soundcard = Soundcard()
+            if soundcard.name:
+                # Get the sound card definition from the soundcard module
+                from .soundcard import SOUND_CARD_DEFINITIONS
+                card_def = SOUND_CARD_DEFINITIONS.get(soundcard.name)
+                if card_def and card_def.get("dtoverlay"):
+                    overlay = card_def["dtoverlay"]
+                    self.enable_overlay(overlay)
+                    logging.info(f"Auto-detected sound card '{soundcard.name}' and enabled overlay '{overlay}'.")
+                else:
+                    logging.warning(f"Auto-detected sound card '{soundcard.name}' but no overlay found in definitions.")
+            else:
+                logging.warning("No sound card detected for auto-overlay configuration.")
+        except Exception as e:
+            logging.error(f"Failed to auto-detect overlay: {e}")
+            raise
+
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     parser = argparse.ArgumentParser(description="Manage /boot/firmware/config.txt settings.")
     parser.add_argument("--overlay", type=str, help="Add a dtoverlay with the given parameter.")
+    parser.add_argument("--autodetect-overlay", action="store_true", help="Auto-detect sound card and add the appropriate overlay.")
     parser.add_argument("--remove-hifiberry", action="store_true", help="Remove all HiFiBerry overlays.")
     parser.add_argument("--disable-onboard-sound", action="store_true", help="Disable onboard sound.")
     parser.add_argument("--enable-onboard-sound", action="store_true", help="Enable onboard sound.")
@@ -191,6 +215,9 @@ def main():
 
         if args.overlay:
             config.enable_overlay(args.overlay)
+
+        if args.autodetect_overlay:
+            config.autodetect_overlay()
 
         if args.disable_onboard_sound:
             config.disable_onboard_sound()
