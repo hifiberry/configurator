@@ -1310,7 +1310,18 @@ Get network configuration including general network information and details for 
 }
 ```
 
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "Failed to retrieve network configuration",
+  "error": "Permission denied accessing network interfaces"
+}
+```
+
 **Response Fields:**
+- **status**: "success" for successful requests, "error" for failed requests
+- **data**: Network configuration data (only present on success)
 - **hostname**: System hostname
 - **default_gateway**: Default gateway IP address (null if not available)
 - **dns_servers**: Array of DNS server IP addresses

@@ -24,7 +24,10 @@ class NetworkHandler:
         """
         try:
             config = get_network_config()
-            return jsonify(config)
+            return jsonify({
+                'status': 'success',
+                'data': config
+            })
         except Exception as e:
             logger.error(f"Error getting network configuration: {e}")
             return jsonify({
