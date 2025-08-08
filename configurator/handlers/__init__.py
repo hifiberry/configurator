@@ -12,8 +12,9 @@ try:
     from .system_handler import SystemHandler
     from .filesystem_handler import FilesystemHandler
     from .script_handler import ScriptHandler
+    from .network_handler import NetworkHandler
     
-    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler']
+    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler']
 except ImportError:
     # Flask not available - likely during testing or installation
     __all__ = []

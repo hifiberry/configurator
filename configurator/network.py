@@ -741,5 +741,47 @@ def main():
             logger.error("Failed to disable IPv6 system-wide")
             sys.exit(1)
 
+
+def get_network_config():
+    """
+    Get network configuration including general information and physical interfaces.
+    Returns a dictionary with hostname and interface details.
+    """
+    import platform
+    
+    # Get hostname
+    hostname = platform.node()
+    
+    # Get physical interfaces
+    interfaces = list_physical_interfaces()
+    
+    # Get default gateway
+    default_gateway = None
+    try:
+        gws = netifaces.gateways()
+        if 'default' in gws and netifaces.AF_INET in gws['default']:
+            default_gateway = gws['default'][netifaces.AF_INET][0]
+    except Exception as e:
+        logger.debug(f"Could not get default gateway: {e}")
+    
+    # Get DNS servers
+    dns_servers = []
+    try:
+        with open('/etc/resolv.conf', 'r') as f:
+            for line in f:
+                if line.strip().startswith('nameserver'):
+                    dns = line.strip().split()[1]
+                    dns_servers.append(dns)
+    except Exception as e:
+        logger.debug(f"Could not read DNS servers: {e}")
+    
+    return {
+        'hostname': hostname,
+        'default_gateway': default_gateway,
+        'dns_servers': dns_servers,
+        'interfaces': interfaces
+    }
+
+
 if __name__ == "__main__":
     main()
