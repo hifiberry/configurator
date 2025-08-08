@@ -12,6 +12,7 @@
   - [Soundcard Management](#soundcard-management)
   - [System Management](#system-management)
   - [Network Configuration](#network-configuration)
+  - [I2C Device Management](#i2c-device-management)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
 - [Configuration File](#configuration-file)
@@ -1329,6 +1330,8 @@ Get network configuration including general network information and details for 
 - DNS servers are read from `/etc/resolv.conf`
 - Default gateway information is obtained from the system routing table
 
+## I2C Device Management
+
 ### `GET /api/v1/i2c/devices`
 
 Scan I2C bus for connected devices and detect kernel-used addresses.
@@ -1828,6 +1831,8 @@ curl -X POST -H "Content-Type: application/json" \
 ```bash
 curl http://localhost:1081/api/v1/network
 ```
+
+### I2C Device Management
 
 **Scan I2C bus for devices:**
 ```bash
