@@ -128,9 +128,9 @@ class ConfigTxt:
         self.disable_hdmi_sound()
         self.enable_eeprom()
         self.enable_spi()
-        self.disable_i2c()
+        self.enable_i2c()
         self.disable_hat_i2c()
-        logging.info("Default configuration applied.")
+        logging.info("Default configuration applied. I2C enabled.")
 
     def enable_updi(self):
         """
