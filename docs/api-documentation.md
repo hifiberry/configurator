@@ -66,7 +66,8 @@ Get version information and available endpoints.
     "scripts": "/api/v1/scripts",
     "script_info": "/api/v1/scripts/<script_id>",
     "script_execute": "/api/v1/scripts/<script_id>/execute",
-    "network": "/api/v1/network"
+    "network": "/api/v1/network",
+    "i2c_devices": "/api/v1/i2c/devices"
   }
 }
 ```
@@ -1328,6 +1329,75 @@ Get network configuration including general network information and details for 
 - DNS servers are read from `/etc/resolv.conf`
 - Default gateway information is obtained from the system routing table
 
+### `GET /api/v1/i2c/devices`
+
+Scan I2C bus for connected devices and detect kernel-used addresses.
+
+**Parameters:**
+- **bus** (query, optional): I2C bus number to scan (default: 1, range: 0-10)
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "bus_number": 1,
+    "bus_path": "/dev/i2c-1",
+    "bus_exists": true,
+    "smbus2_available": true,
+    "detected_devices": ["0x48", "0x60"],
+    "kernel_used": ["0x60"],
+    "scan_range": "0x03-0x77"
+  }
+}
+```
+
+**Response (I2C Bus Not Found):**
+```json
+{
+  "status": "error",
+  "data": {
+    "bus_number": 1,
+    "bus_path": "/dev/i2c-1",
+    "bus_exists": false,
+    "smbus2_available": true,
+    "error": "I2C bus 1 not found. Make sure I2C is enabled."
+  }
+}
+```
+
+**Response (smbus2 Not Available):**
+```json
+{
+  "status": "error",
+  "data": {
+    "bus_number": 1,
+    "bus_path": "/dev/i2c-1",
+    "bus_exists": true,
+    "smbus2_available": false,
+    "error": "smbus2 module not available. Cannot scan I2C bus."
+  }
+}
+```
+
+**Response Fields:**
+- **bus_number**: I2C bus number that was scanned
+- **bus_path**: Path to the I2C device file
+- **bus_exists**: Boolean indicating if the I2C bus device exists
+- **smbus2_available**: Boolean indicating if the smbus2 Python module is available
+- **detected_devices**: Array of I2C addresses where devices responded (hex format)
+- **kernel_used**: Array of I2C addresses already in use by kernel drivers (hex format)
+- **scan_range**: Address range that was scanned
+- **error**: Error message if scan failed
+
+**Notes:**
+- Requires I2C to be enabled in the system (dtparam=i2c_arm=on in config.txt)
+- Requires smbus2 Python module to be installed
+- Scans standard I2C address range (0x03-0x77)
+- Detected devices are addresses that responded to read attempts
+- Kernel-used addresses are detected from /sys/bus/i2c/devices/
+- Similar functionality to `i2cdetect -y <bus>` command but using Python I2C library
+
 ### Script Management
 
 The script management API allows execution of predefined scripts configured in the server configuration file. This provides a secure way to execute system administration scripts through the API.
@@ -1757,6 +1827,16 @@ curl -X POST -H "Content-Type: application/json" \
 **Get network configuration:**
 ```bash
 curl http://localhost:1081/api/v1/network
+```
+
+**Scan I2C bus for devices:**
+```bash
+curl http://localhost:1081/api/v1/i2c/devices
+```
+
+**Scan specific I2C bus:**
+```bash
+curl "http://localhost:1081/api/v1/i2c/devices?bus=0"
 ```
 
 ### Filesystem Management

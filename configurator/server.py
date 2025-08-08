@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -50,6 +50,7 @@ class ConfigAPIServer:
         self.filesystem_handler = FilesystemHandler()
         self.script_handler = ScriptHandler()
         self.network_handler = NetworkHandler()
+        self.i2c_handler = I2CHandler()
         
         # Configure Flask logging
         if not debug:
@@ -96,7 +97,8 @@ class ConfigAPIServer:
                     'scripts': '/api/v1/scripts',
                     'script_info': '/api/v1/scripts/<script_id>',
                     'script_execute': '/api/v1/scripts/<script_id>/execute',
-                    'network': '/api/v1/network'
+                    'network': '/api/v1/network',
+                    'i2c_devices': '/api/v1/i2c/devices'
                 }
             })
         
@@ -253,6 +255,12 @@ class ConfigAPIServer:
         def get_network_config():
             """Get network configuration including hostname and interface details"""
             return self.network_handler.handle_get_network_config()
+
+        # I2C device scan endpoint
+        @self.app.route('/api/v1/i2c/devices', methods=['GET'])
+        def get_i2c_devices():
+            """Scan I2C bus for devices"""
+            return self.i2c_handler.handle_get_i2c_devices()
 
         # Error handlers
         @self.app.errorhandler(400)
