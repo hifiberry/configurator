@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -49,6 +49,7 @@ class ConfigAPIServer:
         self.system_handler = SystemHandler()
         self.filesystem_handler = FilesystemHandler()
         self.script_handler = ScriptHandler()
+        self.network_handler = NetworkHandler()
         
         # Configure Flask logging
         if not debug:
@@ -94,7 +95,8 @@ class ConfigAPIServer:
                     'filesystem_symlinks': '/api/v1/filesystem/symlinks',
                     'scripts': '/api/v1/scripts',
                     'script_info': '/api/v1/scripts/<script_id>',
-                    'script_execute': '/api/v1/scripts/<script_id>/execute'
+                    'script_execute': '/api/v1/scripts/<script_id>/execute',
+                    'network': '/api/v1/network'
                 }
             })
         
@@ -245,6 +247,12 @@ class ConfigAPIServer:
         def execute_script(script_id):
             """Execute a configured script"""
             return self.script_handler.handle_execute_script(script_id)
+
+        # Network configuration endpoint
+        @self.app.route('/api/v1/network', methods=['GET'])
+        def get_network_config():
+            """Get network configuration including hostname and interface details"""
+            return self.network_handler.handle_get_network_config()
 
         # Error handlers
         @self.app.errorhandler(400)

@@ -11,6 +11,7 @@
   - [Hostname Management](#hostname-management)
   - [Soundcard Management](#soundcard-management)
   - [System Management](#system-management)
+  - [Network Configuration](#network-configuration)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
 - [Configuration File](#configuration-file)
@@ -64,7 +65,8 @@ Get version information and available endpoints.
     "filesystem_symlinks": "/api/v1/filesystem/symlinks",
     "scripts": "/api/v1/scripts",
     "script_info": "/api/v1/scripts/<script_id>",
-    "script_execute": "/api/v1/scripts/<script_id>/execute"
+    "script_execute": "/api/v1/scripts/<script_id>/execute",
+    "network": "/api/v1/network"
   }
 }
 ```
@@ -1270,6 +1272,62 @@ Server error:
 - The system will log the operation before executing it
 - Maximum delay is 5 minutes (300 seconds) for safety
 
+## Network Configuration
+
+### `GET /api/v1/network`
+
+Get network configuration including general network information and details for each physical network interface (ethernet and wireless).
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "hostname": "hifiberry-system",
+    "default_gateway": "192.168.1.1",
+    "dns_servers": ["8.8.8.8", "8.8.4.4"],
+    "interfaces": [
+      {
+        "name": "eth0",
+        "mac": "b8:27:eb:12:34:56",
+        "ipv4": "192.168.1.100",
+        "netmask": "255.255.255.0",
+        "state": "up",
+        "type": "wired"
+      },
+      {
+        "name": "wlan0",
+        "mac": "b8:27:eb:ab:cd:ef",
+        "ipv4": null,
+        "netmask": null,
+        "state": "down",
+        "type": "wireless"
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- **hostname**: System hostname
+- **default_gateway**: Default gateway IP address (null if not available)
+- **dns_servers**: Array of DNS server IP addresses
+- **interfaces**: Array of physical network interface objects
+
+**Interface Object Fields:**
+- **name**: Interface name (e.g., eth0, wlan0)
+- **mac**: MAC address of the interface
+- **ipv4**: IPv4 address (null if not assigned)
+- **netmask**: Network mask (null if not assigned)
+- **state**: Interface state ("up", "down", "unknown")
+- **type**: Interface type ("wired" or "wireless")
+
+**Notes:**
+- Only physical network interfaces are included (filters out virtual, Docker, and loopback interfaces)
+- Interfaces starting with "eth" or "wlan" are automatically detected as physical interfaces
+- DNS servers are read from `/etc/resolv.conf`
+- Default gateway information is obtained from the system routing table
+
 ### Script Management
 
 The script management API allows execution of predefined scripts configured in the server configuration file. This provides a secure way to execute system administration scripts through the API.
@@ -1692,6 +1750,13 @@ curl -X POST http://localhost:1081/api/v1/system/shutdown
 curl -X POST -H "Content-Type: application/json" \
      -d '{"delay": 60}' \
      http://localhost:1081/api/v1/system/shutdown
+```
+
+### Network Configuration
+
+**Get network configuration:**
+```bash
+curl http://localhost:1081/api/v1/network
 ```
 
 ### Filesystem Management
