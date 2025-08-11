@@ -7,13 +7,21 @@ Supports both linear (0.0-1.0) and decibel volume settings using wpctl (WirePlum
 import subprocess
 import re
 import math
+import logging
 from typing import List, Optional, Tuple, Dict
+
+logger = logging.getLogger(__name__)
 
 def _run_wpctl(args: List[str]) -> Optional[str]:
     try:
+        logger.debug(f"Running wpctl command: wpctl {' '.join(args)}")
         result = subprocess.run(["wpctl"] + args, capture_output=True, text=True, check=True)
+        logger.debug(f"wpctl stdout length: {len(result.stdout)}")
+        if len(result.stdout) < 500:  # Only log short outputs to avoid spam
+            logger.debug(f"wpctl stdout: {repr(result.stdout)}")
         return result.stdout
-    except Exception:
+    except Exception as e:
+        logger.error(f"wpctl command failed: {e}")
         return None
 
 def _volume_to_db(volume: float) -> float:
@@ -151,21 +159,27 @@ def get_default_sink() -> Optional[str]:
     Returns the default sink (marked with '*' in wpctl status).
     Format: "node_id:device_name" or None if not found.
     """
+    logger.debug("Getting default sink...")
     output = _run_wpctl(["status"])
     if not output:
+        logger.warning("No output from wpctl status")
         return None
+    
+    logger.debug(f"wpctl status output lines: {len(output.splitlines())}")
     
     in_audio_section = False
     in_sinks_section = False
     
-    for line in output.splitlines():
+    for line_num, line in enumerate(output.splitlines(), 1):
         original_line = line
         line = line.strip()
         
         if line == "Audio":
+            logger.debug(f"Found Audio section at line {line_num}")
             in_audio_section = True
             continue
         elif line == "Video" or line == "Settings":
+            logger.debug(f"Exiting Audio section at line {line_num}: {line}")
             in_audio_section = False
             in_sinks_section = False
             continue
@@ -174,22 +188,31 @@ def get_default_sink() -> Optional[str]:
             continue
             
         if "Sinks:" in line:
+            logger.debug(f"Found Sinks section at line {line_num}")
             in_sinks_section = True
             continue
         elif "Sources:" in line or "Filters:" in line or "Streams:" in line:
+            logger.debug(f"Exiting Sinks section at line {line_num}: {line}")
             in_sinks_section = False
             continue
             
         if in_sinks_section and line:
+            logger.debug(f"Processing sink line {line_num}: {repr(original_line)}")
             # Look for lines with asterisk: " │  *   44. Built-in Audio Stereo               [vol: 0.71]"
             if '*' in original_line:
+                logger.debug(f"Found default sink candidate at line {line_num}: {repr(original_line)}")
                 clean_line = re.sub(r'^[│├└─\s]*\*?\s*', '', original_line)
                 match = re.search(r'^(\d+)\.\s+(.+?)\s+\[', clean_line)
                 if match:
                     node_id = match.group(1)
                     device_name = match.group(2).strip()
-                    return f"{node_id}:{device_name}"
+                    result = f"{node_id}:{device_name}"
+                    logger.debug(f"Found default sink: {result}")
+                    return result
+                else:
+                    logger.warning(f"Failed to parse default sink line: {repr(clean_line)}")
     
+    logger.warning("No default sink found in wpctl status output")
     return None
 
 def get_default_source() -> Optional[str]:
