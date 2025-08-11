@@ -529,6 +529,8 @@ def parse_arguments():
                         help='Enable verbose logging')
     parser.add_argument('--restore-settings', action='store_true',
                         help='Restore saved settings from configdb on startup')
+    parser.add_argument('--auto-restore-settings', action='store_true',
+                        help='Automatically restore saved settings during normal startup')
     
     return parser.parse_args()
 
@@ -546,7 +548,7 @@ def main():
         debug=args.debug
     )
     
-    # Restore settings if requested
+    # Restore settings if requested (standalone mode)
     if args.restore_settings:
         logger.info("Restoring settings...")
         results = server.restore_settings()
@@ -554,8 +556,20 @@ def main():
         total = len(results)
         logger.info(f"Settings restoration completed: {successful}/{total} successful")
         
-        # Exit after restoring settings instead of starting server
-        return 0 if successful == total else 1
+        # Always exit successfully after attempting restore
+        # This prevents systemd service failures when some settings can't be restored
+        return 0
+    
+    # Auto-restore settings during normal startup if requested
+    if args.auto_restore_settings:
+        logger.info("Auto-restoring settings during startup...")
+        try:
+            results = server.restore_settings()
+            successful = sum(results.values())
+            total = len(results)
+            logger.info(f"Auto-restore completed: {successful}/{total} successful")
+        except Exception as e:
+            logger.warning(f"Auto-restore failed, continuing with startup: {e}")
     
     # Start the server normally
     server.run()
