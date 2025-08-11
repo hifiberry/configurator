@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""
+config-pipewire - Command line tool for PipeWire volume control
+
+Usage:
+  config-pipewire list
+  config-pipewire get <control_name>
+  config-pipewire set <control_name> <volume>
+"""
+import sys
+from configurator import pipewire
+
+def print_usage():
+    print("Usage:")
+    print("  config-pipewire list")
+    print("  config-pipewire get <control_name>")
+    print("  config-pipewire set <control_name> <volume>")
+
+if len(sys.argv) < 2:
+    print_usage()
+    sys.exit(1)
+
+cmd = sys.argv[1]
+
+if cmd == "list":
+    controls = pipewire.get_volume_controls()
+    for c in controls:
+        print(c)
+elif cmd == "get" and len(sys.argv) == 3:
+    vol = pipewire.get_volume(sys.argv[2])
+    if vol is None:
+        print(f"Control '{sys.argv[2]}' not found or no volume info.")
+        sys.exit(2)
+    print(vol)
+elif cmd == "set" and len(sys.argv) == 4:
+    try:
+        volume = float(sys.argv[3])
+    except ValueError:
+        print("Volume must be a float between 0.0 and 1.0")
+        sys.exit(3)
+    ok = pipewire.set_volume(sys.argv[2], volume)
+    if not ok:
+        print(f"Failed to set volume for '{sys.argv[2]}'")
+        sys.exit(4)
+    print("OK")
+else:
+    print_usage()
+    sys.exit(1)

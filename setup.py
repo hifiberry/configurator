@@ -47,7 +47,8 @@ setup(
             'man/config-soundcard.1',
             'man/config-volume.1',
             'man/config-wifi.1',
-            'man/config-server.1'
+            'man/config-server.1',
+            'man/config-pipewire.1'
         ]),
         ('/usr/share/man/man7', [
             'man/hifiberry-configurator.7',
@@ -70,6 +71,7 @@ setup(
             "config-volume=configurator.volume:main",
             "config-avahi=configurator.avahi:main",
             "config-server=configurator.server:main",
+            "config-pipewire=configurator.pipewire:main",
         ],
     },
     classifiers=[
