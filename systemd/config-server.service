@@ -13,18 +13,22 @@ ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose --auto-res
 Restart=always
 RestartSec=5
 User=root
-Group=root
+Group=audio
 PrivateMounts=no
+
+# Environment for PipeWire access
+Environment="XDG_RUNTIME_DIR=/run/user/0"
+Environment="PIPEWIRE_RUNTIME_DIR=/run/pipewire"
 
 # Capabilities needed for mount/unmount
 CapabilityBoundingSet=CAP_SYS_ADMIN
 DevicePolicy=auto
 
-# Security
+# Security - relaxed for PipeWire access
 NoNewPrivileges=false
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectControlGroups=false
 
 # Resource limits
 LimitNOFILE=1024
