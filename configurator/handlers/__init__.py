@@ -14,8 +14,9 @@ try:
     from .script_handler import ScriptHandler
     from .network_handler import NetworkHandler
     from .i2c_handler import I2CHandler
+    from .pipewire_handler import PipewireHandler
     
-    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler']
+    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'PipewireHandler']
 except ImportError:
     # Flask not available - likely during testing or installation
     __all__ = []
