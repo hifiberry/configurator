@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 
@@ -51,6 +51,7 @@ class ConfigAPIServer:
         self.script_handler = ScriptHandler()
         self.network_handler = NetworkHandler()
         self.i2c_handler = I2CHandler()
+        self.pipewire_handler = PipewireHandler()
         
         # Configure Flask logging
         if not debug:
@@ -98,7 +99,12 @@ class ConfigAPIServer:
                     'script_info': '/api/v1/scripts/<script_id>',
                     'script_execute': '/api/v1/scripts/<script_id>/execute',
                     'network': '/api/v1/network',
-                    'i2c_devices': '/api/v1/i2c/devices'
+                    'i2c_devices': '/api/v1/i2c/devices',
+                    'pipewire_controls': '/api/v1/pipewire/controls',
+                    'pipewire_default_sink': '/api/v1/pipewire/default-sink',
+                    'pipewire_default_source': '/api/v1/pipewire/default-source',
+                    'pipewire_volume': '/api/v1/pipewire/volume/<control>',
+                    'pipewire_volume_set': '/api/v1/pipewire/volume/<control>'
                 }
             })
         
@@ -261,6 +267,32 @@ class ConfigAPIServer:
         def get_i2c_devices():
             """Scan I2C bus for devices"""
             return self.i2c_handler.handle_get_i2c_devices()
+
+        # PipeWire endpoints
+        @self.app.route('/api/v1/pipewire/controls', methods=['GET'])
+        def list_pipewire_controls():
+            """List all available PipeWire volume controls"""
+            return self.pipewire_handler.handle_list_controls()
+
+        @self.app.route('/api/v1/pipewire/default-sink', methods=['GET'])
+        def get_default_sink():
+            """Get the default PipeWire sink"""
+            return self.pipewire_handler.handle_get_default_sink()
+
+        @self.app.route('/api/v1/pipewire/default-source', methods=['GET'])
+        def get_default_source():
+            """Get the default PipeWire source"""
+            return self.pipewire_handler.handle_get_default_source()
+
+        @self.app.route('/api/v1/pipewire/volume/<path:control>', methods=['GET'])
+        def get_pipewire_volume(control):
+            """Get volume for a PipeWire control, returns both linear and dB values"""
+            return self.pipewire_handler.handle_get_volume(control)
+
+        @self.app.route('/api/v1/pipewire/volume/<path:control>', methods=['PUT', 'POST'])
+        def set_pipewire_volume(control):
+            """Set volume for a PipeWire control, accepts both linear (volume) and dB (volume_db) values"""
+            return self.pipewire_handler.handle_set_volume(control)
 
         # Error handlers
         @self.app.errorhandler(400)
