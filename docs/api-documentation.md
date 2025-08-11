@@ -13,6 +13,7 @@
   - [System Management](#system-management)
   - [Network Configuration](#network-configuration)
   - [I2C Device Management](#i2c-device-management)
+  - [PipeWire Volume Management](#pipewire-volume-management)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
 - [Configuration File](#configuration-file)
@@ -68,7 +69,12 @@ Get version information and available endpoints.
     "script_info": "/api/v1/scripts/<script_id>",
     "script_execute": "/api/v1/scripts/<script_id>/execute",
     "network": "/api/v1/network",
-    "i2c_devices": "/api/v1/i2c/devices"
+    "i2c_devices": "/api/v1/i2c/devices",
+    "pipewire_controls": "/api/v1/pipewire/controls",
+    "pipewire_default_sink": "/api/v1/pipewire/default-sink",
+    "pipewire_default_source": "/api/v1/pipewire/default-source",
+    "pipewire_volume": "/api/v1/pipewire/volume/<control>",
+    "pipewire_volume_set": "/api/v1/pipewire/volume/<control>"
   }
 }
 ```
@@ -1412,6 +1418,236 @@ Scan I2C bus for connected devices and detect kernel-used addresses.
 - Kernel-used addresses are detected from /sys/bus/i2c/devices/
 - Similar functionality to `i2cdetect -y <bus>` command but using Python I2C library
 
+## PipeWire Volume Management
+
+The PipeWire API provides comprehensive volume control for PipeWire audio system. PipeWire is a modern audio server that can handle both professional and consumer audio applications.
+
+**Key Features:**
+- List all available volume controls (sinks and sources)
+- Get/set volume using both linear (0.0-1.0) and decibel values
+- Automatic detection of default sink and source
+- Proper volume conversion using PipeWire's cubic volume curve
+- Support for "default" control name for easy access
+
+**Volume Scaling:**
+- PipeWire uses a non-linear (cubic) volume scale where dB ≈ 60 × log10(V)
+- Volume values are represented as floats from 0.0 (mute) to 1.0 (maximum)
+- Decibel values use proper conversion: 0 dB = maximum volume, negative values reduce volume
+- The API handles all conversions automatically between linear and dB representations
+
+### `GET /api/v1/pipewire/controls`
+
+List all available PipeWire volume controls including sinks and sources.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "controls": [
+      "44:Built-in Audio Stereo",
+      "45:Built-in Audio Mono",
+      "46:USB Audio Device Stereo"
+    ],
+    "count": 3
+  }
+}
+```
+
+**Response (PipeWire Not Available):**
+```json
+{
+  "status": "error",
+  "message": "wpctl command not found. PipeWire/WirePlumber may not be installed."
+}
+```
+
+**Response Fields:**
+- **controls**: Array of control names in format "node_id:device_name"
+- **count**: Total number of available controls
+
+### `GET /api/v1/pipewire/default-sink`
+
+Get the default PipeWire sink (output device).
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "default_sink": "44:Built-in Audio Stereo"
+  }
+}
+```
+
+**Response (No Default Sink):**
+```json
+{
+  "status": "error",
+  "message": "No default sink found"
+}
+```
+
+### `GET /api/v1/pipewire/default-source`
+
+Get the default PipeWire source (input device).
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "default_source": "45:Built-in Audio Mono"
+  }
+}
+```
+
+**Response (No Default Source):**
+```json
+{
+  "status": "error",
+  "message": "No default source found"
+}
+```
+
+### `GET /api/v1/pipewire/volume/{control}`
+
+Get volume for a specific PipeWire control. Returns both linear and decibel values.
+
+**Parameters:**
+- **control** (path, required): Control name (e.g., "44:Built-in Audio Stereo") or "default" for default sink
+
+**Special Control Names:**
+- **"default"**: Automatically uses the default sink
+- **""** (empty): Also uses the default sink
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "control": "44:Built-in Audio Stereo",
+    "volume": 0.501,
+    "volume_db": -18.0
+  }
+}
+```
+
+**Response (Control Not Found):**
+```json
+{
+  "status": "error",
+  "message": "Control \"99:Nonexistent Device\" not found"
+}
+```
+
+**Response (No Default Sink - when using "default"):**
+```json
+{
+  "status": "error",
+  "message": "No default sink found"
+}
+```
+
+**Response Fields:**
+- **control**: The actual control name used (resolved from "default" if applicable)
+- **volume**: Linear volume value (0.0-1.0)
+- **volume_db**: Volume in decibels (negative values, 0 dB = maximum)
+
+### `PUT/POST /api/v1/pipewire/volume/{control}`
+
+Set volume for a specific PipeWire control. Accepts either linear or decibel values.
+
+**Parameters:**
+- **control** (path, required): Control name or "default" for default sink
+
+**Request Body (Linear Volume):**
+```json
+{
+  "volume": 0.75
+}
+```
+
+**Request Body (Decibel Volume):**
+```json
+{
+  "volume_db": -12.0
+}
+```
+
+**Request Parameters:**
+- **volume** (optional): Linear volume value (0.0-1.0)
+- **volume_db** (optional): Volume in decibels (negative values for reduction)
+
+> **Note:** Provide either `volume` or `volume_db`, not both. If both are provided, `volume_db` takes precedence.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "control": "44:Built-in Audio Stereo",
+    "volume": 0.631,
+    "volume_db": -12.0
+  }
+}
+```
+
+**Response (Invalid Volume Range):**
+```json
+{
+  "status": "error",
+  "message": "Volume must be between 0.0 and 1.0"
+}
+```
+
+**Response (Invalid Volume Value):**
+```json
+{
+  "status": "error",
+  "message": "Invalid volume value"
+}
+```
+
+**Response (Invalid dB Value):**
+```json
+{
+  "status": "error",
+  "message": "Invalid volume_db value"
+}
+```
+
+**Response (Missing Parameters):**
+```json
+{
+  "status": "error",
+  "message": "Either \"volume\" or \"volume_db\" must be provided"
+}
+```
+
+**Response (JSON Required):**
+```json
+{
+  "status": "error",
+  "message": "JSON data required"
+}
+```
+
+**Response (Set Failed):**
+```json
+{
+  "status": "error",
+  "message": "Failed to set volume for control \"44:Built-in Audio Stereo\""
+}
+```
+
+**Notes:**
+- Volume changes are applied immediately
+- The response includes the actual volume values after the change
+- PipeWire may slightly adjust the requested volume based on hardware capabilities
+- Setting volume to 0.0 effectively mutes the control
+- Decibel values below -60 dB are very quiet and may be effectively silent
+
 ### Script Management
 
 The script management API allows execution of predefined scripts configured in the server configuration file. This provides a secure way to execute system administration scripts through the API.
@@ -1853,6 +2089,68 @@ curl http://localhost:1081/api/v1/i2c/devices
 **Scan specific I2C bus:**
 ```bash
 curl "http://localhost:1081/api/v1/i2c/devices?bus=0"
+```
+
+### PipeWire Volume Management
+
+**List all PipeWire volume controls:**
+```bash
+curl http://localhost:1081/api/v1/pipewire/controls
+```
+
+**Get default sink:**
+```bash
+curl http://localhost:1081/api/v1/pipewire/default-sink
+```
+
+**Get default source:**
+```bash
+curl http://localhost:1081/api/v1/pipewire/default-source
+```
+
+**Get volume of default sink:**
+```bash
+curl http://localhost:1081/api/v1/pipewire/volume/default
+```
+
+**Get volume of specific control:**
+```bash
+curl "http://localhost:1081/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
+```
+
+**Set volume using linear value (0.0-1.0):**
+```bash
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"volume": 0.75}' \
+     http://localhost:1081/api/v1/pipewire/volume/default
+```
+
+**Set volume using decibel value:**
+```bash
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"volume_db": -12.0}' \
+     http://localhost:1081/api/v1/pipewire/volume/default
+```
+
+**Set volume of specific control:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"volume": 0.5}' \
+     "http://localhost:1081/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
+```
+
+**Mute a control (set volume to 0):**
+```bash
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"volume": 0.0}' \
+     http://localhost:1081/api/v1/pipewire/volume/default
+```
+
+**Set very quiet volume (-40 dB):**
+```bash
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"volume_db": -40.0}' \
+     http://localhost:1081/api/v1/pipewire/volume/default
 ```
 
 ### Filesystem Management
