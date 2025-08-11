@@ -16,17 +16,26 @@ def _run_wpctl(args: List[str]) -> Optional[str]:
     except Exception:
         return None
 
-def _linear_to_db(linear: float) -> float:
-    """Convert linear volume (0.0-1.0) to decibels"""
-    if linear <= 0:
+def _volume_to_db(volume: float) -> float:
+    """
+    Convert PipeWire volume (0.0-1.0) to decibels using the cubic curve that PipeWire uses.
+    PipeWire uses approximately: dB ≈ 60 × log10(V) where V is the volume value.
+    This is because PipeWire's volume scale follows roughly V^3 relationship to linear amplitude.
+    """
+    if volume <= 0:
         return -math.inf
-    return 20 * math.log10(linear)
+    # PipeWire's cubic volume curve: dB ≈ 60 × log10(V)
+    return 60 * math.log10(volume)
 
-def _db_to_linear(db: float) -> float:
-    """Convert decibel volume to linear (0.0-1.0)"""
+def _db_to_volume(db: float) -> float:
+    """
+    Convert decibel volume to PipeWire volume (0.0-1.0) using the cubic curve that PipeWire uses.
+    PipeWire uses approximately: V = 10^(dB/60)
+    """
     if db == -math.inf:
         return 0.0
-    return 10 ** (db / 20.0)
+    # PipeWire's cubic volume curve: V = 10^(dB/60)
+    return 10 ** (db / 60.0)
 
 def get_volume_controls() -> List[str]:
     """
@@ -115,7 +124,7 @@ def get_volume_db(control_name: str) -> Optional[float]:
     linear_vol = get_volume(control_name)
     if linear_vol is None:
         return None
-    return _linear_to_db(linear_vol)
+    return _volume_to_db(linear_vol)
 
 def set_volume(control_name: str, volume: float) -> bool:
     """
@@ -234,7 +243,7 @@ def set_volume_db(control_name: str, db: float) -> bool:
     Sets the volume for the given PipeWire control name in decibels.
     Returns True if successful, False otherwise.
     """
-    linear_vol = _db_to_linear(db)
+    linear_vol = _db_to_volume(db)
     return set_volume(control_name, linear_vol)
 
 def main():
