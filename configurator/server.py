@@ -20,6 +20,7 @@ from .configdb import ConfigDB
 from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
+from .settings_manager import SettingsManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -52,6 +53,10 @@ class ConfigAPIServer:
         self.network_handler = NetworkHandler()
         self.i2c_handler = I2CHandler()
         self.pipewire_handler = PipewireHandler()
+        self.settings_manager = SettingsManager(self.configdb)
+        
+        # Set settings manager on handlers that need it
+        self.pipewire_handler.set_settings_manager(self.settings_manager)
         
         # Configure Flask logging
         if not debug:
@@ -59,6 +64,59 @@ class ConfigAPIServer:
         
         # Register API routes
         self._register_routes()
+        
+        # Register settings for modules
+        self._register_module_settings()
+    
+    def _register_module_settings(self):
+        """Register settings that should be saved/restored by modules"""
+        # Register PipeWire default volume setting
+        self.settings_manager.register_setting(
+            "pipewire_default_volume",
+            self._save_pipewire_default_volume,
+            self._restore_pipewire_default_volume
+        )
+    
+    def _save_pipewire_default_volume(self):
+        """Save current default PipeWire volume"""
+        try:
+            from . import pipewire
+            default_sink = pipewire.get_default_sink()
+            if default_sink:
+                volume = pipewire.get_volume(default_sink)
+                if volume is not None:
+                    logger.info(f"Saving PipeWire default volume: {volume}")
+                    return volume
+            return None
+        except Exception as e:
+            logger.error(f"Error saving PipeWire default volume: {e}")
+            return None
+    
+    def _restore_pipewire_default_volume(self, value):
+        """Restore default PipeWire volume"""
+        try:
+            from . import pipewire
+            default_sink = pipewire.get_default_sink()
+            if default_sink:
+                volume = float(value)
+                if 0.0 <= volume <= 1.0:
+                    success = pipewire.set_volume(default_sink, volume)
+                    if success:
+                        logger.info(f"Restored PipeWire default volume to: {volume}")
+                    else:
+                        logger.error(f"Failed to restore PipeWire default volume to: {volume}")
+                else:
+                    logger.error(f"Invalid volume value for restore: {volume}")
+            else:
+                logger.error("No default sink found for volume restore")
+        except Exception as e:
+            logger.error(f"Error restoring PipeWire default volume: {e}")
+    
+    def restore_settings(self):
+        """Restore all registered settings from configdb"""
+        logger.info("Restoring saved settings...")
+        results = self.settings_manager.restore_all_settings()
+        return results
     
     def _register_routes(self):
         """Register all API routes"""
@@ -104,7 +162,11 @@ class ConfigAPIServer:
                     'pipewire_default_sink': '/api/v1/pipewire/default-sink',
                     'pipewire_default_source': '/api/v1/pipewire/default-source',
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
-                    'pipewire_volume_set': '/api/v1/pipewire/volume/<control>'
+                    'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
+                    'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
+                    'settings_list': '/api/v1/settings',
+                    'settings_save': '/api/v1/settings/save',
+                    'settings_restore': '/api/v1/settings/restore'
                 }
             })
         
@@ -294,6 +356,106 @@ class ConfigAPIServer:
             """Set volume for a PipeWire control, accepts both linear (volume) and dB (volume_db) values"""
             return self.pipewire_handler.handle_set_volume(control)
 
+        @self.app.route('/api/v1/pipewire/save-default-volume', methods=['POST'])
+        def save_pipewire_default_volume():
+            """Save the current default PipeWire volume to settings"""
+            try:
+                success = self.settings_manager.save_setting('pipewire_default_volume')
+                
+                if success:
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Default PipeWire volume saved successfully',
+                        'data': {
+                            'setting': 'pipewire_default_volume',
+                            'saved': True
+                        }
+                    })
+                else:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to save default PipeWire volume'
+                    }), 500
+                    
+            except Exception as e:
+                logger.error(f"Error saving default volume: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        # Settings management endpoints
+        @self.app.route('/api/v1/settings/save', methods=['POST'])
+        def save_settings():
+            """Save current settings to configdb"""
+            try:
+                results = self.settings_manager.save_all_settings()
+                successful = sum(results.values())
+                total = len(results)
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Saved {successful}/{total} settings',
+                    'data': {
+                        'results': results,
+                        'successful': successful,
+                        'total': total
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Error saving settings: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        @self.app.route('/api/v1/settings/restore', methods=['POST'])
+        def restore_settings():
+            """Restore settings from configdb"""
+            try:
+                results = self.settings_manager.restore_all_settings()
+                successful = sum(results.values())
+                total = len(results)
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Restored {successful}/{total} settings',
+                    'data': {
+                        'results': results,
+                        'successful': successful,
+                        'total': total
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Error restoring settings: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        @self.app.route('/api/v1/settings', methods=['GET'])
+        def list_settings():
+            """List registered and saved settings"""
+            try:
+                registered = self.settings_manager.list_registered_settings()
+                saved = self.settings_manager.list_saved_settings()
+                
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'registered_settings': registered,
+                        'saved_settings': saved,
+                        'registered_count': len(registered),
+                        'saved_count': len(saved)
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Error listing settings: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
         # Error handlers
         @self.app.errorhandler(400)
         def bad_request(error):
@@ -365,6 +527,8 @@ def parse_arguments():
                         help='Enable debug mode')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Enable verbose logging')
+    parser.add_argument('--restore-settings', action='store_true',
+                        help='Restore saved settings from configdb on startup')
     
     return parser.parse_args()
 
@@ -375,13 +539,25 @@ def main():
     # Configure logging
     setup_logging(args.verbose)
     
-    # Create and start the server
+    # Create the server
     server = ConfigAPIServer(
         host=args.host,
         port=args.port,
         debug=args.debug
     )
     
+    # Restore settings if requested
+    if args.restore_settings:
+        logger.info("Restoring settings...")
+        results = server.restore_settings()
+        successful = sum(results.values())
+        total = len(results)
+        logger.info(f"Settings restoration completed: {successful}/{total} successful")
+        
+        # Exit after restoring settings instead of starting server
+        return 0 if successful == total else 1
+    
+    # Start the server normally
     server.run()
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@
   - [Network Configuration](#network-configuration)
   - [I2C Device Management](#i2c-device-management)
   - [PipeWire Volume Management](#pipewire-volume-management)
+  - [Settings Management](#settings-management)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
 - [Configuration File](#configuration-file)
@@ -1647,6 +1648,126 @@ Set volume for a specific PipeWire control. Accepts either linear or decibel val
 - PipeWire may slightly adjust the requested volume based on hardware capabilities
 - Setting volume to 0.0 effectively mutes the control
 - Decibel values below -60 dB are very quiet and may be effectively silent
+- **Auto-save**: When the default sink volume is changed, the new volume is automatically saved as the default volume setting in configdb
+
+## Settings Management
+
+The Settings Management API provides functionality for saving and restoring system settings. Modules can register settings that should persist across system restarts or configuration changes.
+
+**Key Features:**
+- Automatic saving of settings when values change
+- Manual save/restore operations via API
+- Command-line restore during system startup
+- Per-module setting registration
+- Settings stored in configdb with `saved-setting.` prefix
+
+**Currently Supported Settings:**
+- **pipewire_default_volume**: Default PipeWire sink volume (auto-saved when changed)
+
+### `GET /api/v1/settings`
+
+List all registered settings and their current saved values.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "registered_settings": [
+      "pipewire_default_volume"
+    ],
+    "saved_settings": {
+      "pipewire_default_volume": "0.75"
+    },
+    "registered_count": 1,
+    "saved_count": 1
+  }
+}
+```
+
+**Response Fields:**
+- **registered_settings**: Array of setting names that are registered for save/restore
+- **saved_settings**: Object mapping saved setting names to their stored values
+- **registered_count**: Number of registered settings
+- **saved_count**: Number of settings that have saved values
+
+### `POST /api/v1/settings/save`
+
+Save all current settings to configdb for later restoration.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Saved 1/1 settings",
+  "data": {
+    "results": {
+      "pipewire_default_volume": true
+    },
+    "successful": 1,
+    "total": 1
+  }
+}
+```
+
+**Response Fields:**
+- **results**: Object mapping setting names to success status (true/false)
+- **successful**: Number of settings saved successfully
+- **total**: Total number of settings attempted
+
+### `POST /api/v1/settings/restore`
+
+Restore all saved settings from configdb.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Restored 1/1 settings",
+  "data": {
+    "results": {
+      "pipewire_default_volume": true
+    },
+    "successful": 1,
+    "total": 1
+  }
+}
+```
+
+**Response Fields:**
+- **results**: Object mapping setting names to success status (true/false)
+- **successful**: Number of settings restored successfully
+- **total**: Total number of settings attempted
+
+### `POST /api/v1/pipewire/save-default-volume`
+
+Save the current default PipeWire sink volume as the default setting.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Default PipeWire volume saved successfully",
+  "data": {
+    "setting": "pipewire_default_volume",
+    "saved": true
+  }
+}
+```
+
+**Response (Failed):**
+```json
+{
+  "status": "error",
+  "message": "Failed to save default PipeWire volume"
+}
+```
+
+**Notes:**
+- This endpoint manually saves the current default volume
+- Default volume is also automatically saved whenever it's changed via the volume API
+- Requires a default sink to be available
+- The saved volume will be restored on system startup when using `--restore-settings`
 
 ### Script Management
 
@@ -2151,6 +2272,28 @@ curl -X PUT -H "Content-Type: application/json" \
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume_db": -40.0}' \
      http://localhost:1081/api/v1/pipewire/volume/default
+```
+
+### Settings Management
+
+**List all registered and saved settings:**
+```bash
+curl http://localhost:1081/api/v1/settings
+```
+
+**Save all current settings:**
+```bash
+curl -X POST http://localhost:1081/api/v1/settings/save
+```
+
+**Restore all saved settings:**
+```bash
+curl -X POST http://localhost:1081/api/v1/settings/restore
+```
+
+**Save current default PipeWire volume:**
+```bash
+curl -X POST http://localhost:1081/api/v1/pipewire/save-default-volume
 ```
 
 ### Filesystem Management

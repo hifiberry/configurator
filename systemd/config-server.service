@@ -9,6 +9,7 @@ StartLimitBurst=3
 [Service]
 Type=simple
 ExecStartPre=-/sbin/modprobe i2c-dev
+ExecStartPre=/usr/bin/config-server --restore-settings
 ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose
 Restart=always
 RestartSec=5

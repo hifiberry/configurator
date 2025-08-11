@@ -17,7 +17,12 @@ class PipewireHandler:
     
     def __init__(self):
         """Initialize the PipeWire handler"""
+        self.settings_manager = None  # Will be set by server
         pass
+    
+    def set_settings_manager(self, settings_manager):
+        """Set the settings manager for auto-saving volumes"""
+        self.settings_manager = settings_manager
     
     def handle_list_controls(self):
         """
@@ -165,6 +170,9 @@ class PipewireHandler:
                         'message': 'No default sink found'
                     }), 404
                 control = default_sink
+                resolved_default = True
+            else:
+                resolved_default = False
             
             # Get JSON data from request
             data = request.get_json()
@@ -213,6 +221,10 @@ class PipewireHandler:
                 # Return current volume values
                 new_volume = pipewire.get_volume(control)
                 new_volume_db = pipewire.get_volume_db(control)
+                
+                # Auto-save if this is the default sink and settings manager is available
+                self._auto_save_if_default_sink(control, resolved_default)
+                
                 return jsonify({
                     'status': 'success',
                     'data': {
@@ -233,3 +245,33 @@ class PipewireHandler:
                 'status': 'error',
                 'message': str(e)
             }), 500
+    
+    def _auto_save_if_default_sink(self, control, resolved_default=False):
+        """
+        Automatically save the volume if the control is the default sink
+        
+        Args:
+            control: The control that was modified
+            resolved_default: True if control was resolved from "default" parameter
+        """
+        try:
+            if self.settings_manager is None:
+                return
+                
+            # If we already resolved from "default", we know this is the default sink
+            if resolved_default:
+                should_save = True
+            else:
+                # Get the default sink to compare
+                default_sink = pipewire.get_default_sink()
+                should_save = default_sink and control == default_sink
+                
+            if should_save:
+                # This was a change to the default sink, auto-save it
+                success = self.settings_manager.save_setting('pipewire_default_volume')
+                if success:
+                    logger.info(f"Auto-saved default PipeWire volume after change to {control}")
+                else:
+                    logger.warning(f"Failed to auto-save default PipeWire volume after change to {control}")
+        except Exception as e:
+            logger.error(f"Error auto-saving default volume: {e}")
