@@ -1,0 +1,63 @@
+.TH CONFIG-PIPEWIRE 1 "August 2025" "configurator 1.6.8" "HiFiBerry Configuration Tools"
+.SH NAME
+config-pipewire \- PipeWire volume control utility
+.SH SYNOPSIS
+.B config-pipewire
+.I list
+.br
+.B config-pipewire
+.I get
+\fIcontrol_name\fR
+.br
+.B config-pipewire
+.I set
+\fIcontrol_name\fR \fIvolume\fR
+.SH DESCRIPTION
+.B config-pipewire
+provides command-line access to PipeWire volume controls. It can list available volume controls, get the current volume level for a specific control, and set volume levels.
+.SH COMMANDS
+.TP
+.B list
+List all available PipeWire volume control names
+.TP
+.B get \fIcontrol_name\fR
+Get the current volume level for the specified control. Returns a float value between 0.0 and 1.0
+.TP
+.B set \fIcontrol_name\fR \fIvolume\fR
+Set the volume level for the specified control. Volume must be a float between 0.0 and 1.0
+.SH EXAMPLES
+.TP
+List all available volume controls:
+.B config-pipewire list
+.TP
+Get volume for a specific control:
+.B config-pipewire get alsa_output.pci-0000_00_1b.0.analog-stereo
+.TP
+Set volume to 75%:
+.B config-pipewire set alsa_output.pci-0000_00_1b.0.analog-stereo 0.75
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Invalid command or missing arguments
+.TP
+.B 2
+Control not found or no volume information available
+.TP
+.B 3
+Invalid volume value (must be float between 0.0 and 1.0)
+.TP
+.B 4
+Failed to set volume for the specified control
+.SH DEPENDENCIES
+Requires PipeWire and the pw-cli command-line tool to be installed and running.
+.SH SEE ALSO
+.BR pw-cli (1),
+.BR pipewire (1),
+.BR config-volume (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2025 HiFiBerry. Licensed under the MIT License.
