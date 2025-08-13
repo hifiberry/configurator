@@ -76,6 +76,12 @@ class ConfigAPIServer:
             self._save_pipewire_default_volume,
             self._restore_pipewire_default_volume
         )
+        # Register PipeWire mixer state (mode/balance) setting
+        self.settings_manager.register_setting(
+            "pipewire_mixer_state",
+            self._save_pipewire_mixer_state,
+            self._restore_pipewire_mixer_state
+        )
     
     def _save_pipewire_default_volume(self):
         """Save current default PipeWire volume"""
@@ -111,6 +117,63 @@ class ConfigAPIServer:
                 logger.error("No default sink found for volume restore")
         except Exception as e:
             logger.error(f"Error restoring PipeWire default volume: {e}")
+
+    def _save_pipewire_mixer_state(self):
+        """Save current mixer mode/balance state encoded as 'mode,balance'."""
+        try:
+            from . import pipewire
+            analysis = pipewire.analyze_mixer()
+            if not analysis:
+                return None
+            mode = analysis.get('mode')
+            balance = analysis.get('balance')
+            if mode in (None, 'unknown'):
+                return None
+            # Round balance for stability
+            try:
+                balance = float(balance)
+            except Exception:
+                balance = 0.0
+            balance = max(-1.0, min(1.0, balance))
+            encoded = f"{mode},{balance:.6f}"
+            logger.info(f"Saving PipeWire mixer state: {encoded}")
+            return encoded
+        except Exception as e:
+            logger.error(f"Error saving PipeWire mixer state: {e}")
+            return None
+
+    def _restore_pipewire_mixer_state(self, value):
+        """Restore mixer state from encoded 'mode,balance' string."""
+        try:
+            from . import pipewire
+            if not value:
+                return False
+            parts = str(value).split(',')
+            if len(parts) != 2:
+                logger.warning(f"Invalid mixer state format: {value}")
+                return False
+            mode = parts[0].strip()
+            try:
+                balance = float(parts[1])
+            except Exception:
+                balance = 0.0
+            discrete_modes = {'mono','stereo','left','right'}
+            ok = False
+            if mode in discrete_modes:
+                ok = pipewire.set_mode(mode)
+            elif mode == 'balance':
+                ok = pipewire.set_balance(balance)
+            else:
+                logger.warning(f"Unknown saved mixer mode '{mode}', skipping restore")
+                return False
+            if ok:
+                logger.info(f"Restored PipeWire mixer state: mode={mode} balance={balance}")
+            else:
+                logger.error(f"Failed to restore PipeWire mixer state: mode={mode} balance={balance}")
+            return ok
+        except Exception as e:
+            logger.error(f"Error restoring PipeWire mixer state: {e}")
+            return False
     
     def restore_settings(self):
         """Restore all registered settings from configdb"""
