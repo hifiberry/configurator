@@ -249,10 +249,37 @@ def set_volume(control_name: str, volume: float) -> bool:
 
 def get_default_sink() -> Optional[str]:
     """
-    Returns the default sink (marked with '*' in wpctl status).
+    Returns the default hardware sink (using pw-dump to find ALSA output sink).
     Format: "node_id:device_name" or None if not found.
     """
-    logger.debug("Getting default sink...")
+    logger.debug("Getting default sink using pw-dump...")
+    
+    # First try pw-dump approach for hardware sink
+    try:
+        import json
+        result = subprocess.run(["pw-dump"], capture_output=True, text=True, check=True)
+        dump_data = json.loads(result.stdout)
+        
+        # Find audio sinks with alsa_output in node_name (hardware sinks)
+        for item in dump_data:
+            if (item.get("info", {}).get("props", {}).get("media.class") == "Audio/Sink" and
+                item.get("info", {}).get("props", {}).get("node.name", "").startswith("alsa_output")):
+                
+                node_id = item.get("id")
+                device_name = item.get("info", {}).get("props", {}).get("node.description", "Unknown")
+                
+                if node_id is not None:
+                    result = f"{node_id}:{device_name}"
+                    logger.debug(f"Found hardware sink via pw-dump: {result}")
+                    return result
+        
+        logger.debug("No alsa_output sink found via pw-dump, falling back to wpctl parsing")
+        
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
+        logger.debug(f"pw-dump failed ({e}), falling back to wpctl parsing")
+    
+    # Fallback to original wpctl status parsing, but look for any sink (not just starred ones)
+    logger.debug("Getting default sink via wpctl status fallback...")
     output = _run_wpctl(["status"])
     if not output:
         logger.warning("No output from wpctl status")
@@ -291,19 +318,15 @@ def get_default_sink() -> Optional[str]:
             
         if in_sinks_section and line:
             logger.debug(f"Processing sink line {line_num}: {repr(original_line)}")
-            # Look for lines with asterisk: " │  *   44. Built-in Audio Stereo               [vol: 0.71]"
-            if '*' in original_line:
-                logger.debug(f"Found default sink candidate at line {line_num}: {repr(original_line)}")
-                clean_line = re.sub(r'^[│├└─\s]*\*?\s*', '', original_line)
-                match = re.search(r'^(\d+)\.\s+(.+?)\s+\[', clean_line)
-                if match:
-                    node_id = match.group(1)
-                    device_name = match.group(2).strip()
-                    result = f"{node_id}:{device_name}"
-                    logger.debug(f"Found default sink: {result}")
-                    return result
-                else:
-                    logger.warning(f"Failed to parse default sink line: {repr(clean_line)}")
+            # Parse any sink line (not just starred ones): " │      52. Built-in Audio Stereo               [vol: 0.71]"
+            clean_line = re.sub(r'^[│├└─\s]*\*?\s*', '', original_line)
+            match = re.search(r'^(\d+)\.\s+(.+?)\s+\[', clean_line)
+            if match:
+                node_id = match.group(1)
+                device_name = match.group(2).strip()
+                result = f"{node_id}:{device_name}"
+                logger.debug(f"Found sink via wpctl fallback: {result}")
+                return result
     
     logger.warning("No default sink found in wpctl status output")
     return None
