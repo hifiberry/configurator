@@ -229,8 +229,7 @@ class ConfigAPIServer:
                     'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
                     'pipewire_mixer_status': '/api/v1/pipewire/mixer',
                     'pipewire_mixer_analysis': '/api/v1/pipewire/mixer/analysis',
-                    'pipewire_mixer_balance': '/api/v1/pipewire/mixer/balance/<value>',
-                    'pipewire_mixer_mode': '/api/v1/pipewire/mixer/mode/<mode>',
+                    'pipewire_mixer_set': '/api/v1/pipewire/mixer/set',
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -468,19 +467,10 @@ class ConfigAPIServer:
             """Get inferred mixer mode and balance plus gains"""
             return self.pipewire_handler.handle_get_mixer_mode()
 
-        @self.app.route('/api/v1/pipewire/mixer/balance/<value>', methods=['POST'])
-        def set_pipewire_balance(value):
-            """Set stereo balance (-1 full left .. +1 full right)"""
-            try:
-                b = float(value)
-            except ValueError:
-                return jsonify({'status': 'error', 'message': 'Balance must be a number'}), 400
-            return self.pipewire_handler.handle_set_balance(b)
-
-        @self.app.route('/api/v1/pipewire/mixer/mode/<mode>', methods=['POST'])
-        def set_pipewire_mixer_mode(mode):
-            """Set mixer mode (mono|stereo|left|right)"""
-            return self.pipewire_handler.handle_set_mode(mode)
+        @self.app.route('/api/v1/pipewire/mixer/set', methods=['POST'])
+        def set_pipewire_mixer():
+            """Set mixer mode and/or balance in one operation"""
+            return self.pipewire_handler.handle_set_mixer()
 
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])
