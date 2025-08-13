@@ -103,6 +103,7 @@ logger = logging.getLogger(__name__)
 
 # Cache for last applied mixer gains (used when PipeWire can't report them)
 _last_mixer_gains: Dict[str, float] = {}
+_last_mixer_source: str = ""  # live | cache | default
 
 def _run_wpctl(args: List[str]) -> Optional[str]:
     try:
@@ -387,9 +388,7 @@ def get_filtergraph_dot() -> Optional[str]:
 # Mixer balance / mono-stereo utilities (adapted from pw-balance script)
 # ---------------------------------------------------------------------------
 
-DEFAULT_SINK_NODE_NAME = "effect_input.proc"  # Documented virtual processing sink
-MIXER_LEFT_NODE_NAME = "mixer_left"
-MIXER_RIGHT_NODE_NAME = "mixer_right"
+DEFAULT_MIXER_NODE_NAME = "effect_input.proc"  # Container node with mixer params
 
 def _resolve_node_id_by_name(node_name: str) -> Optional[int]:
     """Resolve a PipeWire node id by its node.name property."""
@@ -426,34 +425,20 @@ def _resolve_node_id_by_name(node_name: str) -> Optional[int]:
         pass
     return None
 
-def _resolve_mixer_node_ids() -> Tuple[Optional[int], Optional[int]]:
-    """Resolve node ids for mixer_left and mixer_right nodes."""
-    left = _resolve_node_id_by_name(MIXER_LEFT_NODE_NAME)
-    right = _resolve_node_id_by_name(MIXER_RIGHT_NODE_NAME)
-    return left, right
+def _resolve_mixer_container_node() -> Optional[int]:
+    return _resolve_node_id_by_name(DEFAULT_MIXER_NODE_NAME)
 
 def _apply_mixer_gains(gL1: float, gL2: float, gR1: float, gR2: float) -> bool:
-    """Apply mixer gains to mixer_left and mixer_right nodes.
-
-    mixer_left  Gain 1 = Left->LeftOut   Gain 2 = Right->LeftOut
-    mixer_right Gain 1 = Left->RightOut  Gain 2 = Right->RightOut
-    """
-    left_id, right_id = _resolve_mixer_node_ids()
-    if left_id is None or right_id is None:
-        logger.error("Could not resolve mixer node ids (left=%s right=%s)", left_id, right_id)
+    nid = _resolve_mixer_container_node()
+    if nid is None:
+        logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
         return False
+    param = '{ "params": [ "mixer_left:Gain 1" %0.6f "mixer_left:Gain 2" %0.6f "mixer_right:Gain 1" %0.6f "mixer_right:Gain 2" %0.6f ] }' % (gL1, gL2, gR1, gR2)
     try:
-        p_left = '{ "Gain 1" = %0.6f "Gain 2" = %0.6f }' % (gL1, gL2)
-        p_right = '{ "Gain 1" = %0.6f "Gain 2" = %0.6f }' % (gR1, gR2)
-        rl = subprocess.run(["pw-cli", "set-param", str(left_id), "Props", p_left], capture_output=True, text=True)
-        if rl.returncode != 0:
-            logger.error("Failed setting left mixer gains: %s", rl.stderr.strip())
+        res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error("pw-cli set-param failed: %s", res.stderr.strip())
             return False
-        rr = subprocess.run(["pw-cli", "set-param", str(right_id), "Props", p_right], capture_output=True, text=True)
-        if rr.returncode != 0:
-            logger.error("Failed setting right mixer gains: %s", rr.stderr.strip())
-            return False
-        # Update cache on success
         _last_mixer_gains.update({
             "mixer_left:Gain_1": gL1,
             "mixer_left:Gain_2": gL2,
@@ -467,51 +452,86 @@ def _apply_mixer_gains(gL1: float, gL2: float, gR1: float, gR2: float) -> bool:
         logger.error("Error applying mixer gains: %s", e)
     return False
 
-def _parse_gains_from_info(text: str, prefix: str) -> Dict[str, float]:
-    out: Dict[str, float] = {}
-    # Look for lines like:  \"Gain 1\" = 0.500000 or Gain 1 = 0.5
-    for line in text.splitlines():
-        line = line.strip()
-        m = re.match(r'(?:"?)Gain\s+([0-9]+)(?:"?)\s*=\s*([0-9.]+)', line)
-        if m:
-            idx = m.group(1)
-            val = m.group(2)
-            try:
-                out[f"{prefix}:Gain_{idx}"] = float(val)
-            except ValueError:
-                pass
-    return out
-
 def _get_mixer_status() -> Optional[Dict[str, float]]:
-    left_id, right_id = _resolve_mixer_node_ids()
-    if left_id is None or right_id is None:
-        logger.warning("Mixer nodes not found (left=%s right=%s)", left_id, right_id)
+    nid = _resolve_mixer_container_node()
+    if nid is None:
+        logger.warning("Mixer container node not found")
         return None
-    gains: Dict[str, float] = {}
+    # Use global for source tracking; declare once before assignments
+    global _last_mixer_source
     try:
-        info_left = subprocess.run(["pw-cli", "info", str(left_id)], capture_output=True, text=True, check=True).stdout
-        info_right = subprocess.run(["pw-cli", "info", str(right_id)], capture_output=True, text=True, check=True).stdout
-        left_g = _parse_gains_from_info(info_left, "mixer_left")
-        right_g = _parse_gains_from_info(info_right, "mixer_right")
-        # We only care about Gain 1 & 2 for our balance/mono logic
-        for k in list(left_g.keys()):
-            if not k.endswith(('_1','_2')):
-                left_g.pop(k)
-        for k in list(right_g.keys()):
-            if not k.endswith(('_1','_2')):
-                right_g.pop(k)
-        gains.update(left_g)
-        gains.update(right_g)
-    except Exception as e:
-        logger.error("Failed retrieving mixer status: %s", e)
-        return None
-    if not gains:
-        if _last_mixer_gains:
-            logger.warning("No live mixer gains parsed; returning cached values.")
+        out = subprocess.run(["pw-cli", "enum-params", str(nid), "Props"], capture_output=True, text=True, check=True).stdout
+        parsed: Dict[str, float] = {}
+        lines = out.splitlines()
+        # Strategy: support two formats
+        # 1. key=value style (legacy regex below)
+        # 2. Alternating lines: String "mixer_left:Gain 1" followed by Float value line
+        # We'll first scan for String/Float pairs because that's the current observed format.
+        i = 0
+        while i < len(lines):
+            raw = lines[i].strip()
+            m_string = re.match(r'^String\s+"(mixer_(?:left|right):Gain\s+([0-9]+))"$', raw)
+            if m_string:
+                full_key = m_string.group(1)  # e.g. mixer_left:Gain 1
+                # Look ahead for the Float value (can be same or subsequent lines; usually next line)
+                j = i + 1
+                while j < len(lines):
+                    val_line = lines[j].strip()
+                    m_float = re.match(r'^Float\s+([0-9]+(?:\.[0-9]+)?)$', val_line)
+                    if m_float:
+                        key_sanitized = full_key.replace(' ', '_')
+                        try:
+                            parsed[key_sanitized] = float(m_float.group(1))
+                        except ValueError:
+                            pass
+                        i = j  # advance outer loop to float line
+                        break
+                    # Break early if another String encountered (value missing)
+                    if val_line.startswith('String '):
+                        break
+                    j += 1
+            else:
+                # Legacy single-line format fallback
+                m_legacy = re.match(r'"?(mixer_(?:left|right):Gain [0-9]+)"?\s*=\s*([0-9]+(?:\.[0-9]+)?)', raw)
+                if m_legacy:
+                    key = m_legacy.group(1).replace(' ', '_')
+                    try:
+                        parsed[key] = float(m_legacy.group(2))
+                    except ValueError:
+                        pass
+            i += 1
+        # Post-parse decision tree
+        if parsed:
+            _last_mixer_gains.update(parsed)
+            _last_mixer_source = 'live'
             return dict(_last_mixer_gains)
-        logger.warning("No mixer gains parsed from pw-cli info output and no cache available.")
-        return None
-    return gains
+        if _last_mixer_gains:
+            logger.debug("Returning cached mixer gains (no numeric values exposed)")
+            _last_mixer_source = 'cache'
+            return dict(_last_mixer_gains)
+        logger.warning("Mixer gains unavailable (no numeric values and no cache) - defaulting to stereo")
+        _last_mixer_gains.update({
+            "mixer_left:Gain_1": 1.0,
+            "mixer_left:Gain_2": 0.0,
+            "mixer_right:Gain_1": 0.0,
+            "mixer_right:Gain_2": 1.0,
+        })
+        _last_mixer_source = 'default'
+        return dict(_last_mixer_gains)
+    except Exception as e:
+        logger.debug("Failed to parse mixer gains (%s); using cache or default", e)
+        if _last_mixer_gains:
+            _last_mixer_source = 'cache'
+            return dict(_last_mixer_gains)
+        # default fallback
+        _last_mixer_gains.update({
+            "mixer_left:Gain_1": 1.0,
+            "mixer_left:Gain_2": 0.0,
+            "mixer_right:Gain_1": 0.0,
+            "mixer_right:Gain_2": 1.0,
+        })
+        _last_mixer_source = 'default'
+        return dict(_last_mixer_gains)
 
 def set_balance(balance: float, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
     """Set stereo balance. balance in [-1,1]; -1 full left, 0 center, +1 full right."""
@@ -547,6 +567,76 @@ def set_mode(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Un
 def get_mixer_status(node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> Optional[Dict[str, float]]:  # kept signature for API compatibility
     return _get_mixer_status()
 
+def analyze_mixer() -> Optional[Dict[str, Union[str, float]]]:
+    """Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance value.
+
+    Returns dict with keys:
+      mode: inferred mode
+      balance: float in [-1,1] (0 for mono/stereo/left/right unless balance mode)
+    or None if gains unavailable.
+    """
+    gains = _get_mixer_status()
+    if gains is None:
+        return None
+    # Extract primary 4 gains (ignore additional mixer gains beyond 2 inputs)
+    aL = gains.get("mixer_left:Gain_1")
+    aR = gains.get("mixer_left:Gain_2")
+    bL = gains.get("mixer_right:Gain_1")
+    bR = gains.get("mixer_right:Gain_2")
+    if None in (aL, aR, bL, bR):
+        return None
+    tol = 0.02
+    def eq(x, y):
+        return abs(x - y) <= tol
+    mode = 'unknown'
+    balance = 0.0
+    # Recognize mono
+    if eq(aL, aR) and eq(aR, bL) and eq(bL, bR) and eq(aL, 0.5):
+        mode = 'mono'
+        balance = 0.0
+    # Left-only
+    elif eq(aL, 1.0) and eq(bL, 1.0) and eq(aR, 0.0) and eq(bR, 0.0):
+        mode = 'left'
+        balance = -1.0
+    # Right-only
+    elif eq(aL, 0.0) and eq(bL, 0.0) and eq(aR, 1.0) and eq(bR, 1.0):
+        mode = 'right'
+        balance = 1.0
+    # Stereo (default)
+    elif eq(aL, 1.0) and eq(aR, 0.0) and eq(bL, 0.0) and eq(bR, 1.0):
+        mode = 'stereo'
+        balance = 0.0
+    else:
+        # Check balance pattern produced by set_balance(): aR=bL=0, aL<=1, bR<=1 and at least one is 1
+        if eq(aR, 0.0) and eq(bL, 0.0) and aL <= 1.0 + tol and bR <= 1.0 + tol:
+            # Determine which side was attenuated
+            if aL < 1.0 - tol and eq(bR, 1.0):  # shifted right
+                balance = 1.0 - aL
+                balance = max(0.0, min(1.0, balance))
+                mode = 'balance'
+            elif bR < 1.0 - tol and eq(aL, 1.0):  # shifted left
+                balance = bR - 1.0  # negative
+                balance = max(-1.0, min(0.0, balance))
+                mode = 'balance'
+            elif eq(aL, 1.0) and eq(bR, 1.0):  # perfect center but failed earlier stereo check (due to tiny drift)
+                mode = 'stereo'
+                balance = 0.0
+            else:
+                # Ambiguous custom mix; try generalized inference: pick smaller attenuation
+                # Map both <1 case to side with smaller attenuation -> approximate center
+                mode = 'balance'
+                # If both side attenuated (shouldn't happen with our setter) compute offset relative to 1 using max diff
+                if aL < bR:
+                    balance = 1.0 - aL  # positive
+                else:
+                    balance = (bR - 1.0)  # negative
+                # Clamp
+                balance = max(-1.0, min(1.0, balance))
+        else:
+            mode = 'unknown'
+            balance = 0.0
+    return {"mode": mode, "balance": round(balance, 6)}
+
 def main():
     import sys
     def print_usage():
@@ -559,6 +649,8 @@ def main():
         print("  config-pipewire set <control_name> <volume>")
         print("  config-pipewire set-db <control_name> <volume_db>")
         print("  config-pipewire mixer-status")
+        print("  config-pipewire mixer-gains        # show individual gain values (live or cached)")
+        print("  config-pipewire mixer-mode         # infer mode (mono/stereo/left/right/balance) + balance value")
         print("  config-pipewire balance <B>")
         print("  config-pipewire mode <mono|stereo|left|right>")
         print("")
@@ -638,6 +730,19 @@ def main():
             sys.exit(5)
         for k,v in gains.items():
             print(f"{k}={v:.6f}")
+    elif cmd == "mixer-gains":
+        gains = get_mixer_status()
+        if gains is None:
+            print("{}")
+            sys.exit(5)
+        # Print as simple JSON-ish line for easy parsing
+        parts = [f"\"{k}\":{v:.6f}" for k,v in sorted(gains.items())]
+        print('{'+', '.join(parts)+'}')
+    elif cmd == "mixer-mode":
+        info = analyze_mixer()
+        if info is None:
+            print("{}"); sys.exit(5)
+        print(f"mode={info['mode']} balance={info['balance']}")
     elif cmd == "balance" and len(sys.argv) == 3:
         try:
             b = float(sys.argv[2])
