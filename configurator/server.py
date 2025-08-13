@@ -164,6 +164,9 @@ class ConfigAPIServer:
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
                     'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
                     'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
+                    'pipewire_mixer_status': '/api/v1/pipewire/mixer',
+                    'pipewire_mixer_balance': '/api/v1/pipewire/mixer/balance/<value>',
+                    'pipewire_mixer_mode': '/api/v1/pipewire/mixer/mode/<mode>',
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -389,6 +392,26 @@ class ConfigAPIServer:
         def get_pipewire_filtergraph():
             """Get the PipeWire filter/connection graph in GraphViz DOT format (text/plain)."""
             return self.pipewire_handler.handle_get_filtergraph()
+
+        # PipeWire mixer / balance endpoints
+        @self.app.route('/api/v1/pipewire/mixer', methods=['GET'])
+        def get_pipewire_mixer_status():
+            """Get current mixer gain matrix"""
+            return self.pipewire_handler.handle_get_mixer()
+
+        @self.app.route('/api/v1/pipewire/mixer/balance/<value>', methods=['POST'])
+        def set_pipewire_balance(value):
+            """Set stereo balance (-1 full left .. +1 full right)"""
+            try:
+                b = float(value)
+            except ValueError:
+                return jsonify({'status': 'error', 'message': 'Balance must be a number'}), 400
+            return self.pipewire_handler.handle_set_balance(b)
+
+        @self.app.route('/api/v1/pipewire/mixer/mode/<mode>', methods=['POST'])
+        def set_pipewire_mixer_mode(mode):
+            """Set mixer mode (mono|stereo|left|right)"""
+            return self.pipewire_handler.handle_set_mode(mode)
 
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])
