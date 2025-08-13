@@ -525,19 +525,18 @@ def set_mixer(mode: str = None, balance: float = None, *, node_name: Optional[st
     """Set channel mixing mode and/or balance in a single operation.
     
     Args:
-        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right', 'balance'). 
-              If 'balance', then balance parameter is required.
+        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right'). 
         balance: Balance value in [-1,1] (-1 full left, 0 center, +1 full right).
-                Only used when mode='balance' or when mode=None.
+                Can be used with any mode or by itself to adjust current mode.
         
     Returns:
         True if successful, False otherwise.
         
     Examples:
-        set_mixer(mode='stereo')           # Set to stereo, balance=0
-        set_mixer(mode='mono')             # Set to mono 
-        set_mixer(mode='balance', balance=-0.3)  # Set balance mode with custom balance
-        set_mixer(balance=0.5)             # Just adjust balance, keep current mode logic
+        set_mixer(mode='stereo')                    # Set to stereo, balance=0
+        set_mixer(mode='mono')                      # Set to mono 
+        set_mixer(mode='stereo', balance=-0.3)      # Set stereo with left bias
+        set_mixer(balance=0.5)                      # Just adjust balance, keep current mode logic
     """
     if mode is None and balance is None:
         logger.error("Must specify either mode or balance")
@@ -545,22 +544,20 @@ def set_mixer(mode: str = None, balance: float = None, *, node_name: Optional[st
         
     mode = (mode or '').lower()
     
-    # Handle discrete modes
+    # Handle discrete modes with optional balance
     if mode == 'mono':
         return _apply_mixer_gains(0.5, 0.5, 0.5, 0.5)
     elif mode == 'stereo':
-        return _apply_mixer_gains(1.0, 0.0, 0.0, 1.0)
+        if balance is not None:
+            # Apply balance to stereo mode
+            return set_balance(balance)
+        else:
+            return _apply_mixer_gains(1.0, 0.0, 0.0, 1.0)
     elif mode == 'left':
         return _apply_mixer_gains(1.0, 0.0, 1.0, 0.0)
     elif mode == 'right':
         return _apply_mixer_gains(0.0, 1.0, 0.0, 1.0)
-    elif mode == 'balance' or (mode == '' and balance is not None):
-        # Balance mode - apply balance value
-        if balance is None:
-            logger.error("Balance value required for balance mode")
-            return False
-        return set_balance(balance)
-    elif mode != '':
+    elif mode != '' and mode is not None:
         logger.error("Invalid mixer mode: %s", mode)
         return False
     
@@ -578,11 +575,11 @@ def get_mixer_status(node_name: Optional[str] = None, node_id: Optional[Union[st
     return _get_mixer_status()
 
 def analyze_mixer() -> Optional[Dict[str, Union[str, float]]]:
-    """Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance value.
+    """Infer logical mixer mode (mono|stereo|left|right|unknown) and balance value.
 
     Returns dict with keys:
-      mode: inferred mode
-      balance: float in [-1,1] (0 for mono/stereo/left/right unless balance mode)
+      mode: inferred mode (mono, stereo, left, right, or unknown)
+      balance: float in [-1,1] representing stereo balance
     or None if gains unavailable.
     """
     gains = _get_mixer_status()
@@ -617,31 +614,30 @@ def analyze_mixer() -> Optional[Dict[str, Union[str, float]]]:
         mode = 'stereo'
         balance = 0.0
     else:
-        # Check balance pattern produced by set_balance(): aR=bL=0, aL<=1, bR<=1 and at least one is 1
+        # Check for balanced stereo pattern produced by set_balance(): aR=bL=0, aL<=1, bR<=1 and at least one is 1
         if eq(aR, 0.0) and eq(bL, 0.0) and aL <= 1.0 + tol and bR <= 1.0 + tol:
-            # Determine which side was attenuated
-            if aL < 1.0 - tol and eq(bR, 1.0):  # shifted right
-                balance = 1.0 - aL
+            # This is a stereo configuration with balance adjustment
+            mode = 'stereo'
+            # Determine balance from attenuation
+            if aL < 1.0 - tol and eq(bR, 1.0):  # right channel favored
+                balance = 1.0 - aL  # positive balance
                 balance = max(0.0, min(1.0, balance))
-                mode = 'balance'
-            elif bR < 1.0 - tol and eq(aL, 1.0):  # shifted left
-                balance = bR - 1.0  # negative
+            elif bR < 1.0 - tol and eq(aL, 1.0):  # left channel favored  
+                balance = bR - 1.0  # negative balance
                 balance = max(-1.0, min(0.0, balance))
-                mode = 'balance'
-            elif eq(aL, 1.0) and eq(bR, 1.0):  # perfect center but failed earlier stereo check (due to tiny drift)
-                mode = 'stereo'
+            elif eq(aL, 1.0) and eq(bR, 1.0):  # perfect center
                 balance = 0.0
             else:
-                # Ambiguous custom mix; try generalized inference: pick smaller attenuation
-                # Map both <1 case to side with smaller attenuation -> approximate center
-                mode = 'balance'
-                # If both side attenuated (shouldn't happen with our setter) compute offset relative to 1 using max diff
+                # Both sides attenuated - use the side with less attenuation to determine balance direction
                 if aL < bR:
-                    balance = 1.0 - aL  # positive
+                    balance = 1.0 - aL  # positive (right favored)
                 else:
-                    balance = (bR - 1.0)  # negative
+                    balance = bR - 1.0  # negative (left favored)
                 # Clamp
                 balance = max(-1.0, min(1.0, balance))
+        else:
+            mode = 'unknown'
+            balance = 0.0
         else:
             mode = 'unknown'
             balance = 0.0
