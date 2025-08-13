@@ -651,6 +651,8 @@ def main():
         print("  config-pipewire mixer-status")
         print("  config-pipewire mixer-gains        # show individual gain values (live or cached)")
         print("  config-pipewire mixer-mode         # infer mode (mono/stereo/left/right/balance) + balance value")
+        print("  config-pipewire mixer-save         # save current mixer mode/balance state")
+        print("  config-pipewire mixer-restore      # restore saved mixer mode/balance state")
         print("  config-pipewire balance <B>")
         print("  config-pipewire mode <mono|stereo|left|right>")
         print("")
@@ -743,6 +745,60 @@ def main():
         if info is None:
             print("{}"); sys.exit(5)
         print(f"mode={info['mode']} balance={info['balance']}")
+    elif cmd == "mixer-save":
+        # Lazy import server settings manager via configdb to reuse storage mechanism if available
+        try:
+            from .configdb import ConfigDB
+            db = ConfigDB()
+            from .settings_manager import SettingsManager
+            sm = SettingsManager(db)
+            # Register ephemeral callbacks matching server logic
+            def save_cb():
+                analysis = analyze_mixer()
+                if not analysis or analysis.get('mode') in (None,'unknown'):
+                    return None
+                return f"{analysis['mode']},{analysis['balance']:.6f}"
+            def restore_cb(val):
+                pass  # not needed here
+            sm.register_setting('pipewire_mixer_state', save_cb, restore_cb)
+            if sm.save_setting('pipewire_mixer_state'):
+                print("OK")
+            else:
+                print("Failed")
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(6)
+    elif cmd == "mixer-restore":
+        try:
+            from .configdb import ConfigDB
+            db = ConfigDB()
+            from .settings_manager import SettingsManager
+            sm = SettingsManager(db)
+            # Provide dummy save; real restore applies using set_mode/set_balance
+            def save_cb():
+                return None
+            def restore_cb(val):
+                parts = str(val).split(',')
+                if len(parts)!=2:
+                    return False
+                mode = parts[0]
+                try:
+                    bal = float(parts[1])
+                except Exception:
+                    bal = 0.0
+                if mode in {'mono','stereo','left','right'}:
+                    return set_mode(mode)
+                if mode=='balance':
+                    return set_balance(bal)
+                return False
+            sm.register_setting('pipewire_mixer_state', save_cb, restore_cb)
+            if sm.restore_setting('pipewire_mixer_state'):
+                print("OK")
+            else:
+                print("Failed")
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(6)
     elif cmd == "balance" and len(sys.argv) == 3:
         try:
             b = float(sys.argv[2])

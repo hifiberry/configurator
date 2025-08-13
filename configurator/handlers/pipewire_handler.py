@@ -306,6 +306,12 @@ class PipewireHandler:
             if not ok:
                 return jsonify({'status': 'error', 'message': 'Failed to set balance'}), 400
             gains = pipewire.get_mixer_status() or {}
+            # Auto-save mixer state if settings manager present
+            try:
+                if self.settings_manager:
+                    self.settings_manager.save_setting('pipewire_mixer_state')
+            except Exception as e:
+                logger.warning(f"Auto-save mixer state failed after balance set: {e}")
             return jsonify({'status': 'success', 'data': {'balance': float(balance), 'gains': gains}})
         except Exception as e:
             logger.error(f"Error setting balance: {e}")
@@ -317,6 +323,12 @@ class PipewireHandler:
             if not ok:
                 return jsonify({'status': 'error', 'message': 'Invalid mode or failed to set'}), 400
             gains = pipewire.get_mixer_status() or {}
+            # Auto-save mixer state
+            try:
+                if self.settings_manager:
+                    self.settings_manager.save_setting('pipewire_mixer_state')
+            except Exception as e:
+                logger.warning(f"Auto-save mixer state failed after mode set: {e}")
             return jsonify({'status': 'success', 'data': {'mode': mode, 'gains': gains}})
         except Exception as e:
             logger.error(f"Error setting mixer mode: {e}")
