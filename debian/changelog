@@ -1,3 +1,37 @@
+hifiberry-configurator (2.2.5) stable; urgency=medium
+
+  * PipeWire mixer analysis endpoint /api/v1/pipewire/mixer/analysis added
+  * Added backward inference of mixer mode (mono/stereo/left/right/balance) and balance value
+  * New CLI command: config-pipewire mixer-mode
+  * Extended mixer gain parser to support String/Float enum-params format
+  * Documentation updated to version 2.2.5 with mixer analysis endpoint
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 13 Aug 2025 10:10:00 +0000
+
+hifiberry-configurator (2.2.4) stable; urgency=medium
+
+  * Added PipeWire mixer control (balance & mode) endpoints:
+    - /api/v1/pipewire/mixer
+    - /api/v1/pipewire/mixer/balance/<value>
+    - /api/v1/pipewire/mixer/mode/<mode>
+  * Added CLI commands: mixer-status, mixer-gains, balance, mode
+  * Implemented gain application & caching with fallback to default stereo
+  * Added filter-chain mixer documentation & generalized mono/blend math reference
+  * Improved pw-cli parameter parsing and robust fallback behavior
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 13 Aug 2025 10:05:00 +0000
+
+hifiberry-configurator (2.2.3) stable; urgency=medium
+
+  * Introduced PipeWire volume REST API (list controls, default sink/source)
+  * Endpoints: /api/v1/pipewire/controls, /default-sink, /default-source,
+    /volume/<control> (GET/PUT), /filtergraph (GraphViz DOT)
+  * Added automatic saving of default sink volume setting
+  * Implemented config-pipewire CLI tool (list/get/set volumes, dB support)
+  * Added pw-dot graph export endpoint for debugging audio graph
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 13 Aug 2025 10:00:00 +0000
+
 hifiberry-configurator (2.2.2) stable; urgency=medium
 
   * Added /api/v1/soundcard/detect endpoint for automatic sound card detection
