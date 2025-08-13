@@ -119,23 +119,18 @@ class ConfigAPIServer:
             logger.error(f"Error restoring PipeWire default volume: {e}")
 
     def _save_pipewire_mixer_state(self):
-        """Save current mixer mode/balance state encoded as 'mode,balance'."""
+        """Save current monostereo mode and balance state encoded as 'monostereo_mode,balance'."""
         try:
             from . import pipewire
-            analysis = pipewire.analyze_mixer()
-            if not analysis:
+            monostereo_mode = pipewire.get_monostereo()
+            balance = pipewire.get_balance()
+            if monostereo_mode is None or monostereo_mode == 'unknown':
                 return None
-            mode = analysis.get('mode')
-            balance = analysis.get('balance')
-            if mode in (None, 'unknown'):
-                return None
-            # Round balance for stability
-            try:
-                balance = float(balance)
-            except Exception:
+            if balance is None:
                 balance = 0.0
+            # Round balance for stability
             balance = max(-1.0, min(1.0, balance))
-            encoded = f"{mode},{balance:.6f}"
+            encoded = f"{monostereo_mode},{balance:.6f}"
             logger.info(f"Saving PipeWire mixer state: {encoded}")
             return encoded
         except Exception as e:
@@ -143,7 +138,7 @@ class ConfigAPIServer:
             return None
 
     def _restore_pipewire_mixer_state(self, value):
-        """Restore mixer state from encoded 'mode,balance' string."""
+        """Restore monostereo mode and balance from encoded 'monostereo_mode,balance' string."""
         try:
             from . import pipewire
             if not value:
@@ -152,25 +147,32 @@ class ConfigAPIServer:
             if len(parts) != 2:
                 logger.warning(f"Invalid mixer state format: {value}")
                 return False
-            mode = parts[0].strip()
+            monostereo_mode = parts[0].strip()
             try:
                 balance = float(parts[1])
             except Exception:
                 balance = 0.0
+            
+            success = True
             discrete_modes = {'mono','stereo','left','right'}
-            ok = False
-            if mode in discrete_modes:
-                ok = pipewire.set_mode(mode)
-            elif mode == 'balance':
-                ok = pipewire.set_balance(balance)
+            
+            # Set monostereo mode
+            if monostereo_mode in discrete_modes:
+                success &= pipewire.set_monostereo(monostereo_mode)
+                logger.info(f"Restored PipeWire monostereo mode: {monostereo_mode}")
             else:
-                logger.warning(f"Unknown saved mixer mode '{mode}', skipping restore")
+                logger.warning(f"Unknown saved monostereo mode '{monostereo_mode}', skipping restore")
                 return False
-            if ok:
-                logger.info(f"Restored PipeWire mixer state: mode={mode} balance={balance}")
-            else:
-                logger.error(f"Failed to restore PipeWire mixer state: mode={mode} balance={balance}")
-            return ok
+            
+            # Set balance (only if non-zero)
+            if abs(balance) > 0.001:
+                success &= pipewire.set_balance(balance)
+                logger.info(f"Restored PipeWire balance: {balance}")
+            
+            if not success:
+                logger.error(f"Failed to restore PipeWire mixer state: mode={monostereo_mode} balance={balance}")
+            
+            return success
         except Exception as e:
             logger.error(f"Error restoring PipeWire mixer state: {e}")
             return False
@@ -229,7 +231,11 @@ class ConfigAPIServer:
                     'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
                     'pipewire_mixer_status': '/api/v1/pipewire/mixer',
                     'pipewire_mixer_analysis': '/api/v1/pipewire/mixer/analysis',
-                    'pipewire_mixer_set': '/api/v1/pipewire/mixer/set',
+                    'pipewire_monostereo_get': '/api/v1/pipewire/monostereo',
+                    'pipewire_monostereo_set': '/api/v1/pipewire/monostereo',
+                    'pipewire_balance_get': '/api/v1/pipewire/balance',
+                    'pipewire_balance_set': '/api/v1/pipewire/balance',
+                    'pipewire_mixer_set': '/api/v1/pipewire/mixer/set',  # DEPRECATED
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -464,12 +470,32 @@ class ConfigAPIServer:
 
         @self.app.route('/api/v1/pipewire/mixer/analysis', methods=['GET'])
         def get_pipewire_mixer_analysis():
-            """Get inferred mixer mode and balance plus gains"""
+            """Get inferred monostereo mode and balance plus gains"""
             return self.pipewire_handler.handle_get_mixer_mode()
+
+        @self.app.route('/api/v1/pipewire/monostereo', methods=['GET'])
+        def get_pipewire_monostereo():
+            """Get current monostereo mode"""
+            return self.pipewire_handler.handle_get_monostereo()
+
+        @self.app.route('/api/v1/pipewire/monostereo', methods=['POST'])
+        def set_pipewire_monostereo():
+            """Set monostereo mode (stereo/mono/left/right)"""
+            return self.pipewire_handler.handle_set_monostereo()
+
+        @self.app.route('/api/v1/pipewire/balance', methods=['GET'])
+        def get_pipewire_balance():
+            """Get current balance"""
+            return self.pipewire_handler.handle_get_balance()
+
+        @self.app.route('/api/v1/pipewire/balance', methods=['POST'])
+        def set_pipewire_balance():
+            """Set balance (-1 to 1)"""
+            return self.pipewire_handler.handle_set_balance()
 
         @self.app.route('/api/v1/pipewire/mixer/set', methods=['POST'])
         def set_pipewire_mixer():
-            """Set mixer mode and/or balance in one operation"""
+            """DEPRECATED: Set mixer mode and/or balance in one operation. Use separate monostereo and balance endpoints."""
             return self.pipewire_handler.handle_set_mixer()
 
         # Settings management endpoints

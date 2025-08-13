@@ -3,95 +3,149 @@ pipewire.py - PipeWire volume & mixer control utility
 
 Provides functions to list controls, get/set volume (linear & dB), dump the
 connection graph (pw-dot) and manipulate a custom filter-chain based mixer for
-balance / mono / channel routing.
+balance / monostereo / channel routing.
 
-Node name assumptions for balance/mono features:
+Node name assumptions for monostereo/balance features:
     - Virtual processing sink (what regular applications target): effect_input.proc
     - (Optional) Passive output node name: effect_output.proc
-    - Parametric EQ node (single instance applying same 6 filters per channel): peq
-    - Two mixer nodes used to implement balance / mono blend:
-                mixer_left
-                mixer_right
+    - Parametric EQ node (16 peaking filters per channel): peq
+    - Two monostereo mixer nodes for mono/stereo/left/right modes:
+                monostereo_left
+                monostereo_right
+    - Two balance mixer nodes for left-right crossfeed:
+                balance_left
+                balance_right
 
-Expected gain parameter names exposed by PipeWire (pw-cli enum-params <mixer_id> Props):
-    mixer_left:Gain 1   (Left  -> LeftOut)
-    mixer_left:Gain 2   (Right -> LeftOut)
-    mixer_right:Gain 1  (Left  -> RightOut)
-    mixer_right:Gain 2  (Right -> RightOut)
+Expected gain parameter names exposed by PipeWire:
 
-The code here implements discrete modes (mono / stereo / left-only / right-only)
-and a simple balance function B in [-1,1]. For documentation and potential
-future extension, a generalized balance + mono blend model is shown below.
+Monostereo mixers (pw-cli enum-params <mixer_id> Props):
+    monostereo_left:Gain 1   (Left  input -> Left output)
+    monostereo_left:Gain 2   (Right input -> Left output)
+    monostereo_right:Gain 1  (Left  input -> Right output)
+    monostereo_right:Gain 2  (Right input -> Right output)
 
-Generalized math (not fully implemented: current code only supports full mono M=1 or M=0):
-    Given balance B in [-1,1] and mono blend M in [0,1]:
-        aL = (1 - 0.5*M) * (1 - B/2)
-        aR = (1 - 0.5*M) * (-B/2) + 0.5*M
-        bL = (1 - 0.5*M) * (-B/2) + 0.5*M
-        bR = (1 - 0.5*M) * (1 + B/2)
-    Apply to mixer gains:
-        mixer_left :  Gain 1 = aL   Gain 2 = aR
-        mixer_right:  Gain 1 = bL   Gain 2 = bR
-    Normalize gains if any |gain| > 1 by dividing all by max|gain|.
+Balance mixers (pw-cli enum-params <mixer_id> Props):
+    balance_left:Gain 1   (Left  input -> Left output)
+    balance_left:Gain 2   (Right input -> Left output)
+    balance_right:Gain 1  (Left  input -> Right output)
+    balance_right:Gain 2  (Right input -> Right output)
 
 Reference filter-chain configuration (for documentation only):
 -----------------------------------------------------------------
-### Combined EQ (6 band) + Mono/Balance sink
+### Monostereo + Balance + Parametric EQ (16-band peaking) sink
 # Single virtual sink so ALSA clients attach here: effect_input.proc
-# Processing order: Input (stereo) -> param_eq (6 filters/channel) -> dual mixers
-# Output of mixers goes directly to hardware via standard routing.
-
+# Processing order: Input (stereo) -> monostereo (stereo/mono/left-only/right-only)
+#                 -> balance (left-right image/crossfeed)
+#                 -> param_eq (multi-channel, 16 peaking filters per channel, no shelves)
+# Output goes directly to hardware via standard routing.
+#
+# Monostereo presets (set gains on monostereo_* nodes):
+#  - stereo:      L {1.0, 0.0}  R {0.0, 1.0}
+#  - mono:        L {0.5, 0.5}  R {0.5, 0.5}
+#  - left-only:   L {1.0, 0.0}  R {1.0, 0.0}
+#  - right-only:  L {0.0, 1.0}  R {0.0, 1.0}
+#
+# Balance math (external): Given balance B in [-1,1]
+#  Compute crossfeed gains and set on balance_* nodes:
+#   balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
+#   balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
+# Normalize if any |gain|>1.0 by dividing all by max|gain|. Center (B=0): left (1,0) right (0,1)
+#
+# Adjust gains at runtime (example Mono):
+#  L=$(pw-cli ls Node | awk '/monostereo_left/{print $1;exit}'|tr -d :) ; R=$(pw-cli ls Node | awk '/monostereo_right/{print $1;exit}'|tr -d :) ; \
+#  pw-cli set-param $L Props '{ "Gain 1" = 0.5 "Gain 2" = 0.5 }' ; pw-cli set-param $R Props '{ "Gain 1" = 0.5 "Gain 2" = 0.5 }'
+#
+# Adjust balance (example center):
+#  BL=$(pw-cli ls Node | awk '/balance_left/{print $1;exit}'|tr -d :) ; BR=$(pw-cli ls Node | awk '/balance_right/{print $1;exit}'|tr -d :) ; \
+#  pw-cli set-param $BL Props '{ "Gain 1" = 1.0 "Gain 2" = 0.0 }' ; pw-cli set-param $BR Props '{ "Gain 1" = 0.0 "Gain 2" = 1.0 }'
+#
 context.modules = [
-    { name = libpipewire-module-filter-chain
-        args = {
-            node.description = "EQ + Balance Sink"
-            media.name       = "EQ + Balance Sink"
-            filter.graph = {
-                nodes = [
-                    { type = builtin label = param_eq name = peq
-                        config = {
-                            filters = [
-                                { type = bq_lowshelf  freq = 100.0  gain = 0.0 q = 1.0 }
-                                { type = bq_peaking   freq = 100.0  gain = 0.0 q = 1.0 }
-                                { type = bq_peaking   freq = 500.0  gain = 0.0 q = 1.0 }
-                                { type = bq_peaking   freq = 2000.0 gain = 0.0 q = 1.0 }
-                                { type = bq_peaking   freq = 5000.0 gain = 0.0 q = 1.0 }
-                                { type = bq_highshelf freq = 5000.0 gain = 0.0 q = 1.0 }
-                            ]
-                        }
-                    }
-                    { type = builtin label = mixer name = mixer_left  control = { "Gain 1" = 1.0 "Gain 2" = 0.0 } }
-                    { type = builtin label = mixer name = mixer_right control = { "Gain 1" = 0.0 "Gain 2" = 1.0 } }
-                ]
-                links = [
-                    { output = "peq:Out 1" input = "mixer_left:In 1" }
-                    { output = "peq:Out 1" input = "mixer_right:In 1" }
-                    { output = "peq:Out 2" input = "mixer_left:In 2" }
-                    { output = "peq:Out 2" input = "mixer_right:In 2" }
-                ]
-                inputs  = [ "peq:In 1" "peq:In 2" ]
-                outputs = [ "mixer_left:Out" "mixer_right:Out" ]
+  { name = libpipewire-module-filter-chain
+    args = {
+      node.description = "EQ + Balance Sink"
+      media.name       = "EQ + Balance Sink"
+      filter.graph = {
+        nodes = [
+          # Input copy nodes (provide fan-out of external L/R to both monostereo mixers)
+          { type = builtin label = copy name = in_left }
+          { type = builtin label = copy name = in_right }
+          
+          # Monostereo stage: mixes L/R into stereo/mono/left-only/right-only
+          { type = builtin label = mixer name = monostereo_left  control = { "Gain 1" = 1.0 "Gain 2" = 0.0 } }
+          { type = builtin label = mixer name = monostereo_right control = { "Gain 1" = 0.0 "Gain 2" = 1.0 } }
+
+          # Balance stage: crossfeed between post-monostereo L/R
+          { type = builtin label = mixer name = balance_left  control = { "Gain 1" = 1.0 "Gain 2" = 0.0 } }
+          { type = builtin label = mixer name = balance_right control = { "Gain 1" = 0.0 "Gain 2" = 1.0 } }
+
+          # Parametric EQ (applies same 16 peaking filters to each channel independently) — final stage
+          { type = builtin label = param_eq name = peq
+            config = {
+              filters = [
+                { type = bq_peaking freq = 32.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 50.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 80.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 125.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 200.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 315.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 500.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 800.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 1250.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 2000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 3150.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 5000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 8000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 10000.0 gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 16000.0 gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 20000.0 gain = 0.0 q = 1.0 }
+              ]
             }
-            audio.channels = 2
-            audio.position = [ FL FR ]
-            capture.props = {
-                node.name = "effect_input.proc"
-                media.class = Audio/Sink
-                node.virtual = true
-                priority.session = 2000
-                priority.driver = 2000
-            }
-            playback.props = { node.name = "effect_output.proc" node.passive = true }
-        }
+          }
+        ]
+        links = [
+          # Feed inputs to copy nodes
+          # (External inputs are attached to in_left:In and in_right:In via the graph's inputs[] specification below)
+
+          # Fan-out copy outputs into monostereo mixers (each takes both inputs)
+          { output = "in_left:Out"  input = "monostereo_left:In 1" }
+          { output = "in_right:Out" input = "monostereo_left:In 2" }
+          { output = "in_left:Out"  input = "monostereo_right:In 1" }
+          { output = "in_right:Out" input = "monostereo_right:In 2" }
+
+          # Feed monostereo outputs into balance mixers (cross-mix for balance)
+          { output = "monostereo_left:Out"  input = "balance_left:In 1" }
+          { output = "monostereo_right:Out" input = "balance_left:In 2" }
+          { output = "monostereo_left:Out"  input = "balance_right:In 1" }
+          { output = "monostereo_right:Out" input = "balance_right:In 2" }
+
+          # Final EQ stage per channel
+          { output = "balance_left:Out"  input = "peq:In 1" }
+          { output = "balance_right:Out" input = "peq:In 2" }
+        ]
+        inputs  = [ "in_left:In" "in_right:In" ]
+        outputs = [ "peq:Out 1" "peq:Out 2" ]
+      }
+      audio.channels = 2
+      audio.position = [ FL FR ]
+      capture.props = {
+        node.name = "effect_input.proc"
+        media.class = Audio/Sink
+        node.virtual = true            # Hint it's a processing virtual sink
+        priority.session = 2000        # Higher than physical sinks (often 1000)
+        priority.driver = 2000
+      }
+      playback.props = { node.name = "effect_output.proc" node.passive = true }
     }
+  }
 ]
 
+# Make this the default sink
 context.properties = { default.audio.sink = effect_input.proc }
 -----------------------------------------------------------------
 
 This configuration is not auto-deployed by this module; it documents the
-assumed topology for mixer manipulation. If your node names differ, you can
-override them by extending the helper functions to accept custom names.
+assumed topology for monostereo and balance manipulation. If your node names 
+differ, you can override them by extending the helper functions to accept custom names.
 """
 import subprocess
 import re
@@ -399,28 +453,54 @@ def _resolve_node_id_by_name(node_name: str) -> Optional[int]:
 def _resolve_mixer_container_node() -> Optional[int]:
     return _resolve_node_id_by_name(DEFAULT_MIXER_NODE_NAME)
 
-def _apply_mixer_gains(gL1: float, gL2: float, gR1: float, gR2: float) -> bool:
+def _apply_monostereo_gains(gL1: float, gL2: float, gR1: float, gR2: float) -> bool:
+    """Apply gains to monostereo mixer nodes."""
     nid = _resolve_mixer_container_node()
     if nid is None:
         logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
         return False
-    param = '{ "params": [ "mixer_left:Gain 1" %0.6f "mixer_left:Gain 2" %0.6f "mixer_right:Gain 1" %0.6f "mixer_right:Gain 2" %0.6f ] }' % (gL1, gL2, gR1, gR2)
+    param = '{ "params": [ "monostereo_left:Gain 1" %0.6f "monostereo_left:Gain 2" %0.6f "monostereo_right:Gain 1" %0.6f "monostereo_right:Gain 2" %0.6f ] }' % (gL1, gL2, gR1, gR2)
     try:
         res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
         if res.returncode != 0:
             logger.error("pw-cli set-param failed: %s", res.stderr.strip())
             return False
         _last_mixer_gains.update({
-            "mixer_left:Gain_1": gL1,
-            "mixer_left:Gain_2": gL2,
-            "mixer_right:Gain_1": gR1,
-            "mixer_right:Gain_2": gR2,
+            "monostereo_left:Gain_1": gL1,
+            "monostereo_left:Gain_2": gL2,
+            "monostereo_right:Gain_1": gR1,
+            "monostereo_right:Gain_2": gR2,
         })
         return True
     except FileNotFoundError:
         logger.error("pw-cli not found")
     except Exception as e:
-        logger.error("Error applying mixer gains: %s", e)
+        logger.error("Error applying monostereo gains: %s", e)
+    return False
+
+def _apply_balance_gains(gL1: float, gL2: float, gR1: float, gR2: float) -> bool:
+    """Apply gains to balance mixer nodes."""
+    nid = _resolve_mixer_container_node()
+    if nid is None:
+        logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
+        return False
+    param = '{ "params": [ "balance_left:Gain 1" %0.6f "balance_left:Gain 2" %0.6f "balance_right:Gain 1" %0.6f "balance_right:Gain 2" %0.6f ] }' % (gL1, gL2, gR1, gR2)
+    try:
+        res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error("pw-cli set-param failed: %s", res.stderr.strip())
+            return False
+        _last_mixer_gains.update({
+            "balance_left:Gain_1": gL1,
+            "balance_left:Gain_2": gL2,
+            "balance_right:Gain_1": gR1,
+            "balance_right:Gain_2": gR2,
+        })
+        return True
+    except FileNotFoundError:
+        logger.error("pw-cli not found")
+    except Exception as e:
+        logger.error("Error applying balance gains: %s", e)
     return False
 
 def _get_mixer_status() -> Optional[Dict[str, float]]:
@@ -436,14 +516,15 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
         lines = out.splitlines()
         # Strategy: support two formats
         # 1. key=value style (legacy regex below)
-        # 2. Alternating lines: String "mixer_left:Gain 1" followed by Float value line
+        # 2. Alternating lines: String "mixer_name:Gain 1" followed by Float value line
         # We'll first scan for String/Float pairs because that's the current observed format.
         i = 0
         while i < len(lines):
             raw = lines[i].strip()
-            m_string = re.match(r'^String\s+"(mixer_(?:left|right):Gain\s+([0-9]+))"$', raw)
+            # Look for both monostereo and balance mixer nodes
+            m_string = re.match(r'^String\s+"((monostereo_|balance_)(?:left|right):Gain\s+([0-9]+))"$', raw)
             if m_string:
-                full_key = m_string.group(1)  # e.g. mixer_left:Gain 1
+                full_key = m_string.group(1)  # e.g. monostereo_left:Gain 1
                 # Look ahead for the Float value (can be same or subsequent lines; usually next line)
                 j = i + 1
                 while j < len(lines):
@@ -463,11 +544,11 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
                     j += 1
             else:
                 # Legacy single-line format fallback
-                m_legacy = re.match(r'"?(mixer_(?:left|right):Gain [0-9]+)"?\s*=\s*([0-9]+(?:\.[0-9]+)?)', raw)
+                m_legacy = re.match(r'"?((monostereo_|balance_)(?:left|right):Gain [0-9]+)"?\s*=\s*([0-9]+(?:\.[0-9]+)?)', raw)
                 if m_legacy:
                     key = m_legacy.group(1).replace(' ', '_')
                     try:
-                        parsed[key] = float(m_legacy.group(2))
+                        parsed[key] = float(m_legacy.group(3))
                     except ValueError:
                         pass
             i += 1
@@ -482,10 +563,14 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
             return dict(_last_mixer_gains)
         logger.warning("Mixer gains unavailable (no numeric values and no cache) - defaulting to stereo")
         _last_mixer_gains.update({
-            "mixer_left:Gain_1": 1.0,
-            "mixer_left:Gain_2": 0.0,
-            "mixer_right:Gain_1": 0.0,
-            "mixer_right:Gain_2": 1.0,
+            "monostereo_left:Gain_1": 1.0,
+            "monostereo_left:Gain_2": 0.0,
+            "monostereo_right:Gain_1": 0.0,
+            "monostereo_right:Gain_2": 1.0,
+            "balance_left:Gain_1": 1.0,
+            "balance_left:Gain_2": 0.0,
+            "balance_right:Gain_1": 0.0,
+            "balance_right:Gain_2": 1.0,
         })
         _last_mixer_source = 'default'
         return dict(_last_mixer_gains)
@@ -496,17 +581,50 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
             return dict(_last_mixer_gains)
         # default fallback
         _last_mixer_gains.update({
-            "mixer_left:Gain_1": 1.0,
-            "mixer_left:Gain_2": 0.0,
-            "mixer_right:Gain_1": 0.0,
-            "mixer_right:Gain_2": 1.0,
+            "monostereo_left:Gain_1": 1.0,
+            "monostereo_left:Gain_2": 0.0,
+            "monostereo_right:Gain_1": 0.0,
+            "monostereo_right:Gain_2": 1.0,
+            "balance_left:Gain_1": 1.0,
+            "balance_left:Gain_2": 0.0,
+            "balance_right:Gain_1": 0.0,
+            "balance_right:Gain_2": 1.0,
         })
         _last_mixer_source = 'default'
         return dict(_last_mixer_gains)
 
+def set_monostereo(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
+    """Set monostereo mode: stereo, mono, left, right.
+    
+    Args:
+        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right')
+        
+    Returns:
+        True if successful, False otherwise.
+    """
+    mode = (mode or '').lower()
+    
+    if mode == 'stereo':
+        return _apply_monostereo_gains(1.0, 0.0, 0.0, 1.0)
+    elif mode == 'mono':
+        return _apply_monostereo_gains(0.5, 0.5, 0.5, 0.5)
+    elif mode == 'left':
+        return _apply_monostereo_gains(1.0, 0.0, 1.0, 0.0)
+    elif mode == 'right':
+        return _apply_monostereo_gains(0.0, 1.0, 0.0, 1.0)
+    else:
+        logger.error("Invalid monostereo mode: %s (use stereo|mono|left|right)", mode)
+        return False
+
 def set_balance(balance: float, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set stereo balance. balance in [-1,1]; -1 full left, 0 center, +1 full right."""
-    # Clamp
+    """Set stereo balance using crossfeed. balance in [-1,1]; -1 full left, 0 center, +1 full right.
+    
+    Uses the new balance math:
+    balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
+    balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
+    Normalize if any |gain|>1.0 by dividing all by max|gain|.
+    """
+    # Clamp balance
     try:
         b = float(balance)
     except ValueError:
@@ -515,133 +633,113 @@ def set_balance(balance: float, *, node_name: Optional[str] = None, node_id: Opt
         b = -1
     if b > 1:
         b = 1
-    # Compute attenuations like script
-    attL = 1 - b if b > 0 else 1.0
-    attR = 1 + b if b < 0 else 1.0
-    ok = _apply_mixer_gains(attL, 0.0, 0.0, attR)
-    return ok
-
-def set_mixer(mode: str = None, balance: float = None, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set channel mixing mode and/or balance in a single operation.
     
-    Args:
-        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right'). 
-        balance: Balance value in [-1,1] (-1 full left, 0 center, +1 full right).
-                Can be used with any mode or by itself to adjust current mode.
-        
-    Returns:
-        True if successful, False otherwise.
-        
-    Examples:
-        set_mixer(mode='stereo')                    # Set to stereo, balance=0
-        set_mixer(mode='mono')                      # Set to mono 
-        set_mixer(mode='stereo', balance=-0.3)      # Set stereo with left bias
-        set_mixer(balance=0.5)                      # Just adjust balance, keep current mode logic
-    """
-    if mode is None and balance is None:
-        logger.error("Must specify either mode or balance")
-        return False
-        
-    mode = (mode or '').lower()
+    # Compute crossfeed gains using the new balance math
+    gL1 = 1 - b/2    # balance_left:Gain 1
+    gL2 = -b/2       # balance_left:Gain 2
+    gR1 = -b/2       # balance_right:Gain 1
+    gR2 = 1 + b/2    # balance_right:Gain 2
     
-    # Handle discrete modes with optional balance
-    if mode == 'mono':
-        return _apply_mixer_gains(0.5, 0.5, 0.5, 0.5)
-    elif mode == 'stereo':
-        if balance is not None:
-            # Apply balance to stereo mode
-            return set_balance(balance)
-        else:
-            return _apply_mixer_gains(1.0, 0.0, 0.0, 1.0)
-    elif mode == 'left':
-        return _apply_mixer_gains(1.0, 0.0, 1.0, 0.0)
-    elif mode == 'right':
-        return _apply_mixer_gains(0.0, 1.0, 0.0, 1.0)
-    elif mode != '' and mode is not None:
-        logger.error("Invalid mixer mode: %s", mode)
-        return False
+    # Normalize if any |gain| > 1.0
+    max_gain = max(abs(gL1), abs(gL2), abs(gR1), abs(gR2))
+    if max_gain > 1.0:
+        gL1 /= max_gain
+        gL2 /= max_gain
+        gR1 /= max_gain
+        gR2 /= max_gain
     
-    # If we get here, mode was empty/None but balance was provided
-    if balance is not None:
-        return set_balance(balance)
-    
-    return False
-
-def set_mode(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set channel mixing mode: mono, stereo, left, right. (Legacy function - use set_mixer instead)"""
-    return set_mixer(mode=mode, node_name=node_name, node_id=node_id)
+    return _apply_balance_gains(gL1, gL2, gR1, gR2)
 
 def get_mixer_status(node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> Optional[Dict[str, float]]:  # kept signature for API compatibility
     return _get_mixer_status()
 
-def analyze_mixer() -> Optional[Dict[str, Union[str, float]]]:
-    """Infer logical mixer mode (mono|stereo|left|right|unknown) and balance value.
-
-    Returns dict with keys:
-      mode: inferred mode (mono, stereo, left, right, or unknown)
-      balance: float in [-1,1] representing stereo balance
-    or None if gains unavailable.
+def get_monostereo() -> Optional[str]:
+    """Get current monostereo mode by analyzing mixer gains.
+    
+    Returns:
+        String indicating current mode: 'stereo', 'mono', 'left', 'right', or 'unknown'
+        None if gains unavailable.
     """
     gains = _get_mixer_status()
     if gains is None:
         return None
-    # Extract primary 4 gains (ignore additional mixer gains beyond 2 inputs)
-    aL = gains.get("mixer_left:Gain_1")
-    aR = gains.get("mixer_left:Gain_2")
-    bL = gains.get("mixer_right:Gain_1")
-    bR = gains.get("mixer_right:Gain_2")
-    if None in (aL, aR, bL, bR):
+    
+    # Extract monostereo gains
+    mL1 = gains.get("monostereo_left:Gain_1")
+    mL2 = gains.get("monostereo_left:Gain_2")
+    mR1 = gains.get("monostereo_right:Gain_1")
+    mR2 = gains.get("monostereo_right:Gain_2")
+    
+    if None in (mL1, mL2, mR1, mR2):
         return None
+    
     tol = 0.02
     def eq(x, y):
         return abs(x - y) <= tol
-    mode = 'unknown'
-    balance = 0.0
+    
+    # Recognize stereo
+    if eq(mL1, 1.0) and eq(mL2, 0.0) and eq(mR1, 0.0) and eq(mR2, 1.0):
+        return 'stereo'
     # Recognize mono
-    if eq(aL, aR) and eq(aR, bL) and eq(bL, bR) and eq(aL, 0.5):
-        mode = 'mono'
-        balance = 0.0
+    elif eq(mL1, 0.5) and eq(mL2, 0.5) and eq(mR1, 0.5) and eq(mR2, 0.5):
+        return 'mono'
     # Left-only
-    elif eq(aL, 1.0) and eq(bL, 1.0) and eq(aR, 0.0) and eq(bR, 0.0):
-        mode = 'left'
-        balance = -1.0
+    elif eq(mL1, 1.0) and eq(mL2, 0.0) and eq(mR1, 1.0) and eq(mR2, 0.0):
+        return 'left'
     # Right-only
-    elif eq(aL, 0.0) and eq(bL, 0.0) and eq(aR, 1.0) and eq(bR, 1.0):
-        mode = 'right'
-        balance = 1.0
-    # Stereo (default)
-    elif eq(aL, 1.0) and eq(aR, 0.0) and eq(bL, 0.0) and eq(bR, 1.0):
-        mode = 'stereo'
-        balance = 0.0
+    elif eq(mL1, 0.0) and eq(mL2, 1.0) and eq(mR1, 0.0) and eq(mR2, 1.0):
+        return 'right'
     else:
-        # Check for balanced stereo pattern produced by set_balance(): aR=bL=0, aL<=1, bR<=1 and at least one is 1
-        if eq(aR, 0.0) and eq(bL, 0.0) and aL <= 1.0 + tol and bR <= 1.0 + tol:
-            # This is a stereo configuration with balance adjustment
-            mode = 'stereo'
-            # Determine balance from attenuation
-            if aL < 1.0 - tol and eq(bR, 1.0):  # right channel favored
-                balance = 1.0 - aL  # positive balance
-                balance = max(0.0, min(1.0, balance))
-            elif bR < 1.0 - tol and eq(aL, 1.0):  # left channel favored  
-                balance = bR - 1.0  # negative balance
-                balance = max(-1.0, min(0.0, balance))
-            elif eq(aL, 1.0) and eq(bR, 1.0):  # perfect center
-                balance = 0.0
-            else:
-                # Both sides attenuated - use the side with less attenuation to determine balance direction
-                if aL < bR:
-                    balance = 1.0 - aL  # positive (right favored)
-                else:
-                    balance = bR - 1.0  # negative (left favored)
-                # Clamp
-                balance = max(-1.0, min(1.0, balance))
-        else:
-            mode = 'unknown'
-            balance = 0.0
-        else:
-            mode = 'unknown'
-            balance = 0.0
-    return {"mode": mode, "balance": round(balance, 6)}
+        return 'unknown'
+
+def get_balance() -> Optional[float]:
+    """Get current balance value by analyzing balance mixer gains.
+    
+    Returns:
+        Float in [-1,1] representing stereo balance (-1 full left, 0 center, +1 full right)
+        None if gains unavailable.
+    """
+    gains = _get_mixer_status()
+    if gains is None:
+        return None
+    
+    # Extract balance gains
+    bL1 = gains.get("balance_left:Gain_1")
+    bL2 = gains.get("balance_left:Gain_2")
+    bR1 = gains.get("balance_right:Gain_1")
+    bR2 = gains.get("balance_right:Gain_2")
+    
+    if None in (bL1, bL2, bR1, bR2):
+        return None
+    
+    tol = 0.02
+    def eq(x, y):
+        return abs(x - y) <= tol
+    
+    # Try to reverse the balance math:
+    # balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
+    # balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
+    
+    # Check if it follows the crossfeed pattern
+    if eq(bL2, bR1):  # Crossfeed gains should be equal
+        crossfeed = bL2  # = bR1 = (-B/2)
+        expected_b = -2 * crossfeed
+        
+        # Verify the expected gains match
+        expected_bL1 = 1 - expected_b/2
+        expected_bR2 = 1 + expected_b/2
+        
+        if eq(bL1, expected_bL1) and eq(bR2, expected_bR2):
+            balance = expected_b
+            # Clamp to valid range
+            balance = max(-1.0, min(1.0, balance))
+            return round(balance, 6)
+        elif eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
+            # Perfect center/bypass case
+            return 0.0
+    
+    # Default to center if pattern doesn't match
+    return 0.0
 
 def main():
     import sys
@@ -656,21 +754,23 @@ def main():
         print("  config-pipewire set-db <control_name> <volume_db>")
         print("  config-pipewire mixer-status")
         print("  config-pipewire mixer-gains        # show individual gain values (live or cached)")
-        print("  config-pipewire mixer-mode         # infer mode (mono/stereo/left/right/balance) + balance value")
-        print("  config-pipewire mixer-save         # save current mixer mode/balance state")
-        print("  config-pipewire mixer-restore      # restore saved mixer mode/balance state")
-        print("  config-pipewire mixer <mode> [balance]  # set mode and optional balance in one command")
-        print("  config-pipewire balance <B>")
-        print("  config-pipewire mode <mono|stereo|left|right>")
+        print("  config-pipewire get-monostereo     # get current monostereo mode")
+        print("  config-pipewire get-balance        # get current balance value")
+        print("  config-pipewire mixer-save         # save current mixer state")
+        print("  config-pipewire mixer-restore      # restore saved mixer state")
+        print("  config-pipewire monostereo <mode>  # set monostereo mode")
+        print("  config-pipewire balance <B>        # set balance")
         print("")
         print("  control_name: either 'node_id:device_name' or just 'node_id'")
         print("  volume: linear volume (0.0 - 1.0)")
         print("  volume_db: volume in decibels (e.g., -20.0)")
+        print("  mode: stereo, mono, left, right")
         print("  B: balance in [-1,1]; -1 full left, 0 center, +1 full right")
-        print("  mixer examples:")
-        print("    config-pipewire mixer stereo       # set stereo mode")
-        print("    config-pipewire mixer balance -0.3 # set balance mode with left bias")
-        print("    config-pipewire mixer mono         # set mono mode")
+        print("  examples:")
+        print("    config-pipewire monostereo stereo  # set stereo mode")
+        print("    config-pipewire balance -0.3       # set left bias")
+        print("    config-pipewire get-monostereo     # get current mode")
+        print("    config-pipewire get-balance        # get current balance")
 
     if len(sys.argv) < 2:
         print_usage()
@@ -751,11 +851,18 @@ def main():
         # Print as simple JSON-ish line for easy parsing
         parts = [f"\"{k}\":{v:.6f}" for k,v in sorted(gains.items())]
         print('{'+', '.join(parts)+'}')
-    elif cmd == "mixer-mode":
-        info = analyze_mixer()
-        if info is None:
-            print("{}"); sys.exit(5)
-        print(f"mode={info['mode']} balance={info['balance']}")
+    elif cmd == "get-monostereo":
+        mode = get_monostereo()
+        if mode is None:
+            print("Monostereo status unavailable")
+            sys.exit(5)
+        print(mode)
+    elif cmd == "get-balance":
+        balance = get_balance()
+        if balance is None:
+            print("Balance status unavailable")
+            sys.exit(5)
+        print(f"{balance:.6f}")
     elif cmd == "mixer-save":
         # Lazy import server settings manager via configdb to reuse storage mechanism if available
         try:
@@ -765,10 +872,13 @@ def main():
             sm = SettingsManager(db)
             # Register ephemeral callbacks matching server logic
             def save_cb():
-                analysis = analyze_mixer()
-                if not analysis or analysis.get('mode') in (None,'unknown'):
+                mode = get_monostereo()
+                balance = get_balance()
+                if mode is None or mode == 'unknown':
                     return None
-                return f"{analysis['mode']},{analysis['balance']:.6f}"
+                if balance is None:
+                    balance = 0.0
+                return f"{mode},{balance:.6f}"
             def restore_cb(val):
                 pass  # not needed here
             sm.register_setting('pipewire_mixer_state', save_cb, restore_cb)
@@ -785,23 +895,24 @@ def main():
             db = ConfigDB()
             from .settings_manager import SettingsManager
             sm = SettingsManager(db)
-            # Provide dummy save; real restore applies using set_mode/set_balance
+            # Provide dummy save; real restore applies using set_monostereo/set_balance
             def save_cb():
                 return None
             def restore_cb(val):
                 parts = str(val).split(',')
-                if len(parts)!=2:
+                if len(parts) != 2:
                     return False
                 mode = parts[0]
                 try:
                     bal = float(parts[1])
                 except Exception:
                     bal = 0.0
+                success = True
                 if mode in {'mono','stereo','left','right'}:
-                    return set_mode(mode)
-                if mode=='balance':
-                    return set_balance(bal)
-                return False
+                    success &= set_monostereo(mode)
+                if abs(bal) > 0.001:  # Only set balance if it's not essentially zero
+                    success &= set_balance(bal)
+                return success
             sm.register_setting('pipewire_mixer_state', save_cb, restore_cb)
             if sm.restore_setting('pipewire_mixer_state'):
                 print("OK")
@@ -810,25 +921,10 @@ def main():
         except Exception as e:
             print(f"Error: {e}")
             sys.exit(6)
-    elif cmd == "mixer" and len(sys.argv) >= 3:
-        # Combined mixer command: mixer <mode> [balance]
-        mode_arg = sys.argv[2]
-        balance_arg = None
-        
-        if len(sys.argv) == 4:
-            try:
-                balance_arg = float(sys.argv[3])
-            except ValueError:
-                print("Balance must be numeric in [-1,1]")
-                sys.exit(3)
-        
-        # If mode is 'balance' and no balance arg provided, error
-        if mode_arg == 'balance' and balance_arg is None:
-            print("Balance value required for balance mode")
-            sys.exit(3)
-        
-        if not set_mixer(mode=mode_arg, balance=balance_arg):
-            print("Failed to set mixer")
+    elif cmd == "monostereo" and len(sys.argv) == 3:
+        mode = sys.argv[2]
+        if not set_monostereo(mode):
+            print("Invalid mode or failed to set (use stereo|mono|left|right)")
             sys.exit(4)
         print("OK")
     elif cmd == "balance" and len(sys.argv) == 3:
@@ -839,11 +935,6 @@ def main():
             sys.exit(3)
         if not set_balance(b):
             print("Failed to set balance")
-            sys.exit(4)
-        print("OK")
-    elif cmd == "mode" and len(sys.argv) == 3:
-        if not set_mode(sys.argv[2]):
-            print("Invalid mode or failed to set (use mono|stereo|left|right)")
             sys.exit(4)
         print("OK")
     else:
