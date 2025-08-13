@@ -703,42 +703,68 @@ def get_balance() -> Optional[float]:
     if gains is None:
         return None
     
-    # Extract balance gains
-    bL1 = gains.get("balance_left:Gain_1")
-    bL2 = gains.get("balance_left:Gain_2")
-    bR1 = gains.get("balance_right:Gain_1")
-    bR2 = gains.get("balance_right:Gain_2")
-    
-    if None in (bL1, bL2, bR1, bR2):
-        return None
+    # Extract balance gains (missing gains are treated as 0.0)
+    bL1 = gains.get("balance_left:Gain_1", 0.0)
+    bL2 = gains.get("balance_left:Gain_2", 0.0)
+    bR1 = gains.get("balance_right:Gain_1", 0.0)
+    bR2 = gains.get("balance_right:Gain_2", 0.0)
     
     tol = 0.02
     def eq(x, y):
         return abs(x - y) <= tol
     
-    # Try to reverse the balance math:
-    # balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
-    # balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
+    # Check for perfect center/bypass case first
+    if eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
+        return 0.0
     
-    # Check if it follows the crossfeed pattern
-    if eq(bL2, bR1):  # Crossfeed gains should be equal
-        crossfeed = bL2  # = bR1 = (-B/2)
-        expected_b = -2 * crossfeed
-        
-        # Verify the expected gains match
-        expected_bL1 = 1 - expected_b/2
-        expected_bR2 = 1 + expected_b/2
-        
-        if eq(bL1, expected_bL1) and eq(bR2, expected_bR2):
-            balance = expected_b
-            # Clamp to valid range
-            balance = max(-1.0, min(1.0, balance))
-            return round(balance, 6)
-        elif eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
-            # Perfect center/bypass case
-            return 0.0
+    # The balance math with normalization:
+    # Original: bL1 = 1 - B/2, bL2 = -B/2, bR1 = -B/2, bR2 = 1 + B/2  
+    # Normalized by max_gain to keep all gains <= 1.0
+    # So we need to reverse this process.
     
-    # Default to center if pattern doesn't match
+    # Check if crossfeed gains are equal (they should be after normalization)
+    if eq(bL2, bR1) and (bL1 > 0 or bR2 > 0):  # At least one main gain should be non-zero
+        # Find the normalization factor by looking at the maximum expected gain
+        # For balance B, max expected gain is max(1 - B/2, 1 + B/2, |B/2|)
+        
+        # Try different balance values to see which one produces the observed pattern
+        for test_balance in [-1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 
+                            0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+            # Calculate expected gains
+            expected_bL1 = 1 - test_balance/2
+            expected_bL2 = -test_balance/2  
+            expected_bR1 = -test_balance/2
+            expected_bR2 = 1 + test_balance/2
+            
+            # Apply normalization like the setter does
+            max_gain = max(abs(expected_bL1), abs(expected_bL2), abs(expected_bR1), abs(expected_bR2))
+            if max_gain > 1.0:
+                expected_bL1 /= max_gain
+                expected_bL2 /= max_gain
+                expected_bR1 /= max_gain  
+                expected_bR2 /= max_gain
+            
+            # Negative gains become 0 in PipeWire
+            if expected_bL2 < 0:
+                expected_bL2 = 0
+            if expected_bR1 < 0:
+                expected_bR1 = 0
+                
+            # Check if this matches our observed gains
+            if (eq(bL1, expected_bL1) and eq(bL2, expected_bL2) and 
+                eq(bR1, expected_bR1) and eq(bR2, expected_bR2)):
+                return round(test_balance, 6)
+    
+    # Special cases for extreme values
+    # Full left (balance = -1): only left channel, right muted
+    if eq(bR2, 0.0) and bL1 > 0 and eq(bL2, 0.0) and eq(bR1, 0.0):
+        return -1.0
+        
+    # Full right (balance = 1): only right channel, left muted  
+    if eq(bL1, 0.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and bR2 > 0:
+        return 1.0
+    
+    # Default to center if no pattern matches
     return 0.0
 
 def main():
