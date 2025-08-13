@@ -298,10 +298,42 @@ class PipewireHandler:
             logger.error(f"Error auto-saving default volume: {e}")
 
     # ------------------------------------------------------------------
-    # Mixer / balance endpoints
+    # Monostereo and balance endpoints (separate)
     # ------------------------------------------------------------------
-    def handle_set_mixer(self):
-        """Handle combined mixer mode and balance setting"""
+    def handle_get_monostereo(self):
+        """Handle GET monostereo mode"""
+        try:
+            mode = pipewire.get_monostereo()
+            if mode is None:
+                return jsonify({'status': 'error', 'message': 'Monostereo status unavailable'}), 503
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'monostereo_mode': mode
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error getting monostereo: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def handle_get_balance(self):
+        """Handle GET balance"""
+        try:
+            balance = pipewire.get_balance()
+            if balance is None:
+                return jsonify({'status': 'error', 'message': 'Balance status unavailable'}), 503
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'balance': balance
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error getting balance: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def handle_set_monostereo(self):
+        """Handle monostereo mode setting"""
         try:
             # Get JSON data from request
             data = request.get_json()
@@ -312,58 +344,105 @@ class PipewireHandler:
                 }), 400
             
             mode = data.get('mode')
-            balance = data.get('balance')
-            
-            if mode is None and balance is None:
+            if mode is None:
                 return jsonify({
                     'status': 'error',
-                    'message': 'Either "mode" or "balance" must be provided'
+                    'message': 'Mode must be provided'
                 }), 400
             
-            # Validate balance if provided
-            if balance is not None:
-                try:
-                    balance = float(balance)
-                    if not -1.0 <= balance <= 1.0:
-                        return jsonify({
-                            'status': 'error',
-                            'message': 'Balance must be between -1.0 and 1.0'
-                        }), 400
-                except (ValueError, TypeError):
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Balance must be a number'
-                    }), 400
-            
-            # Apply mixer settings
-            ok = pipewire.set_mixer(mode=mode, balance=balance)
+            # Apply monostereo mode
+            ok = pipewire.set_monostereo(mode)
             if not ok:
                 return jsonify({
                     'status': 'error',
-                    'message': 'Failed to set mixer'
+                    'message': 'Failed to set monostereo mode'
                 }), 400
             
             # Get current status for response
-            gains = pipewire.get_mixer_status() or {}
-            analysis = pipewire.analyze_mixer() or {}
+            current_mode = pipewire.get_monostereo()
+            current_balance = pipewire.get_balance()
             
             # Auto-save mixer state if settings manager present
             try:
                 if self.settings_manager:
                     self.settings_manager.save_setting('pipewire_mixer_state')
             except Exception as e:
-                logger.warning(f"Auto-save mixer state failed after mixer set: {e}")
+                logger.warning(f"Auto-save mixer state failed after monostereo set: {e}")
             
             return jsonify({
                 'status': 'success',
                 'data': {
-                    'mode': analysis.get('mode'),
-                    'balance': analysis.get('balance'),
-                    'gains': gains
+                    'monostereo_mode': current_mode,
+                    'balance': current_balance
                 }
             })
         except Exception as e:
-            logger.error(f"Error setting mixer: {e}")
+            logger.error(f"Error setting monostereo: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 500
+
+    def handle_set_balance(self):
+        """Handle balance setting"""
+        try:
+            # Get JSON data from request
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'JSON data required'
+                }), 400
+            
+            balance = data.get('balance')
+            if balance is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Balance must be provided'
+                }), 400
+            
+            # Validate balance
+            try:
+                balance = float(balance)
+                if not -1.0 <= balance <= 1.0:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Balance must be between -1.0 and 1.0'
+                    }), 400
+            except (ValueError, TypeError):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Balance must be a number'
+                }), 400
+            
+            # Apply balance
+            ok = pipewire.set_balance(balance)
+            if not ok:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to set balance'
+                }), 400
+            
+            # Get current status for response
+            current_mode = pipewire.get_monostereo()
+            current_balance = pipewire.get_balance()
+            
+            # Auto-save mixer state if settings manager present
+            try:
+                if self.settings_manager:
+                    self.settings_manager.save_setting('pipewire_mixer_state')
+            except Exception as e:
+                logger.warning(f"Auto-save mixer state failed after balance set: {e}")
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'monostereo_mode': current_mode,
+                    'balance': current_balance
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error setting balance: {e}")
             return jsonify({
                 'status': 'error',
                 'message': str(e)
@@ -380,13 +459,20 @@ class PipewireHandler:
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
     def handle_get_mixer_mode(self):
-        """Analyze mixer gains and return inferred mode and balance."""
+        """Analyze mixer gains and return inferred monostereo mode and balance."""
         try:
             analysis = pipewire.analyze_mixer()
             if analysis is None:
                 return jsonify({'status': 'error', 'message': 'Mixer analysis unavailable'}), 503
             gains = pipewire.get_mixer_status() or {}
-            return jsonify({'status': 'success', 'data': {'mode': analysis.get('mode'), 'balance': analysis.get('balance'), 'gains': gains}})
+            return jsonify({
+                'status': 'success', 
+                'data': {
+                    'monostereo_mode': analysis.get('monostereo_mode'), 
+                    'balance': analysis.get('balance'), 
+                    'gains': gains
+                }
+            })
         except Exception as e:
             logger.error(f"Error analyzing mixer: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
