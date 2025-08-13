@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.2.3**
+**Version 2.2.4**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -1635,6 +1635,76 @@ digraph pipewire_graph {
 - Large systems may produce large DOT outputs.
 - You can render the graph with: `dot -Tpng -o graph.png`.
 - This endpoint requires the `pw-dot` utility (part of PipeWire tools) to be installed.
+
+### `GET /api/v1/pipewire/mixer`
+
+Retrieve the current mixer gain matrix for the custom filter-chain node (default name `effect_input.proc`).
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "gains": {
+      "mixer_left:Gain_1": 1.0,
+      "mixer_left:Gain_2": 0.0,
+      "mixer_right:Gain_1": 0.0,
+      "mixer_right:Gain_2": 1.0
+    }
+  }
+}
+```
+
+**Response (Unavailable):**
+```json
+{ "status": "error", "message": "Mixer status unavailable" }
+```
+
+### `POST /api/v1/pipewire/mixer/balance/<value>`
+
+Set stereo balance. `<value>` is a float in [-1,1]; -1 full left, 0 center, +1 full right.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "balance": 0.25,
+    "gains": { "mixer_left:Gain_1": 0.75, "mixer_left:Gain_2": 0.0, "mixer_right:Gain_1": 0.0, "mixer_right:Gain_2": 1.0 }
+  }
+}
+```
+
+**Response (Error):**
+```json
+{ "status": "error", "message": "Failed to set balance" }
+```
+
+### `POST /api/v1/pipewire/mixer/mode/<mode>`
+
+Set channel mixing matrix by mode: `mono`, `stereo`, `left`, `right`.
+
+Modes:
+- mono: Mix L+R at 0.5 each to both outputs
+- stereo: Standard (L->L, R->R)
+- left: Left channel sent to both outputs
+- right: Right channel sent to both outputs
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "mode": "mono",
+    "gains": { "mixer_left:Gain_1": 0.5, "mixer_left:Gain_2": 0.5, "mixer_right:Gain_1": 0.5, "mixer_right:Gain_2": 0.5 }
+  }
+}
+```
+
+**Response (Invalid Mode):**
+```json
+{ "status": "error", "message": "Invalid mode or failed to set" }
+```
 
 **Response (Invalid dB Value):**
 ```json

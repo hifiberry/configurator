@@ -296,3 +296,38 @@ class PipewireHandler:
                     logger.warning(f"Failed to auto-save default PipeWire volume after change to {control}")
         except Exception as e:
             logger.error(f"Error auto-saving default volume: {e}")
+
+    # ------------------------------------------------------------------
+    # Mixer / balance endpoints
+    # ------------------------------------------------------------------
+    def handle_set_balance(self, balance: float):
+        try:
+            ok = pipewire.set_balance(balance)
+            if not ok:
+                return jsonify({'status': 'error', 'message': 'Failed to set balance'}), 400
+            gains = pipewire.get_mixer_status() or {}
+            return jsonify({'status': 'success', 'data': {'balance': float(balance), 'gains': gains}})
+        except Exception as e:
+            logger.error(f"Error setting balance: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def handle_set_mode(self, mode: str):
+        try:
+            ok = pipewire.set_mode(mode)
+            if not ok:
+                return jsonify({'status': 'error', 'message': 'Invalid mode or failed to set'}), 400
+            gains = pipewire.get_mixer_status() or {}
+            return jsonify({'status': 'success', 'data': {'mode': mode, 'gains': gains}})
+        except Exception as e:
+            logger.error(f"Error setting mixer mode: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def handle_get_mixer(self):
+        try:
+            gains = pipewire.get_mixer_status()
+            if gains is None:
+                return jsonify({'status': 'error', 'message': 'Mixer status unavailable'}), 503
+            return jsonify({'status': 'success', 'data': {'gains': gains}})
+        except Exception as e:
+            logger.error(f"Error getting mixer status: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
