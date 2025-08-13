@@ -269,6 +269,28 @@ def set_volume_db(control_name: str, db: float) -> bool:
     linear_vol = _db_to_volume(db)
     return set_volume(control_name, linear_vol)
 
+def get_filtergraph_dot() -> Optional[str]:
+    """Return the PipeWire filter/connection graph in GraphViz DOT format.
+
+    Uses the 'pw-dot' tool (part of PipeWire) to dump the current graph.
+    Returns the DOT text on success or None if the command fails or the
+    utility is not available.
+    """
+    try:
+        logger.debug("Running pw-dot to get filtergraph (DOT format)")
+        # -o - writes to stdout
+        result = subprocess.run(["pw-dot", "-o", "-"], capture_output=True, text=True, check=True)
+        return result.stdout
+    except FileNotFoundError:
+        logger.error("pw-dot command not found. PipeWire tools may not be installed.")
+        return None
+    except subprocess.CalledProcessError as e:
+        logger.error(f"pw-dot failed with return code {e.returncode}: {e.stderr.strip() if e.stderr else e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error running pw-dot: {e}")
+        return None
+
 def main():
     import sys
     def print_usage():

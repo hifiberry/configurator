@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.2.2**
+**Version 2.2.3**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -14,6 +14,7 @@
   - [Network Configuration](#network-configuration)
   - [I2C Device Management](#i2c-device-management)
   - [PipeWire Volume Management](#pipewire-volume-management)
+    - [PipeWire Filtergraph](#get-apiv1pipewirefiltergraph)
   - [Settings Management](#settings-management)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
@@ -1429,6 +1430,7 @@ The PipeWire API provides comprehensive volume control for PipeWire audio system
 - Automatic detection of default sink and source
 - Proper volume conversion using PipeWire's cubic volume curve
 - Support for "default" control name for easy access
+ - Export current PipeWire connection graph in GraphViz DOT format
 
 **Volume Scaling:**
 - PipeWire uses a non-linear (cubic) volume scale where dB ≈ 60 × log10(V)
@@ -1609,6 +1611,30 @@ Set volume for a specific PipeWire control. Accepts either linear or decibel val
   "message": "Invalid volume value"
 }
 ```
+
+### `GET /api/v1/pipewire/filtergraph`
+
+Export the current PipeWire node/connection graph in GraphViz DOT format. This provides a snapshot of how nodes (sinks, sources, filters, streams) are interconnected.
+
+**Response (Success - Content-Type: text/plain):**
+```
+digraph pipewire_graph {
+  // DOT content produced by pw-dot
+}
+```
+
+**Response (pw-dot Not Available / Failure):**
+```json
+{
+  "status": "error",
+  "message": "pw-dot command failed or not available"
+}
+```
+
+**Notes:**
+- Large systems may produce large DOT outputs.
+- You can render the graph with: `dot -Tpng -o graph.png`.
+- This endpoint requires the `pw-dot` utility (part of PipeWire tools) to be installed.
 
 **Response (Invalid dB Value):**
 ```json
