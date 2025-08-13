@@ -1696,7 +1696,7 @@ Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance va
 
 ### `POST /api/v1/pipewire/mixer/set`
 
-Set mixer mode and/or balance in a unified operation. This endpoint allows setting both the channel mixing mode and stereo balance simultaneously since they manipulate the same underlying gain matrix.
+Set mixer mode and/or balance in a unified operation. This endpoint allows setting both the channel mixing mode and stereo balance simultaneously since they manipulate the same underlying gain matrix and are interdependent.
 
 **Request Body Examples:**
 
@@ -1707,7 +1707,7 @@ Set mode only:
 }
 ```
 
-Set balance only:
+Set balance only (applies to current mode):
 ```json
 {
   "balance": -0.3
@@ -1717,8 +1717,8 @@ Set balance only:
 Set mode and balance together:
 ```json
 {
-  "mode": "balance",
-  "balance": 0.5
+  "mode": "mono",
+  "balance": 0.0
 }
 ```
 
@@ -1727,8 +1727,7 @@ Set mode and balance together:
   - `"mono"` - Mix L+R at 0.5 each to both outputs
   - `"stereo"` - Standard stereo (L→L, R→R)
   - `"left"` - Left channel sent to both outputs
-  - `"right"` - Right channel sent to both outputs  
-  - `"balance"` - Balance mode (requires balance parameter)
+  - `"right"` - Right channel sent to both outputs
 - **balance** (optional): Stereo balance value in [-1,1]
   - `-1.0` = full left
   - `0.0` = center
@@ -1739,10 +1738,10 @@ Set mode and balance together:
 {
   "status": "success",
   "data": {
-    "mode": "balance",
-    "balance": 0.5,
+    "mode": "stereo",
+    "balance": 0.3,
     "gains": {
-      "mixer_left:Gain_1": 0.5,
+      "mixer_left:Gain_1": 0.7,
       "mixer_left:Gain_2": 0.0,
       "mixer_right:Gain_1": 0.0,
       "mixer_right:Gain_2": 1.0
@@ -1779,8 +1778,9 @@ Invalid mode:
 
 **Notes:**
 - At least one of `mode` or `balance` must be provided
-- When `mode` is `"balance"`, the `balance` parameter is required
+- Balance and mode are interdependent - changing one may affect the other since they share the same gain matrix
 - When only `balance` is provided, it applies balance adjustments to the current mode
+- When only `mode` is provided, balance is typically reset to center (0.0) except for discrete modes
 - Changes are automatically saved to mixer state if settings management is enabled
 - The response includes the current inferred mode, balance, and raw gain matrix
 
