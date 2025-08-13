@@ -76,7 +76,15 @@ Get version information and available endpoints.
     "pipewire_default_sink": "/api/v1/pipewire/default-sink",
     "pipewire_default_source": "/api/v1/pipewire/default-source",
     "pipewire_volume": "/api/v1/pipewire/volume/<control>",
-    "pipewire_volume_set": "/api/v1/pipewire/volume/<control>"
+    "pipewire_volume_set": "/api/v1/pipewire/volume/<control>",
+    "pipewire_filtergraph": "/api/v1/pipewire/filtergraph",
+    "pipewire_mixer_status": "/api/v1/pipewire/mixer",
+    "pipewire_mixer_analysis": "/api/v1/pipewire/mixer/analysis",
+    "pipewire_mixer_set": "/api/v1/pipewire/mixer/set",
+    "pipewire_save_default_volume": "/api/v1/pipewire/save-default-volume",
+    "settings_list": "/api/v1/settings",
+    "settings_save": "/api/v1/settings/save",
+    "settings_restore": "/api/v1/settings/restore"
   }
 }
 ```
@@ -1686,91 +1694,95 @@ Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance va
 { "status": "error", "message": "Mixer analysis unavailable" }
 ```
 
-### `POST /api/v1/pipewire/mixer/balance/<value>`
+### `POST /api/v1/pipewire/mixer/set`
 
-Set stereo balance. `<value>` is a float in [-1,1]; -1 full left, 0 center, +1 full right.
+Set mixer mode and/or balance in a unified operation. This endpoint allows setting both the channel mixing mode and stereo balance simultaneously since they manipulate the same underlying gain matrix.
 
-**Response (Success):**
+**Request Body Examples:**
+
+Set mode only:
+```json
+{
+  "mode": "stereo"
+}
+```
+
+Set balance only:
+```json
+{
+  "balance": -0.3
+}
+```
+
+Set mode and balance together:
+```json
+{
+  "mode": "balance",
+  "balance": 0.5
+}
+```
+
+**Request Parameters:**
+- **mode** (optional): Channel mixing mode
+  - `"mono"` - Mix L+R at 0.5 each to both outputs
+  - `"stereo"` - Standard stereo (L→L, R→R)
+  - `"left"` - Left channel sent to both outputs
+  - `"right"` - Right channel sent to both outputs  
+  - `"balance"` - Balance mode (requires balance parameter)
+- **balance** (optional): Stereo balance value in [-1,1]
+  - `-1.0` = full left
+  - `0.0` = center
+  - `+1.0` = full right
+
+**Success Response:**
 ```json
 {
   "status": "success",
   "data": {
-    "balance": 0.25,
-    "gains": { "mixer_left:Gain_1": 0.75, "mixer_left:Gain_2": 0.0, "mixer_right:Gain_1": 0.0, "mixer_right:Gain_2": 1.0 }
+    "mode": "balance",
+    "balance": 0.5,
+    "gains": {
+      "mixer_left:Gain_1": 0.5,
+      "mixer_left:Gain_2": 0.0,
+      "mixer_right:Gain_1": 0.0,
+      "mixer_right:Gain_2": 1.0
+    }
   }
 }
 ```
 
-**Response (Error):**
-```json
-{ "status": "error", "message": "Failed to set balance" }
-```
+**Error Responses:**
 
-### `POST /api/v1/pipewire/mixer/mode/<mode>`
-
-Set channel mixing matrix by mode: `mono`, `stereo`, `left`, `right`.
-
-Modes:
-- mono: Mix L+R at 0.5 each to both outputs
-- stereo: Standard (L->L, R->R)
-- left: Left channel sent to both outputs
-- right: Right channel sent to both outputs
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "mode": "mono",
-    "gains": { "mixer_left:Gain_1": 0.5, "mixer_left:Gain_2": 0.5, "mixer_right:Gain_1": 0.5, "mixer_right:Gain_2": 0.5 }
-  }
-}
-```
-
-**Response (Invalid Mode):**
-```json
-{ "status": "error", "message": "Invalid mode or failed to set" }
-```
-
-**Response (Invalid dB Value):**
+Missing parameters:
 ```json
 {
   "status": "error",
-  "message": "Invalid volume_db value"
+  "message": "Either \"mode\" or \"balance\" must be provided"
 }
 ```
 
-**Response (Missing Parameters):**
+Invalid balance range:
 ```json
 {
-  "status": "error",
-  "message": "Either \"volume\" or \"volume_db\" must be provided"
+  "status": "error", 
+  "message": "Balance must be between -1.0 and 1.0"
 }
 ```
 
-**Response (JSON Required):**
+Invalid mode:
 ```json
 {
   "status": "error",
-  "message": "JSON data required"
-}
-```
-
-**Response (Set Failed):**
-```json
-{
-  "status": "error",
-  "message": "Failed to set volume for control \"44:Built-in Audio Stereo\""
+  "message": "Failed to set mixer"
 }
 ```
 
 **Notes:**
-- Volume changes are applied immediately
-- The response includes the actual volume values after the change
-- PipeWire may slightly adjust the requested volume based on hardware capabilities
-- Setting volume to 0.0 effectively mutes the control
-- Decibel values below -60 dB are very quiet and may be effectively silent
-- **Auto-save**: When the default sink volume is changed, the new volume is automatically saved as the default volume setting in configdb
+- At least one of `mode` or `balance` must be provided
+- When `mode` is `"balance"`, the `balance` parameter is required
+- When only `balance` is provided, it applies balance adjustments to the current mode
+- Changes are automatically saved to mixer state if settings management is enabled
+- The response includes the current inferred mode, balance, and raw gain matrix
 
 ## Settings Management
 

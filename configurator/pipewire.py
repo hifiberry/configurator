@@ -254,7 +254,6 @@ def get_default_sink() -> Optional[str]:
     """
     logger.debug("Getting default sink using pw-dump...")
     
-    # First try pw-dump approach for hardware sink
     try:
         import json
         result = subprocess.run(["pw-dump"], capture_output=True, text=True, check=True)
@@ -273,63 +272,12 @@ def get_default_sink() -> Optional[str]:
                     logger.debug(f"Found hardware sink via pw-dump: {result}")
                     return result
         
-        logger.debug("No alsa_output sink found via pw-dump, falling back to wpctl parsing")
+        logger.warning("No alsa_output sink found via pw-dump")
+        return None
         
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
-        logger.debug(f"pw-dump failed ({e}), falling back to wpctl parsing")
-    
-    # Fallback to original wpctl status parsing, but look for any sink (not just starred ones)
-    logger.debug("Getting default sink via wpctl status fallback...")
-    output = _run_wpctl(["status"])
-    if not output:
-        logger.warning("No output from wpctl status")
+        logger.error(f"pw-dump failed: {e}")
         return None
-    
-    logger.debug(f"wpctl status output lines: {len(output.splitlines())}")
-    
-    in_audio_section = False
-    in_sinks_section = False
-    
-    for line_num, line in enumerate(output.splitlines(), 1):
-        original_line = line
-        line = line.strip()
-        
-        if line == "Audio":
-            logger.debug(f"Found Audio section at line {line_num}")
-            in_audio_section = True
-            continue
-        elif line == "Video" or line == "Settings":
-            logger.debug(f"Exiting Audio section at line {line_num}: {line}")
-            in_audio_section = False
-            in_sinks_section = False
-            continue
-            
-        if not in_audio_section:
-            continue
-            
-        if "Sinks:" in line:
-            logger.debug(f"Found Sinks section at line {line_num}")
-            in_sinks_section = True
-            continue
-        elif "Sources:" in line or "Filters:" in line or "Streams:" in line:
-            logger.debug(f"Exiting Sinks section at line {line_num}: {line}")
-            in_sinks_section = False
-            continue
-            
-        if in_sinks_section and line:
-            logger.debug(f"Processing sink line {line_num}: {repr(original_line)}")
-            # Parse any sink line (not just starred ones): " │      52. Built-in Audio Stereo               [vol: 0.71]"
-            clean_line = re.sub(r'^[│├└─\s]*\*?\s*', '', original_line)
-            match = re.search(r'^(\d+)\.\s+(.+?)\s+\[', clean_line)
-            if match:
-                node_id = match.group(1)
-                device_name = match.group(2).strip()
-                result = f"{node_id}:{device_name}"
-                logger.debug(f"Found sink via wpctl fallback: {result}")
-                return result
-    
-    logger.warning("No default sink found in wpctl status output")
-    return None
 
 def get_default_source() -> Optional[str]:
     """
@@ -573,19 +521,58 @@ def set_balance(balance: float, *, node_name: Optional[str] = None, node_id: Opt
     ok = _apply_mixer_gains(attL, 0.0, 0.0, attR)
     return ok
 
-def set_mode(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set channel mixing mode: mono, stereo, left, right."""
+def set_mixer(mode: str = None, balance: float = None, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
+    """Set channel mixing mode and/or balance in a single operation.
+    
+    Args:
+        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right', 'balance'). 
+              If 'balance', then balance parameter is required.
+        balance: Balance value in [-1,1] (-1 full left, 0 center, +1 full right).
+                Only used when mode='balance' or when mode=None.
+        
+    Returns:
+        True if successful, False otherwise.
+        
+    Examples:
+        set_mixer(mode='stereo')           # Set to stereo, balance=0
+        set_mixer(mode='mono')             # Set to mono 
+        set_mixer(mode='balance', balance=-0.3)  # Set balance mode with custom balance
+        set_mixer(balance=0.5)             # Just adjust balance, keep current mode logic
+    """
+    if mode is None and balance is None:
+        logger.error("Must specify either mode or balance")
+        return False
+        
     mode = (mode or '').lower()
+    
+    # Handle discrete modes
     if mode == 'mono':
         return _apply_mixer_gains(0.5, 0.5, 0.5, 0.5)
-    if mode == 'stereo':
+    elif mode == 'stereo':
         return _apply_mixer_gains(1.0, 0.0, 0.0, 1.0)
-    if mode == 'left':
+    elif mode == 'left':
         return _apply_mixer_gains(1.0, 0.0, 1.0, 0.0)
-    if mode == 'right':
+    elif mode == 'right':
         return _apply_mixer_gains(0.0, 1.0, 0.0, 1.0)
-    logger.error("Invalid mixer mode: %s", mode)
+    elif mode == 'balance' or (mode == '' and balance is not None):
+        # Balance mode - apply balance value
+        if balance is None:
+            logger.error("Balance value required for balance mode")
+            return False
+        return set_balance(balance)
+    elif mode != '':
+        logger.error("Invalid mixer mode: %s", mode)
+        return False
+    
+    # If we get here, mode was empty/None but balance was provided
+    if balance is not None:
+        return set_balance(balance)
+    
     return False
+
+def set_mode(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
+    """Set channel mixing mode: mono, stereo, left, right. (Legacy function - use set_mixer instead)"""
+    return set_mixer(mode=mode, node_name=node_name, node_id=node_id)
 
 def get_mixer_status(node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> Optional[Dict[str, float]]:  # kept signature for API compatibility
     return _get_mixer_status()
@@ -676,6 +663,7 @@ def main():
         print("  config-pipewire mixer-mode         # infer mode (mono/stereo/left/right/balance) + balance value")
         print("  config-pipewire mixer-save         # save current mixer mode/balance state")
         print("  config-pipewire mixer-restore      # restore saved mixer mode/balance state")
+        print("  config-pipewire mixer <mode> [balance]  # set mode and optional balance in one command")
         print("  config-pipewire balance <B>")
         print("  config-pipewire mode <mono|stereo|left|right>")
         print("")
@@ -683,6 +671,10 @@ def main():
         print("  volume: linear volume (0.0 - 1.0)")
         print("  volume_db: volume in decibels (e.g., -20.0)")
         print("  B: balance in [-1,1]; -1 full left, 0 center, +1 full right")
+        print("  mixer examples:")
+        print("    config-pipewire mixer stereo       # set stereo mode")
+        print("    config-pipewire mixer balance -0.3 # set balance mode with left bias")
+        print("    config-pipewire mixer mono         # set mono mode")
 
     if len(sys.argv) < 2:
         print_usage()
@@ -822,6 +814,27 @@ def main():
         except Exception as e:
             print(f"Error: {e}")
             sys.exit(6)
+    elif cmd == "mixer" and len(sys.argv) >= 3:
+        # Combined mixer command: mixer <mode> [balance]
+        mode_arg = sys.argv[2]
+        balance_arg = None
+        
+        if len(sys.argv) == 4:
+            try:
+                balance_arg = float(sys.argv[3])
+            except ValueError:
+                print("Balance must be numeric in [-1,1]")
+                sys.exit(3)
+        
+        # If mode is 'balance' and no balance arg provided, error
+        if mode_arg == 'balance' and balance_arg is None:
+            print("Balance value required for balance mode")
+            sys.exit(3)
+        
+        if not set_mixer(mode=mode_arg, balance=balance_arg):
+            print("Failed to set mixer")
+            sys.exit(4)
+        print("OK")
     elif cmd == "balance" and len(sys.argv) == 3:
         try:
             b = float(sys.argv[2])
