@@ -1,3 +1,21 @@
+hifiberry-configurator (2.2.7) stable; urgency=medium
+
+  * Fixed stray CLI usage prints for PipeWire mixer commands
+  * Ensured all usage lines scoped inside print_usage() only
+  * Minor code cleanup in pipewire.py (no functional changes)
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 13 Aug 2025 11:05:00 +0000
+
+hifiberry-configurator (2.2.6) stable; urgency=medium
+
+  * Added persistent PipeWire mixer state (mode/balance) save & restore
+  * Registered new setting pipewire_mixer_state via SettingsManager
+  * Auto-save mixer state on balance and mode changes
+  * Added CLI commands: mixer-save, mixer-restore
+  * REST API now restores mixer state with other settings
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 13 Aug 2025 10:20:00 +0000
+
 hifiberry-configurator (2.2.5) stable; urgency=medium
 
   * PipeWire mixer analysis endpoint /api/v1/pipewire/mixer/analysis added
