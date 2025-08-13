@@ -245,6 +245,27 @@ class PipewireHandler:
                 'status': 'error',
                 'message': str(e)
             }), 500
+
+    def handle_get_filtergraph(self):
+        """Handle GET /api/v1/pipewire/filtergraph - Return PipeWire graph in DOT format.
+
+        Returns plain text (text/plain) response with GraphViz DOT content.
+        """
+        try:
+            dot = pipewire.get_filtergraph_dot()
+            if dot is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'pw-dot command failed or not available'
+                }), 500
+            # Flask shortcut: return (response_text, status, headers)
+            return dot, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+        except Exception as e:
+            logger.error(f"Error generating PipeWire filtergraph: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 500
     
     def _auto_save_if_default_sink(self, control, resolved_default=False):
         """

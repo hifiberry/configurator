@@ -163,6 +163,7 @@ class ConfigAPIServer:
                     'pipewire_default_source': '/api/v1/pipewire/default-source',
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
                     'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
+                    'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -383,6 +384,11 @@ class ConfigAPIServer:
                     'status': 'error',
                     'message': str(e)
                 }), 500
+
+        @self.app.route('/api/v1/pipewire/filtergraph', methods=['GET'])
+        def get_pipewire_filtergraph():
+            """Get the PipeWire filter/connection graph in GraphViz DOT format (text/plain)."""
+            return self.pipewire_handler.handle_get_filtergraph()
 
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])
