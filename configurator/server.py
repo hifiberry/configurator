@@ -165,6 +165,7 @@ class ConfigAPIServer:
                     'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
                     'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
                     'pipewire_mixer_status': '/api/v1/pipewire/mixer',
+                    'pipewire_mixer_analysis': '/api/v1/pipewire/mixer/analysis',
                     'pipewire_mixer_balance': '/api/v1/pipewire/mixer/balance/<value>',
                     'pipewire_mixer_mode': '/api/v1/pipewire/mixer/mode/<mode>',
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
@@ -398,6 +399,11 @@ class ConfigAPIServer:
         def get_pipewire_mixer_status():
             """Get current mixer gain matrix"""
             return self.pipewire_handler.handle_get_mixer()
+
+        @self.app.route('/api/v1/pipewire/mixer/analysis', methods=['GET'])
+        def get_pipewire_mixer_analysis():
+            """Get inferred mixer mode and balance plus gains"""
+            return self.pipewire_handler.handle_get_mixer_mode()
 
         @self.app.route('/api/v1/pipewire/mixer/balance/<value>', methods=['POST'])
         def set_pipewire_balance(value):

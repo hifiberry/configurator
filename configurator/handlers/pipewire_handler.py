@@ -331,3 +331,15 @@ class PipewireHandler:
         except Exception as e:
             logger.error(f"Error getting mixer status: {e}")
             return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    def handle_get_mixer_mode(self):
+        """Analyze mixer gains and return inferred mode and balance."""
+        try:
+            analysis = pipewire.analyze_mixer()
+            if analysis is None:
+                return jsonify({'status': 'error', 'message': 'Mixer analysis unavailable'}), 503
+            gains = pipewire.get_mixer_status() or {}
+            return jsonify({'status': 'success', 'data': {'mode': analysis.get('mode'), 'balance': analysis.get('balance'), 'gains': gains}})
+        except Exception as e:
+            logger.error(f"Error analyzing mixer: {e}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500

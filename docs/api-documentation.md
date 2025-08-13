@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.2.4**
+**Version 2.2.5**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -1658,6 +1658,32 @@ Retrieve the current mixer gain matrix for the custom filter-chain node (default
 **Response (Unavailable):**
 ```json
 { "status": "error", "message": "Mixer status unavailable" }
+```
+
+### `GET /api/v1/pipewire/mixer/analysis`
+
+Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance value from current gain matrix.
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "data": {
+    "mode": "stereo",
+    "balance": 0.0,
+    "gains": {
+      "mixer_left:Gain_1": 1.0,
+      "mixer_left:Gain_2": 0.0,
+      "mixer_right:Gain_1": 0.0,
+      "mixer_right:Gain_2": 1.0
+    }
+  }
+}
+```
+
+**Response (Unavailable):**
+```json
+{ "status": "error", "message": "Mixer analysis unavailable" }
 ```
 
 ### `POST /api/v1/pipewire/mixer/balance/<value>`
