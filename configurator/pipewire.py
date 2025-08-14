@@ -32,11 +32,11 @@ Balance mixers (pw-cli enum-params <mixer_id> Props):
 
 Reference filter-chain configuration (for documentation only):
 -----------------------------------------------------------------
-### Monostereo + Balance + Parametric EQ (16-band peaking, dynamic) sink
+### Monostereo + Balance + Parametric EQ (16-band peaking) sink
 # Single virtual sink so ALSA clients attach here: effect_input.proc
 # Processing order: Input (stereo) -> monostereo (stereo/mono/left-only/right-only)
 #                 -> balance (left-right image/crossfeed)
-#                 -> 16x bq_peaking (multi-channel, same filters per channel, no shelves)
+#                 -> param_eq (multi-channel, 16 peaking filters per channel, no shelves)
 # Output goes directly to hardware via standard routing.
 #
 # Monostereo presets (set gains on monostereo_* nodes):
@@ -50,12 +50,6 @@ Reference filter-chain configuration (for documentation only):
 #   balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
 #   balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
 # Normalize if any |gain|>1.0 by dividing all by max|gain|. Center (B=0): left (1,0) right (0,1)
-#
-# EQ Controls (runtime adjustable):
-# Left channel EQ nodes: eqL01 to eqL16, each with Freq, Q, Gain controls
-# Right channel EQ nodes: eqR01 to eqR16, each with Freq, Q, Gain controls
-# Example: Set EQ1 left channel to 80Hz, Q=1.5, Gain=-3dB:
-#  pw-cli set-param <container_node_id> Props '{ "eqL01:Freq" = 80.0 "eqL01:Q" = 1.5 "eqL01:Gain" = -3.0 }'
 #
 # Adjust gains at runtime (example Mono):
 #  L=$(pw-cli ls Node | awk '/monostereo_left/{print $1;exit}'|tr -d :) ; R=$(pw-cli ls Node | awk '/monostereo_right/{print $1;exit}'|tr -d :) ; \
@@ -83,42 +77,30 @@ context.modules = [
           # Balance stage: crossfeed between post-monostereo L/R
           { type = builtin label = mixer name = balance_left  control = { "Gain 1" = 1.0 "Gain 2" = 0.0 } }
           { type = builtin label = mixer name = balance_right control = { "Gain 1" = 0.0 "Gain 2" = 1.0 } }
-          
-          # Parametric EQ Left Channel (16x peaking biquads in series)
-          { type = builtin label = bq_peaking name = eqL01 control = { Freq = 32.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL02 control = { Freq = 50.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL03 control = { Freq = 80.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL04 control = { Freq = 125.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL05 control = { Freq = 200.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL06 control = { Freq = 315.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL07 control = { Freq = 500.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL08 control = { Freq = 800.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL09 control = { Freq = 1250.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL10 control = { Freq = 2000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL11 control = { Freq = 3150.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL12 control = { Freq = 5000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL13 control = { Freq = 8000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL14 control = { Freq = 10000.0 Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL15 control = { Freq = 16000.0 Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqL16 control = { Freq = 20000.0 Q = 1.0 Gain = 0.0 } }
 
-          # Parametric EQ Right Channel (16x peaking biquads in series)
-          { type = builtin label = bq_peaking name = eqR01 control = { Freq = 32.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR02 control = { Freq = 50.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR03 control = { Freq = 80.0    Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR04 control = { Freq = 125.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR05 control = { Freq = 200.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR06 control = { Freq = 315.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR07 control = { Freq = 500.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR08 control = { Freq = 800.0   Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR09 control = { Freq = 1250.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR10 control = { Freq = 2000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR11 control = { Freq = 3150.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR12 control = { Freq = 5000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR13 control = { Freq = 8000.0  Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR14 control = { Freq = 10000.0 Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR15 control = { Freq = 16000.0 Q = 1.0 Gain = 0.0 } }
-          { type = builtin label = bq_peaking name = eqR16 control = { Freq = 20000.0 Q = 1.0 Gain = 0.0 } }
+          # Parametric EQ (applies same 16 peaking filters to each channel independently) — final stage
+          { type = builtin label = param_eq name = peq
+            config = {
+              filters = [
+                { type = bq_peaking freq = 32.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 50.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 80.0    gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 125.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 200.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 315.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 500.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 800.0   gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 1250.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 2000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 3150.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 5000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 8000.0  gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 10000.0 gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 16000.0 gain = 0.0 q = 1.0 }
+                { type = bq_peaking freq = 20000.0 gain = 0.0 q = 1.0 }
+              ]
+            }
+          }
         ]
         links = [
           # Feed inputs to copy nodes
@@ -136,44 +118,12 @@ context.modules = [
           { output = "monostereo_left:Out"  input = "balance_right:In 1" }
           { output = "monostereo_right:Out" input = "balance_right:In 2" }
 
-          # Left EQ chain (16 peaking filters in series)
-          { output = "balance_left:Out"  input = "eqL01:In" }
-          { output = "eqL01:Out" input = "eqL02:In" }
-          { output = "eqL02:Out" input = "eqL03:In" }
-          { output = "eqL03:Out" input = "eqL04:In" }
-          { output = "eqL04:Out" input = "eqL05:In" }
-          { output = "eqL05:Out" input = "eqL06:In" }
-          { output = "eqL06:Out" input = "eqL07:In" }
-          { output = "eqL07:Out" input = "eqL08:In" }
-          { output = "eqL08:Out" input = "eqL09:In" }
-          { output = "eqL09:Out" input = "eqL10:In" }
-          { output = "eqL10:Out" input = "eqL11:In" }
-          { output = "eqL11:Out" input = "eqL12:In" }
-          { output = "eqL12:Out" input = "eqL13:In" }
-          { output = "eqL13:Out" input = "eqL14:In" }
-          { output = "eqL14:Out" input = "eqL15:In" }
-          { output = "eqL15:Out" input = "eqL16:In" }
-
-          # Right EQ chain (16 peaking filters in series)
-          { output = "balance_right:Out" input = "eqR01:In" }
-          { output = "eqR01:Out" input = "eqR02:In" }
-          { output = "eqR02:Out" input = "eqR03:In" }
-          { output = "eqR03:Out" input = "eqR04:In" }
-          { output = "eqR04:Out" input = "eqR05:In" }
-          { output = "eqR05:Out" input = "eqR06:In" }
-          { output = "eqR06:Out" input = "eqR07:In" }
-          { output = "eqR07:Out" input = "eqR08:In" }
-          { output = "eqR08:Out" input = "eqR09:In" }
-          { output = "eqR09:Out" input = "eqR10:In" }
-          { output = "eqR10:Out" input = "eqR11:In" }
-          { output = "eqR11:Out" input = "eqR12:In" }
-          { output = "eqR12:Out" input = "eqR13:In" }
-          { output = "eqR13:Out" input = "eqR14:In" }
-          { output = "eqR14:Out" input = "eqR15:In" }
-          { output = "eqR15:Out" input = "eqR16:In" }
+          # Final EQ stage per channel
+          { output = "balance_left:Out"  input = "peq:In 1" }
+          { output = "balance_right:Out" input = "peq:In 2" }
         ]
         inputs  = [ "in_left:In" "in_right:In" ]
-        outputs = [ "eqL16:Out" "eqR16:Out" ]
+        outputs = [ "peq:Out 1" "peq:Out 2" ]
       }
       audio.channels = 2
       audio.position = [ FL FR ]
@@ -571,8 +521,8 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
         i = 0
         while i < len(lines):
             raw = lines[i].strip()
-            # Look for monostereo, balance, and EQ node controls
-            m_string = re.match(r'^String\s+"((monostereo_|balance_|eqL\d+:|eqR\d+:).+)"$', raw)
+            # Look for both monostereo and balance mixer nodes
+            m_string = re.match(r'^String\s+"((monostereo_|balance_)(?:left|right):Gain\s+([0-9]+))"$', raw)
             if m_string:
                 full_key = m_string.group(1)  # e.g. monostereo_left:Gain 1
                 # Look ahead for the Float value (can be same or subsequent lines; usually next line)
@@ -594,7 +544,7 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
                     j += 1
             else:
                 # Legacy single-line format fallback
-                m_legacy = re.match(r'"?((monostereo_|balance_|eqL\d+:|eqR\d+:).+)"?\s*=\s*([0-9]+(?:\.[0-9]+)?)', raw)
+                m_legacy = re.match(r'"?((monostereo_|balance_)(?:left|right):Gain [0-9]+)"?\s*=\s*([0-9]+(?:\.[0-9]+)?)', raw)
                 if m_legacy:
                     key = m_legacy.group(1).replace(' ', '_')
                     try:
@@ -753,467 +703,43 @@ def get_balance() -> Optional[float]:
     if gains is None:
         return None
     
-    # Extract balance gains (missing gains are treated as 0.0)
-    bL1 = gains.get("balance_left:Gain_1", 0.0)
-    bL2 = gains.get("balance_left:Gain_2", 0.0)
-    bR1 = gains.get("balance_right:Gain_1", 0.0)
-    bR2 = gains.get("balance_right:Gain_2", 0.0)
+    # Extract balance gains
+    bL1 = gains.get("balance_left:Gain_1")
+    bL2 = gains.get("balance_left:Gain_2")
+    bR1 = gains.get("balance_right:Gain_1")
+    bR2 = gains.get("balance_right:Gain_2")
+    
+    if None in (bL1, bL2, bR1, bR2):
+        return None
     
     tol = 0.02
     def eq(x, y):
         return abs(x - y) <= tol
     
-    # Check for perfect center/bypass case first
-    if eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
-        return 0.0
+    # Try to reverse the balance math:
+    # balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
+    # balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
     
-    # The balance math with normalization:
-    # Original: bL1 = 1 - B/2, bL2 = -B/2, bR1 = -B/2, bR2 = 1 + B/2  
-    # Normalized by max_gain to keep all gains <= 1.0
-    # So we need to reverse this process.
-    
-    # Check if crossfeed gains are equal (they should be after normalization)
-    if eq(bL2, bR1) and (bL1 > 0 or bR2 > 0):  # At least one main gain should be non-zero
-        # Find the normalization factor by looking at the maximum expected gain
-        # For balance B, max expected gain is max(1 - B/2, 1 + B/2, |B/2|)
+    # Check if it follows the crossfeed pattern
+    if eq(bL2, bR1):  # Crossfeed gains should be equal
+        crossfeed = bL2  # = bR1 = (-B/2)
+        expected_b = -2 * crossfeed
         
-        # Try different balance values to see which one produces the observed pattern
-        for test_balance in [-1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 
-                            0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-            # Calculate expected gains
-            expected_bL1 = 1 - test_balance/2
-            expected_bL2 = -test_balance/2  
-            expected_bR1 = -test_balance/2
-            expected_bR2 = 1 + test_balance/2
-            
-            # Apply normalization like the setter does
-            max_gain = max(abs(expected_bL1), abs(expected_bL2), abs(expected_bR1), abs(expected_bR2))
-            if max_gain > 1.0:
-                expected_bL1 /= max_gain
-                expected_bL2 /= max_gain
-                expected_bR1 /= max_gain  
-                expected_bR2 /= max_gain
-            
-            # Negative gains become 0 in PipeWire
-            if expected_bL2 < 0:
-                expected_bL2 = 0
-            if expected_bR1 < 0:
-                expected_bR1 = 0
-                
-            # Check if this matches our observed gains
-            if (eq(bL1, expected_bL1) and eq(bL2, expected_bL2) and 
-                eq(bR1, expected_bR1) and eq(bR2, expected_bR2)):
-                return round(test_balance, 6)
-    
-    # Special cases for extreme values
-    # Full left (balance = -1): only left channel, right muted
-    if eq(bR2, 0.0) and bL1 > 0 and eq(bL2, 0.0) and eq(bR1, 0.0):
-        return -1.0
+        # Verify the expected gains match
+        expected_bL1 = 1 - expected_b/2
+        expected_bR2 = 1 + expected_b/2
         
-    # Full right (balance = 1): only right channel, left muted  
-    if eq(bL1, 0.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and bR2 > 0:
-        return 1.0
+        if eq(bL1, expected_bL1) and eq(bR2, expected_bR2):
+            balance = expected_b
+            # Clamp to valid range
+            balance = max(-1.0, min(1.0, balance))
+            return round(balance, 6)
+        elif eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
+            # Perfect center/bypass case
+            return 0.0
     
-    # Default to center if no pattern matches
+    # Default to center if pattern doesn't match
     return 0.0
-
-def get_eq(eq_num: int) -> Optional[Dict[str, float]]:
-    """Get frequency, Q, and gain for a specific EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        
-    Returns:
-        Dict with 'freq', 'q', 'gain' keys, or None if unavailable
-    """
-    if not 1 <= eq_num <= 16:
-        return None
-        
-    gains = _get_mixer_status()
-    if gains is None:
-        return None
-    
-    # EQ parameters are stored as eqL01:Freq, eqL01:Q, eqL01:Gain (left channel as reference)
-    # Format EQ number as zero-padded 2 digits
-    eq_name = f"eqL{eq_num:02d}"
-    freq_key = f"{eq_name}:Freq"
-    q_key = f"{eq_name}:Q"
-    gain_key = f"{eq_name}:Gain"
-    
-    # Default EQ values from the filter-chain configuration
-    default_freqs = [32.0, 50.0, 80.0, 125.0, 200.0, 315.0, 500.0, 800.0,
-                     1250.0, 2000.0, 3150.0, 5000.0, 8000.0, 10000.0, 16000.0, 20000.0]
-    default_freq = default_freqs[eq_num - 1] if eq_num <= len(default_freqs) else 1000.0
-    
-    return {
-        'freq': gains.get(freq_key, default_freq),
-        'q': gains.get(q_key, 1.0),
-        'gain': gains.get(gain_key, 0.0)  # 0dB default
-    }
-
-def get_eq_left(eq_num: int) -> Optional[Dict[str, float]]:
-    """Get frequency, Q, and gain for a specific left channel EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        
-    Returns:
-        Dict with 'freq', 'q', 'gain' keys, or None if unavailable
-    """
-    return _get_eq_channel(eq_num, 'L')
-
-def get_eq_right(eq_num: int) -> Optional[Dict[str, float]]:
-    """Get frequency, Q, and gain for a specific right channel EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        
-    Returns:
-        Dict with 'freq', 'q', 'gain' keys, or None if unavailable
-    """
-    return _get_eq_channel(eq_num, 'R')
-
-def _get_eq_channel(eq_num: int, channel: str) -> Optional[Dict[str, float]]:
-    """Get frequency, Q, and gain for a specific EQ filter channel.
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        channel: 'L' for left or 'R' for right
-        
-    Returns:
-        Dict with 'freq', 'q', 'gain' keys, or None if unavailable
-    """
-    if not 1 <= eq_num <= 16:
-        return None
-        
-    gains = _get_mixer_status()
-    if gains is None:
-        return None
-    
-    # Format EQ number as zero-padded 2 digits
-    eq_name = f"eq{channel}{eq_num:02d}"
-    freq_key = f"{eq_name}:Freq"
-    q_key = f"{eq_name}:Q"
-    gain_key = f"{eq_name}:Gain"
-    
-    # Default EQ values from the filter-chain configuration
-    default_freqs = [32.0, 50.0, 80.0, 125.0, 200.0, 315.0, 500.0, 800.0,
-                     1250.0, 2000.0, 3150.0, 5000.0, 8000.0, 10000.0, 16000.0, 20000.0]
-    default_freq = default_freqs[eq_num - 1] if eq_num <= len(default_freqs) else 1000.0
-    
-    return {
-        'freq': gains.get(freq_key, default_freq),
-        'q': gains.get(q_key, 1.0),
-        'gain': gains.get(gain_key, 0.0)
-    }
-
-def get_eq_all() -> Optional[Dict[int, Dict[str, float]]]:
-    """Get frequency, Q, and gain for all EQ filters.
-    
-    Returns:
-        Dict mapping EQ numbers (1-16) to dicts with freq/q/gain, or None if unavailable
-    """
-    gains = _get_mixer_status()
-    if gains is None:
-        return None
-        
-    eq_filters = {}
-    default_freqs = [32.0, 50.0, 80.0, 125.0, 200.0, 315.0, 500.0, 800.0,
-                     1250.0, 2000.0, 3150.0, 5000.0, 8000.0, 10000.0, 16000.0, 20000.0]
-    
-    for eq_num in range(1, 17):
-        # Format EQ number as zero-padded 2 digits
-        eq_name = f"eqL{eq_num:02d}"
-        freq_key = f"{eq_name}:Freq"
-        q_key = f"{eq_name}:Q"
-        gain_key = f"{eq_name}:Gain"
-        
-        default_freq = default_freqs[eq_num - 1] if eq_num <= len(default_freqs) else 1000.0
-        
-        eq_filters[eq_num] = {
-            'freq': gains.get(freq_key, default_freq),
-            'q': gains.get(q_key, 1.0),
-            'gain': gains.get(gain_key, 0.0)
-        }
-        
-    return eq_filters
-
-def set_eq(eq_num: int, freq: Optional[float] = None, q: Optional[float] = None, 
-           gain: Optional[float] = None, *, node_name: Optional[str] = None, 
-           node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set frequency, Q, and/or gain for a specific EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        freq: Frequency in Hz (optional, keeps current if None)
-        q: Q factor (optional, keeps current if None)  
-        gain: Gain in dB (optional, keeps current if None)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if not 1 <= eq_num <= 16:
-        return False
-        
-    # Get current values if we're only updating some parameters
-    current = get_eq(eq_num)
-    if current is None:
-        return False
-        
-    # Use current values for parameters not being changed
-    if freq is None:
-        freq = current['freq']
-    if q is None:
-        q = current['q'] 
-    if gain is None:
-        gain = current['gain']
-        
-    # Validate parameters
-    try:
-        freq_val = float(freq)
-        q_val = float(q)
-        gain_val = float(gain)
-        
-        if freq_val <= 0 or freq_val > 24000:
-            return False  # Invalid frequency range
-        if q_val <= 0 or q_val > 20:
-            return False  # Invalid Q range
-        if gain_val < -15 or gain_val > 15:
-            return False  # Invalid gain range
-    except ValueError:
-        return False
-        
-    return _apply_eq_filter(eq_num, freq_val, q_val, gain_val)
-
-def set_eq_left(eq_num: int, freq: Optional[float] = None, q: Optional[float] = None, 
-                gain: Optional[float] = None, *, node_name: Optional[str] = None, 
-                node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set frequency, Q, and/or gain for a specific left channel EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        freq: Frequency in Hz (optional, keeps current if None)
-        q: Q factor (optional, keeps current if None)  
-        gain: Gain in dB (optional, keeps current if None)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    return _set_eq_channel(eq_num, 'L', freq, q, gain)
-
-def set_eq_right(eq_num: int, freq: Optional[float] = None, q: Optional[float] = None, 
-                 gain: Optional[float] = None, *, node_name: Optional[str] = None, 
-                 node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set frequency, Q, and/or gain for a specific right channel EQ filter (1-16).
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        freq: Frequency in Hz (optional, keeps current if None)
-        q: Q factor (optional, keeps current if None)  
-        gain: Gain in dB (optional, keeps current if None)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    return _set_eq_channel(eq_num, 'R', freq, q, gain)
-
-def _set_eq_channel(eq_num: int, channel: str, freq: Optional[float] = None, 
-                    q: Optional[float] = None, gain: Optional[float] = None) -> bool:
-    """Set frequency, Q, and/or gain for a specific EQ filter channel.
-    
-    Args:
-        eq_num: EQ filter number (1-16)
-        channel: 'L' for left or 'R' for right
-        freq: Frequency in Hz (optional, keeps current if None)
-        q: Q factor (optional, keeps current if None)  
-        gain: Gain in dB (optional, keeps current if None)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if not 1 <= eq_num <= 16:
-        return False
-        
-    # Get current values if we're only updating some parameters
-    current = _get_eq_channel(eq_num, channel)
-    if current is None:
-        return False
-        
-    # Use current values for parameters not being changed
-    if freq is None:
-        freq = current['freq']
-    if q is None:
-        q = current['q'] 
-    if gain is None:
-        gain = current['gain']
-        
-    # Validate parameters
-    try:
-        freq_val = float(freq)
-        q_val = float(q)
-        gain_val = float(gain)
-        
-        if freq_val <= 0 or freq_val > 24000:
-            return False  # Invalid frequency range
-        if q_val <= 0 or q_val > 20:
-            return False  # Invalid Q range
-        if gain_val < -15 or gain_val > 15:
-            return False  # Invalid gain range
-    except ValueError:
-        return False
-        
-    return _apply_eq_filter_channel(eq_num, channel, freq_val, q_val, gain_val)
-
-def set_eq_all(eq_filters: Dict[int, Dict[str, float]], *, node_name: Optional[str] = None, 
-               node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set frequency, Q, and gain for multiple EQ filters.
-    
-    Args:
-        eq_filters: Dict mapping EQ numbers (1-16) to dicts with freq/q/gain values
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    # Validate all EQ filters first
-    for eq_num, params in eq_filters.items():
-        if not 1 <= eq_num <= 16:
-            return False
-        if not isinstance(params, dict):
-            return False
-        
-        for key in ['freq', 'q', 'gain']:
-            if key not in params:
-                return False
-            try:
-                val = float(params[key])
-                if key == 'freq' and (val <= 0 or val > 24000):
-                    return False
-                elif key == 'q' and (val <= 0 or val > 20):
-                    return False
-                elif key == 'gain' and (val < -15 or val > 15):
-                    return False
-            except ValueError:
-                return False
-            
-    return _apply_eq_filters(eq_filters)
-
-def _apply_eq_filter_channel(eq_num: int, channel: str, freq: float, q: float, gain: float) -> bool:
-    """Apply freq, Q, and gain to a specific EQ filter channel."""
-    nid = _resolve_mixer_container_node()
-    if nid is None:
-        logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
-        return False
-        
-    # Format EQ number as zero-padded 2 digits
-    eq_name = f"eq{channel}{eq_num:02d}"
-    
-    # Set parameters for the specified channel
-    param = '{ "params": [ "%s:Freq" %0.2f "%s:Q" %0.6f "%s:Gain" %0.2f ] }' % (
-        eq_name, freq, eq_name, q, eq_name, gain)
-    try:
-        res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
-        if res.returncode != 0:
-            logger.error("pw-cli set-param failed: %s", res.stderr.strip())
-            return False
-        # Update cache
-        _last_mixer_gains.update({
-            f"{eq_name}:Freq": freq,
-            f"{eq_name}:Q": q,
-            f"{eq_name}:Gain": gain,
-        })
-        return True
-    except FileNotFoundError:
-        logger.error("pw-cli not found")
-    except Exception as e:
-        logger.error("Error applying EQ filter: %s", e)
-    return False
-
-def _apply_eq_filter(eq_num: int, freq: float, q: float, gain: float) -> bool:
-    """Apply freq, Q, and gain to a specific EQ filter."""
-    nid = _resolve_mixer_container_node()
-    if nid is None:
-        logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
-        return False
-        
-    # Format EQ number as zero-padded 2 digits
-    eq_left = f"eqL{eq_num:02d}"
-    eq_right = f"eqR{eq_num:02d}"
-    
-    # Set the same parameters for both left and right channels
-    param = '{ "params": [ "%s:Freq" %0.2f "%s:Q" %0.6f "%s:Gain" %0.2f "%s:Freq" %0.2f "%s:Q" %0.6f "%s:Gain" %0.2f ] }' % (
-        eq_left, freq, eq_left, q, eq_left, gain,
-        eq_right, freq, eq_right, q, eq_right, gain)
-    try:
-        res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
-        if res.returncode != 0:
-            logger.error("pw-cli set-param failed: %s", res.stderr.strip())
-            return False
-        # Update cache
-        _last_mixer_gains.update({
-            f"{eq_left}:Freq": freq,
-            f"{eq_left}:Q": q,
-            f"{eq_left}:Gain": gain,
-            f"{eq_right}:Freq": freq,
-            f"{eq_right}:Q": q,
-            f"{eq_right}:Gain": gain,
-        })
-        return True
-    except FileNotFoundError:
-        logger.error("pw-cli not found")
-    except Exception as e:
-        logger.error("Error applying EQ filter: %s", e)
-    return False
-
-def _apply_eq_filters(eq_filters: Dict[int, Dict[str, float]]) -> bool:
-    """Apply freq, Q, and gain to multiple EQ filters in one operation."""
-    nid = _resolve_mixer_container_node()
-    if nid is None:
-        logger.error("Mixer container node '%s' not found", DEFAULT_MIXER_NODE_NAME)
-        return False
-        
-    # Build parameter string for all specified EQ filters
-    params = []
-    cache_updates = {}
-    for eq_num, eq_params in eq_filters.items():
-        freq = eq_params['freq']
-        q = eq_params['q'] 
-        gain = eq_params['gain']
-        
-        # Format EQ number as zero-padded 2 digits
-        eq_left = f"eqL{eq_num:02d}"
-        eq_right = f"eqR{eq_num:02d}"
-        
-        params.extend([
-            f'"{eq_left}:Freq" {freq:0.2f}',
-            f'"{eq_left}:Q" {q:0.6f}',
-            f'"{eq_left}:Gain" {gain:0.2f}',
-            f'"{eq_right}:Freq" {freq:0.2f}',
-            f'"{eq_right}:Q" {q:0.6f}',
-            f'"{eq_right}:Gain" {gain:0.2f}'
-        ])
-        cache_updates.update({
-            f"{eq_left}:Freq": freq,
-            f"{eq_left}:Q": q,
-            f"{eq_left}:Gain": gain,
-            f"{eq_right}:Freq": freq,
-            f"{eq_right}:Q": q,
-            f"{eq_right}:Gain": gain,
-        })
-        
-    param = '{ "params": [ ' + ' '.join(params) + ' ] }'
-    try:
-        res = subprocess.run(["pw-cli", "set-param", str(nid), "Props", param], capture_output=True, text=True)
-        if res.returncode != 0:
-            logger.error("pw-cli set-param failed: %s", res.stderr.strip())
-            return False
-        # Update cache
-        _last_mixer_gains.update(cache_updates)
-        return True
-    except FileNotFoundError:
-        logger.error("pw-cli not found")
-    except Exception as e:
-        logger.error("Error applying EQ filters: %s", e)
-    return False
 
 def main():
     import sys
@@ -1226,49 +752,23 @@ def main():
         print("  config-pipewire get-db <control_name>")
         print("  config-pipewire set <control_name> <volume>")
         print("  config-pipewire set-db <control_name> <volume_db>")
-        print("  config-pipewire get-default-volume       # get default sink volume")
-        print("  config-pipewire get-default-volume-db    # get default sink volume in dB")
-        print("  config-pipewire set-default-volume <vol> # set default sink volume")
-        print("  config-pipewire set-default-volume-db <vol_db> # set default sink volume in dB")
-        print("  config-pipewire mixer-status")
-        print("  config-pipewire mixer-gains        # show individual gain values (live or cached)")
         print("  config-pipewire get-monostereo     # get current monostereo mode")
         print("  config-pipewire get-balance        # get current balance value")
-        print("  config-pipewire get-eq <eq_num> [channel]    # get EQ filter parameters (1-16), channel: left/right/both")
-        print("  config-pipewire get-eq-all         # get all EQ filter parameters")
         print("  config-pipewire mixer-save         # save current mixer state")
         print("  config-pipewire mixer-restore      # restore saved mixer state")
         print("  config-pipewire monostereo <mode>  # set monostereo mode")
         print("  config-pipewire balance <B>        # set balance")
-        print("  config-pipewire eq <eq_num> <freq> <q> <gain> [channel]  # set EQ filter parameters, channel: left/right/both")
-        print("  config-pipewire eq-reset           # reset all EQ filters to defaults")
         print("")
         print("  control_name: either 'node_id:device_name' or just 'node_id'")
         print("  volume: linear volume (0.0 - 1.0)")
         print("  volume_db: volume in decibels (e.g., -20.0)")
         print("  mode: stereo, mono, left, right")
         print("  B: balance in [-1,1]; -1 full left, 0 center, +1 full right")
-        print("  eq_num: EQ filter number (1-16)")
-        print("  freq: frequency in Hz (20-20000)")
-        print("  q: Q factor (0.1-20.0)")
-        print("  gain: gain in dB (-15.0 to +15.0)")
-        print("  channel: left, right, both (default: both)")
         print("  examples:")
-        print("    config-pipewire monostereo stereo         # set stereo mode")
-        print("    config-pipewire balance -0.3              # set left bias")
-        print("    config-pipewire get-monostereo            # get current mode")
-        print("    config-pipewire get-balance               # get current balance")
-        print("    config-pipewire get-default-volume        # get current default sink volume")
-        print("    config-pipewire set-default-volume 0.8    # set default sink to 80%")
-        print("    config-pipewire set-default-volume-db -6  # set default sink to -6dB")
-        print("    config-pipewire eq 1 80.0 1.5 -3.0       # set EQ 1: 80Hz, Q=1.5, -3dB (both channels)")
-        print("    config-pipewire eq 5 1250.0 0.8 +2.5     # set EQ 5: 1.25kHz, Q=0.8, +2.5dB (both channels)")
-        print("    config-pipewire eq 3 200.0 2.0 +1.0 left # set left EQ 3: 200Hz, Q=2.0, +1dB")
-        print("    config-pipewire eq 3 250.0 1.8 +0.5 right # set right EQ 3: 250Hz, Q=1.8, +0.5dB")
-        print("    config-pipewire get-eq 3                 # get EQ 3 parameters (both channels)")
-        print("    config-pipewire get-eq 3 left            # get left EQ 3 parameters")
-        print("    config-pipewire get-eq 3 right           # get right EQ 3 parameters")
-        print("    config-pipewire get-eq-all               # show all EQ filters")
+        print("    config-pipewire monostereo stereo  # set stereo mode")
+        print("    config-pipewire balance -0.3       # set left bias")
+        print("    config-pipewire get-monostereo     # get current mode")
+        print("    config-pipewire get-balance        # get current balance")
 
     if len(sys.argv) < 2:
         print_usage()
@@ -1334,21 +834,6 @@ def main():
             print(f"Failed to set volume for '{sys.argv[2]}'")
             sys.exit(4)
         print("OK")
-    elif cmd == "mixer-status":
-        gains = get_mixer_status()
-        if gains is None:
-            print("Mixer status unavailable")
-            sys.exit(5)
-        for k,v in gains.items():
-            print(f"{k}={v:.6f}")
-    elif cmd == "mixer-gains":
-        gains = get_mixer_status()
-        if gains is None:
-            print("{}")
-            sys.exit(5)
-        # Print as simple JSON-ish line for easy parsing
-        parts = [f"\"{k}\":{v:.6f}" for k,v in sorted(gains.items())]
-        print('{'+', '.join(parts)+'}')
     elif cmd == "get-monostereo":
         mode = get_monostereo()
         if mode is None:
@@ -1433,165 +918,6 @@ def main():
             sys.exit(3)
         if not set_balance(b):
             print("Failed to set balance")
-            sys.exit(4)
-        print("OK")
-    elif cmd == "get-eq" and len(sys.argv) >= 3:
-        try:
-            eq_num = int(sys.argv[2])
-            if not 1 <= eq_num <= 16:
-                print("EQ filter number must be between 1 and 16")
-                sys.exit(3)
-        except ValueError:
-            print("EQ filter number must be a number between 1 and 16")
-            sys.exit(3)
-        
-        # Optional channel parameter
-        channel = sys.argv[3].lower() if len(sys.argv) > 3 else "both"
-        
-        if channel == "left":
-            eq_params = get_eq_left(eq_num)
-            if eq_params is None:
-                print("EQ status unavailable")
-                sys.exit(2)
-            print(f"EQ Left {eq_num}: freq={eq_params['freq']:0.1f}Hz, Q={eq_params['q']:0.2f}, gain={eq_params['gain']:+0.1f}dB")
-        elif channel == "right":
-            eq_params = get_eq_right(eq_num)
-            if eq_params is None:
-                print("EQ status unavailable")
-                sys.exit(2)
-            print(f"EQ Right {eq_num}: freq={eq_params['freq']:0.1f}Hz, Q={eq_params['q']:0.2f}, gain={eq_params['gain']:+0.1f}dB")
-        elif channel == "both":
-            # Show both channels
-            eq_left = get_eq_left(eq_num)
-            eq_right = get_eq_right(eq_num)
-            if eq_left is None or eq_right is None:
-                print("EQ status unavailable")
-                sys.exit(2)
-            print(f"EQ Left  {eq_num}: freq={eq_left['freq']:0.1f}Hz, Q={eq_left['q']:0.2f}, gain={eq_left['gain']:+0.1f}dB")
-            print(f"EQ Right {eq_num}: freq={eq_right['freq']:0.1f}Hz, Q={eq_right['q']:0.2f}, gain={eq_right['gain']:+0.1f}dB")
-        else:
-            print("Channel must be 'left', 'right', or 'both'")
-            sys.exit(3)
-    elif cmd == "get-eq-all":
-        eq_filters = get_eq_all()
-        if eq_filters is None:
-            print("EQ status unavailable")
-            sys.exit(2)
-        for eq_num in range(1, 17):
-            params = eq_filters[eq_num]
-            print(f"EQ {eq_num:2d}: freq={params['freq']:6.1f}Hz, Q={params['q']:4.2f}, gain={params['gain']:+5.1f}dB")
-    elif cmd == "eq" and len(sys.argv) >= 6:
-        try:
-            eq_num = int(sys.argv[2])
-            freq = float(sys.argv[3])
-            q = float(sys.argv[4])
-            gain = float(sys.argv[5])
-            if not 1 <= eq_num <= 16:
-                print("EQ filter number must be between 1 and 16")
-                sys.exit(3)
-            if not 20 <= freq <= 20000:
-                print("Frequency must be between 20 and 20000 Hz")
-                sys.exit(3)
-            if not 0.1 <= q <= 20.0:
-                print("Q factor must be between 0.1 and 20.0")
-                sys.exit(3)
-            if not -15.0 <= gain <= 15.0:
-                print("Gain must be between -15.0 and +15.0 dB")
-                sys.exit(3)
-        except ValueError:
-            print("EQ parameters must be numeric: eq <eq_num> <freq> <q> <gain> [channel]")
-            sys.exit(3)
-        
-        # Optional channel parameter
-        channel = sys.argv[6].lower() if len(sys.argv) > 6 else "both"
-        
-        if channel == "left":
-            if not set_eq_left(eq_num, freq, q, gain):
-                print("Failed to set left EQ filter")
-                sys.exit(4)
-        elif channel == "right":
-            if not set_eq_right(eq_num, freq, q, gain):
-                print("Failed to set right EQ filter")
-                sys.exit(4)
-        elif channel == "both":
-            if not set_eq(eq_num, freq, q, gain):
-                print("Failed to set EQ filter")
-                sys.exit(4)
-        else:
-            print("Channel must be 'left', 'right', or 'both'")
-            sys.exit(3)
-        print("OK")
-    elif cmd == "eq-reset":
-        # Reset all EQ filters to defaults
-        default_freqs = [32.0, 50.0, 80.0, 125.0, 200.0, 315.0, 500.0, 800.0,
-                         1250.0, 2000.0, 3150.0, 5000.0, 8000.0, 10000.0, 16000.0, 20000.0]
-        reset_filters = {}
-        for eq_num in range(1, 17):
-            reset_filters[eq_num] = {
-                'freq': default_freqs[eq_num - 1] if eq_num <= len(default_freqs) else 1000.0,
-                'q': 1.0,
-                'gain': 0.0
-            }
-        if not set_eq_all(reset_filters):
-            print("Failed to reset EQ")
-            sys.exit(4)
-        print("OK")
-    elif cmd == "get-default-volume":
-        default_sink = get_default_sink()
-        if default_sink:
-            vol = get_volume(default_sink)
-            if vol is None:
-                print("Failed to get default sink volume")
-                sys.exit(2)
-            print(f"{vol:.6f}")
-        else:
-            print("No default sink found")
-            sys.exit(2)
-    elif cmd == "get-default-volume-db":
-        default_sink = get_default_sink()
-        if default_sink:
-            vol_db = get_volume_db(default_sink)
-            if vol_db is None:
-                print("Failed to get default sink volume")
-                sys.exit(2)
-            if vol_db == -math.inf:
-                print("-inf")
-            else:
-                print(f"{vol_db:.2f}")
-        else:
-            print("No default sink found")
-            sys.exit(2)
-    elif cmd == "set-default-volume" and len(sys.argv) == 3:
-        default_sink = get_default_sink()
-        if not default_sink:
-            print("No default sink found")
-            sys.exit(2)
-        try:
-            volume = float(sys.argv[2])
-            if volume < 0.0 or volume > 1.0:
-                print("Volume must be between 0.0 and 1.0")
-                sys.exit(3)
-        except ValueError:
-            print("Volume must be a float between 0.0 and 1.0")
-            sys.exit(3)
-        ok = set_volume(default_sink, volume)
-        if not ok:
-            print("Failed to set default sink volume")
-            sys.exit(4)
-        print("OK")
-    elif cmd == "set-default-volume-db" and len(sys.argv) == 3:
-        default_sink = get_default_sink()
-        if not default_sink:
-            print("No default sink found")
-            sys.exit(2)
-        try:
-            volume_db = float(sys.argv[2])
-        except ValueError:
-            print("Volume in dB must be a float (e.g., -20.0)")
-            sys.exit(3)
-        ok = set_volume_db(default_sink, volume_db)
-        if not ok:
-            print("Failed to set default sink volume")
             sys.exit(4)
         print("OK")
     else:

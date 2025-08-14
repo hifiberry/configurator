@@ -78,13 +78,11 @@ Get version information and available endpoints.
     "pipewire_volume": "/api/v1/pipewire/volume/<control>",
     "pipewire_volume_set": "/api/v1/pipewire/volume/<control>",
     "pipewire_filtergraph": "/api/v1/pipewire/filtergraph",
-    "pipewire_mixer_status": "/api/v1/pipewire/mixer",
     "pipewire_mixer_analysis": "/api/v1/pipewire/mixer/analysis",
     "pipewire_monostereo_get": "/api/v1/pipewire/monostereo",
     "pipewire_monostereo_set": "/api/v1/pipewire/monostereo",
     "pipewire_balance_get": "/api/v1/pipewire/balance",
     "pipewire_balance_set": "/api/v1/pipewire/balance",
-    "pipewire_mixer_set": "/api/v1/pipewire/mixer/set",
     "pipewire_save_default_volume": "/api/v1/pipewire/save-default-volume",
     "settings_list": "/api/v1/settings",
     "settings_save": "/api/v1/settings/save",
@@ -1443,10 +1441,11 @@ The PipeWire API provides comprehensive volume control for PipeWire audio system
 - Proper volume conversion using PipeWire's cubic volume curve
 - Support for "default" control name for easy access
 - Export current PipeWire connection graph in GraphViz DOT format
-- Advanced mixer control with separate monostereo/balance stages
+- Advanced mixer control with 16-band parametric EQ and separate monostereo/balance stages
 
 **New PipeWire Filter Architecture (v2.3+):**
 The PipeWire filter-chain now uses a modern architecture with:
+- **16-band parametric EQ**: Professional-grade frequency response control
 - **Separate monostereo mixer**: Dedicated filter block for mono/stereo/left/right channel mixing  
 - **Separate balance mixer**: Independent filter block for stereo balance control
 - **Improved API separation**: Dedicated endpoints for monostereo (`/api/v1/pipewire/monostereo`) and balance (`/api/v1/pipewire/balance`) control
@@ -1661,30 +1660,6 @@ digraph pipewire_graph {
 - You can render the graph with: `dot -Tpng -o graph.png`.
 - This endpoint requires the `pw-dot` utility (part of PipeWire tools) to be installed.
 
-### `GET /api/v1/pipewire/mixer`
-
-Retrieve the current mixer gain matrix for the custom filter-chain node (default name `effect_input.proc`).
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "gains": {
-      "mixer_left:Gain_1": 1.0,
-      "mixer_left:Gain_2": 0.0,
-      "mixer_right:Gain_1": 0.0,
-      "mixer_right:Gain_2": 1.0
-    }
-  }
-}
-```
-
-**Response (Unavailable):**
-```json
-{ "status": "error", "message": "Mixer status unavailable" }
-```
-
 ### `GET /api/v1/pipewire/mixer/analysis`
 
 Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance value from current gain matrix.
@@ -1852,7 +1827,8 @@ Set the monostereo mode for the PipeWire filter-chain mixer. This controls how t
 {
   "status": "success",
   "data": {
-    "monostereo_mode": "stereo"
+    "monostereo_mode": "stereo",
+    "balance": 0.0
   }
 }
 ```
@@ -1877,11 +1853,12 @@ Invalid mode:
 
 **Response Fields:**
 - **monostereo_mode**: The monostereo mode that was set
+- **balance**: Current balance value after setting the mode
 
 **Notes:**
 - Changes are automatically saved to mixer state if settings management is enabled
-- This endpoint only controls monostereo mode and does not affect balance settings
-- The response only includes the monostereo mode for proper separation of concerns
+- Setting monostereo mode may affect the current balance setting depending on the mode
+- The response includes both the new monostereo mode and current balance for reference
 
 ### `GET /api/v1/pipewire/balance`
 
@@ -1933,6 +1910,7 @@ Set the stereo balance for the PipeWire filter-chain mixer. This adjusts the rel
 {
   "status": "success",
   "data": {
+    "monostereo_mode": "stereo",
     "balance": -0.3
   }
 }
@@ -1973,12 +1951,13 @@ Balance setting failed:
 ```
 
 **Response Fields:**
+- **monostereo_mode**: Current monostereo mode after setting balance
 - **balance**: The balance value that was set
 
 **Notes:**
+- Balance is applied within the context of the current monostereo mode
 - Changes are automatically saved to mixer state if settings management is enabled
-- This endpoint only controls balance and does not affect monostereo mode settings
-- The response only includes the balance value for proper separation of concerns
+- The response includes both the current monostereo mode and new balance for reference
 - Balance adjustments work by modifying the gain values of the underlying mixer matrix
 
 ## Settings Management
@@ -2603,11 +2582,6 @@ curl -X PUT -H "Content-Type: application/json" \
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume_db": -40.0}' \
      http://localhost:1081/api/v1/pipewire/volume/default
-```
-
-**Get current mixer gain matrix:**
-```bash
-curl http://localhost:1081/api/v1/pipewire/mixer
 ```
 
 **Get mixer analysis (inferred mode and balance):**

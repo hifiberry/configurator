@@ -229,18 +229,11 @@ class ConfigAPIServer:
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
                     'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
                     'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
-                    'pipewire_mixer_status': '/api/v1/pipewire/mixer',
                     'pipewire_mixer_analysis': '/api/v1/pipewire/mixer/analysis',
                     'pipewire_monostereo_get': '/api/v1/pipewire/monostereo',
                     'pipewire_monostereo_set': '/api/v1/pipewire/monostereo',
                     'pipewire_balance_get': '/api/v1/pipewire/balance',
                     'pipewire_balance_set': '/api/v1/pipewire/balance',
-                    'pipewire_eq_get': '/api/v1/pipewire/eq/<eq_num>',
-                    'pipewire_eq_set': '/api/v1/pipewire/eq/<eq_num>',
-                    'pipewire_eq_all_get': '/api/v1/pipewire/eq',
-                    'pipewire_eq_all_set': '/api/v1/pipewire/eq',
-                    'pipewire_eq_reset': '/api/v1/pipewire/eq/reset',
-                    'pipewire_mixer_set': '/api/v1/pipewire/mixer/set',  # DEPRECATED
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -468,11 +461,6 @@ class ConfigAPIServer:
             return self.pipewire_handler.handle_get_filtergraph()
 
         # PipeWire mixer / balance endpoints
-        @self.app.route('/api/v1/pipewire/mixer', methods=['GET'])
-        def get_pipewire_mixer_status():
-            """Get current mixer gain matrix"""
-            return self.pipewire_handler.handle_get_mixer()
-
         @self.app.route('/api/v1/pipewire/mixer/analysis', methods=['GET'])
         def get_pipewire_mixer_analysis():
             """Get inferred monostereo mode and balance plus gains"""
@@ -497,31 +485,6 @@ class ConfigAPIServer:
         def set_pipewire_balance():
             """Set balance (-1 to 1)"""
             return self.pipewire_handler.handle_set_balance()
-
-        @self.app.route('/api/v1/pipewire/eq/<int:eq_num>', methods=['GET'])
-        def get_pipewire_eq(eq_num):
-            """Get EQ filter parameters for specific filter (1-16)"""
-            return self.pipewire_handler.handle_get_eq(eq_num)
-
-        @self.app.route('/api/v1/pipewire/eq/<int:eq_num>', methods=['POST'])
-        def set_pipewire_eq(eq_num):
-            """Set EQ filter parameters for specific filter (1-16)"""
-            return self.pipewire_handler.handle_set_eq(eq_num)
-
-        @self.app.route('/api/v1/pipewire/eq', methods=['GET'])
-        def get_pipewire_eq_all():
-            """Get all EQ filter parameters"""
-            return self.pipewire_handler.handle_get_eq_all()
-
-        @self.app.route('/api/v1/pipewire/eq', methods=['POST'])
-        def set_pipewire_eq_all():
-            """Set EQ filter parameters for multiple filters at once"""
-            return self.pipewire_handler.handle_set_eq_all()
-
-        @self.app.route('/api/v1/pipewire/eq/reset', methods=['POST'])
-        def reset_pipewire_eq():
-            """Reset all EQ filters to default values"""
-            return self.pipewire_handler.handle_reset_eq()
 
         @self.app.route('/api/v1/pipewire/mixer/set', methods=['POST'])
         def set_pipewire_mixer():
