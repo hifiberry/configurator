@@ -9,7 +9,7 @@ Node name assumptions for monostereo/balance features:
     - Virtual processing sink (what regular applications target): effect_input.proc
     - (Optional) Passive output node name: effect_output.proc
     - Parametric EQ node (16 peaking filters per channel): peq
-    - Two monostereo mixer nodes for mono/stereo/left/right modes:
+    - Two monostereo mixer nodes for mono/stereo/left/right/swapped modes:
                 monostereo_left
                 monostereo_right
     - Two balance mixer nodes for left-right crossfeed:
@@ -594,10 +594,10 @@ def _get_mixer_status() -> Optional[Dict[str, float]]:
         return dict(_last_mixer_gains)
 
 def set_monostereo(mode: str, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
-    """Set monostereo mode: stereo, mono, left, right.
+    """Set monostereo mode: stereo, mono, left, right, swapped.
     
     Args:
-        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right')
+        mode: Channel mixing mode ('mono', 'stereo', 'left', 'right', 'swapped')
         
     Returns:
         True if successful, False otherwise.
@@ -612,8 +612,10 @@ def set_monostereo(mode: str, *, node_name: Optional[str] = None, node_id: Optio
         return _apply_monostereo_gains(1.0, 0.0, 1.0, 0.0)
     elif mode == 'right':
         return _apply_monostereo_gains(0.0, 1.0, 0.0, 1.0)
+    elif mode == 'swapped':
+        return _apply_monostereo_gains(0.0, 1.0, 1.0, 0.0)
     else:
-        logger.error("Invalid monostereo mode: %s (use stereo|mono|left|right)", mode)
+        logger.error("Invalid monostereo mode: %s (use stereo|mono|left|right|swapped)", mode)
         return False
 
 def set_balance(balance: float, *, node_name: Optional[str] = None, node_id: Optional[Union[str,int]] = None) -> bool:
@@ -689,6 +691,9 @@ def get_monostereo() -> Optional[str]:
     # Right-only
     elif eq(mL1, 0.0) and eq(mL2, 1.0) and eq(mR1, 0.0) and eq(mR2, 1.0):
         return 'right'
+    # Swapped (left input to right output, right input to left output)
+    elif eq(mL1, 0.0) and eq(mL2, 1.0) and eq(mR1, 1.0) and eq(mR2, 0.0):
+        return 'swapped'
     else:
         return 'unknown'
 
@@ -762,7 +767,7 @@ def main():
         print("  control_name: either 'node_id:device_name' or just 'node_id'")
         print("  volume: linear volume (0.0 - 1.0)")
         print("  volume_db: volume in decibels (e.g., -20.0)")
-        print("  mode: stereo, mono, left, right")
+        print("  mode: stereo, mono, left, right, swapped")
         print("  B: balance in [-1,1]; -1 full left, 0 center, +1 full right")
         print("  examples:")
         print("    config-pipewire monostereo stereo  # set stereo mode")
