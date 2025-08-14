@@ -721,27 +721,55 @@ def get_balance() -> Optional[float]:
     def eq(x, y):
         return abs(x - y) <= tol
     
-    # Try to reverse the balance math:
+    # Check for perfect center/bypass case first
+    if eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
+        return 0.0
+    
+    # Try to reverse the balance math, accounting for normalization:
+    # Original balance math (before normalization):
     # balance_left  : Gain 1 = (1 - B/2)     Gain 2 = (-B/2)
     # balance_right : Gain 1 = (-B/2)        Gain 2 = (1 + B/2)
     
-    # Check if it follows the crossfeed pattern
+    # Check if it follows the crossfeed pattern (crossfeed gains should be equal)
     if eq(bL2, bR1):  # Crossfeed gains should be equal
-        crossfeed = bL2  # = bR1 = (-B/2)
-        expected_b = -2 * crossfeed
+        crossfeed = bL2  # = bR1 = normalized(-B/2)
         
-        # Verify the expected gains match
-        expected_bL1 = 1 - expected_b/2
-        expected_bR2 = 1 + expected_b/2
+        # To find B, we need to account for possible normalization
+        # If normalized, the ratio between gains is preserved:
+        # crossfeed / main_gain = (-B/2) / (1 ± B/2)
         
-        if eq(bL1, expected_bL1) and eq(bR2, expected_bR2):
-            balance = expected_b
-            # Clamp to valid range
-            balance = max(-1.0, min(1.0, balance))
-            return round(balance, 6)
-        elif eq(bL1, 1.0) and eq(bL2, 0.0) and eq(bR1, 0.0) and eq(bR2, 1.0):
-            # Perfect center/bypass case
-            return 0.0
+        # Use the larger of the two main gains to calculate balance
+        # bL1 corresponds to (1 - B/2), bR2 corresponds to (1 + B/2)
+        if abs(bR2) >= abs(bL1):
+            # Use right channel as reference: bR2 = normalized(1 + B/2)
+            # crossfeed = normalized(-B/2)
+            # So: crossfeed / bR2 = (-B/2) / (1 + B/2) = -B / (2 + B)
+            # Solve for B: crossfeed * (2 + B) = -B * bR2
+            # crossfeed * 2 + crossfeed * B = -B * bR2  
+            # crossfeed * 2 = -B * bR2 - crossfeed * B
+            # crossfeed * 2 = -B * (bR2 + crossfeed)
+            # B = -2 * crossfeed / (bR2 + crossfeed)
+            if abs(bR2 + crossfeed) > 1e-6:  # Avoid division by zero
+                balance = -2 * crossfeed / (bR2 + crossfeed)
+            else:
+                balance = 0.0
+        else:
+            # Use left channel as reference: bL1 = normalized(1 - B/2)
+            # crossfeed = normalized(-B/2)  
+            # So: crossfeed / bL1 = (-B/2) / (1 - B/2) = -B / (2 - B)
+            # Solve for B: crossfeed * (2 - B) = -B * bL1
+            # crossfeed * 2 - crossfeed * B = -B * bL1
+            # crossfeed * 2 = -B * bL1 + crossfeed * B
+            # crossfeed * 2 = B * (crossfeed - bL1)
+            # B = 2 * crossfeed / (crossfeed - bL1)
+            if abs(crossfeed - bL1) > 1e-6:  # Avoid division by zero
+                balance = 2 * crossfeed / (crossfeed - bL1)
+            else:
+                balance = 0.0
+        
+        # Clamp to valid range and return
+        balance = max(-1.0, min(1.0, balance))
+        return round(balance, 6)
     
     # Default to center if pattern doesn't match
     return 0.0
