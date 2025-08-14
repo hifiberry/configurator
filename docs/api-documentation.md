@@ -1729,8 +1729,7 @@ Set the monostereo mode for the PipeWire filter-chain mixer. This controls how t
 {
   "status": "success",
   "data": {
-    "monostereo_mode": "stereo",
-    "balance": 0.0
+    "monostereo_mode": "stereo"
   }
 }
 ```
@@ -1812,7 +1811,6 @@ Set the stereo balance for the PipeWire filter-chain mixer. This adjusts the rel
 {
   "status": "success",
   "data": {
-    "monostereo_mode": "stereo",
     "balance": -0.3
   }
 }
@@ -1853,11 +1851,10 @@ Balance setting failed:
 ```
 
 **Response Fields:**
-- **monostereo_mode**: Current monostereo mode after setting balance
 - **balance**: The balance value that was set
 
 **Notes:**
-- Balance is applied within the context of the current monostereo mode
+- Balance adjustments are independent of monostereo mode
 - Changes are automatically saved to mixer state if settings management is enabled
 - The response includes both the current monostereo mode and new balance for reference
 - Balance adjustments work by modifying the gain values of the underlying mixer matrix
