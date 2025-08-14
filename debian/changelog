@@ -1,3 +1,13 @@
+hifiberry-configurator (2.3.0) stable; urgency=medium
+
+  * Added "swapped" mode to PipeWire monostereo (swap left/right channels)
+  * Fixed balance calculation bug for positive values (normalization issue)
+  * Cleaned up API responses - separated monostereo and balance endpoints
+  * Removed deprecated mixer endpoints and documentation
+  * Updated API documentation for cleaner endpoint separation
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 14 Aug 2025 15:30:00 +0000
+
 hifiberry-configurator (2.2.7) stable; urgency=medium
 
   * Fixed stray CLI usage prints for PipeWire mixer commands
