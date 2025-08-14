@@ -1446,7 +1446,7 @@ The PipeWire API provides comprehensive volume control for PipeWire audio system
 **New PipeWire Filter Architecture (v2.3+):**
 The PipeWire filter-chain now uses a modern architecture with:
 - **16-band parametric EQ**: Professional-grade frequency response control
-- **Separate monostereo mixer**: Dedicated filter block for mono/stereo/left/right channel mixing  
+- **Separate monostereo mixer**: Dedicated filter block for mono/stereo/left/right/swapped channel mixing  
 - **Separate balance mixer**: Independent filter block for stereo balance control
 - **Improved API separation**: Dedicated endpoints for monostereo (`/api/v1/pipewire/monostereo`) and balance (`/api/v1/pipewire/balance`) control
 
@@ -1703,7 +1703,7 @@ Get the current monostereo mode from the PipeWire filter-chain mixer configurati
 ```
 
 **Response Fields:**
-- **monostereo_mode**: Current monostereo mode (`"stereo"`, `"mono"`, `"left"`, or `"right"`)
+- **monostereo_mode**: Current monostereo mode (`"stereo"`, `"mono"`, `"left"`, `"right"`, or `"swapped"`)
 
 ### `POST /api/v1/pipewire/monostereo`
 
@@ -1722,6 +1722,7 @@ Set the monostereo mode for the PipeWire filter-chain mixer. This controls how t
   - `"mono"` - Mix L+R channels equally to both outputs
   - `"left"` - Send left channel to both outputs
   - `"right"` - Send right channel to both outputs
+  - `"swapped"` - Swap left/right channels (L→R, R→L)
 
 **Success Response:**
 ```json
