@@ -358,9 +358,8 @@ class PipewireHandler:
                     'message': 'Failed to set monostereo mode'
                 }), 400
             
-            # Get current status for response
+            # Get current monostereo mode for response
             current_mode = pipewire.get_monostereo()
-            current_balance = pipewire.get_balance()
             
             # Auto-save mixer state if settings manager present
             try:
@@ -372,8 +371,7 @@ class PipewireHandler:
             return jsonify({
                 'status': 'success',
                 'data': {
-                    'monostereo_mode': current_mode,
-                    'balance': current_balance
+                    'monostereo_mode': current_mode
                 }
             })
         except Exception as e:
@@ -423,8 +421,7 @@ class PipewireHandler:
                     'message': 'Failed to set balance'
                 }), 400
             
-            # Get current status for response
-            current_mode = pipewire.get_monostereo()
+            # Get current balance for response
             current_balance = pipewire.get_balance()
             
             # Auto-save mixer state if settings manager present
@@ -437,7 +434,6 @@ class PipewireHandler:
             return jsonify({
                 'status': 'success',
                 'data': {
-                    'monostereo_mode': current_mode,
                     'balance': current_balance
                 }
             })
