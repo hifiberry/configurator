@@ -10,19 +10,30 @@ import logging
 import argparse
 import sys
 import json
+import os
+import pwd
 from typing import Dict, List, Optional, Tuple
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 class SystemdServiceManager:
-    """Manager for systemd service operations"""
+    """Manager for systemd service operations (supports system + user services)."""
     
     def __init__(self):
         """Initialize the SystemD service manager"""
         self.systemctl_cmd = "systemctl"
+        # User service detection (parsed once from /etc/hifiberry.user)
+        self.user_name = None
+        self.user_uid = None
+        self.user_runtime_dir = None
+        self._detect_user_service_user()
+        
+        # Service environment mapping (service_name -> 'system' or 'user')
+        self.service_environments = {}
+        self._build_service_environment_map()
     
-    def _run_command(self, command: List[str]) -> Tuple[bool, str, str]:
+    def _run_command(self, command: List[str], env: Optional[Dict[str, str]] = None) -> Tuple[bool, str, str]:
         """
         Run a systemctl command and return success status, stdout, and stderr
         
@@ -37,7 +48,8 @@ class SystemdServiceManager:
                 command,
                 capture_output=True,
                 text=True,
-                check=False  # Don't raise exception on non-zero exit
+                check=False,  # Don't raise exception on non-zero exit
+                env=env if env is not None else os.environ.copy()
             )
             
             success = result.returncode == 0
@@ -55,6 +67,140 @@ class SystemdServiceManager:
             logger.error(f"Error running command {' '.join(command)}: {e}")
             return False, "", str(e)
     
+    def _detect_user_service_user(self):
+        """Read /etc/hifiberry.user and set up user service context if valid.
+        If file missing or user invalid, user services won't be available.
+        """
+        user_file = "/etc/hifiberry.user"
+        try:
+            if not os.path.exists(user_file):
+                logger.debug(f"{user_file} does not exist, user services unavailable")
+                return
+            
+            with open(user_file, "r") as f:
+                lines = [line.strip() for line in f.readlines()]
+            
+            # Find first non-empty, non-comment line
+            username = None
+            for line in lines:
+                if not line or line.startswith("#"):
+                    continue
+                username = line
+                break
+            
+            if not username:
+                logger.debug(f"{user_file} contains no valid username, user services unavailable")
+                return
+            
+            # Verify user exists
+            try:
+                pw = pwd.getpwnam(username)
+            except KeyError:
+                logger.warning(f"User in {user_file} does not exist: {username}")
+                return
+            
+            uid = pw.pw_uid
+            runtime_dir = f"/run/user/{uid}"
+            
+            self.user_name = username
+            self.user_uid = uid
+            self.user_runtime_dir = runtime_dir
+            
+            logger.debug(f"User services available for {username} (uid={uid}, XDG_RUNTIME_DIR={runtime_dir})")
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse {user_file}: {e}")
+            # User services remain unavailable
+    
+    def _build_service_environment_map(self):
+        """Build a mapping of service names to their environment (system or user).
+        This is done once at startup to determine the correct environment for each service.
+        """
+        self.service_environments = {}
+        
+        # Get system services
+        try:
+            system_cmd = [self.systemctl_cmd, "list-units", "--type=service", "--no-pager", "--all", "--plain", "--no-legend"]
+            result = subprocess.run(system_cmd, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        parts = line.split()
+                        if len(parts) >= 1:
+                            service_name = parts[0]
+                            # Remove .service suffix if present for consistency
+                            if service_name.endswith('.service'):
+                                service_name = service_name[:-8]
+                            self.service_environments[service_name] = 'system'
+        except Exception as e:
+            logger.warning(f"Failed to list system services: {e}")
+        
+        # Get user services if user context is available
+        if self.user_name and self.user_uid is not None:
+            try:
+                # Use systemd-run to execute user systemctl command in proper user context
+                user_cmd = [
+                    "systemd-run", "--uid", str(self.user_uid), "--gid", str(self.user_uid),
+                    "--setenv", f"XDG_RUNTIME_DIR={self.user_runtime_dir}",
+                    "--pipe", "--wait", "--quiet",
+                    "systemctl", "--user", "list-units", "--type=service", "--no-pager", "--all", "--plain", "--no-legend"
+                ]
+                logger.debug("Listing user services with command: %s", ' '.join(user_cmd))
+                result = subprocess.run(user_cmd, capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            parts = line.split()
+                            if len(parts) >= 1:
+                                service_name = parts[0]
+                                if service_name.endswith('.service'):
+                                    service_name = service_name[:-8]
+                                self.service_environments[service_name] = 'user'
+                                logger.debug(f"Detected user service: {service_name}")
+                else:
+                    logger.debug("Failed to list user services (rc=%s): %s", result.returncode, result.stderr.strip())
+            except Exception as e:
+                logger.warning(f"Failed to list user services: {e}")
+        
+        logger.debug(f"Built service environment map with {len(self.service_environments)} services")
+        if logger.isEnabledFor(logging.DEBUG):
+            user_services = [name for name, env in self.service_environments.items() if env == 'user']
+            if user_services:
+                logger.debug(f"User services: {', '.join(user_services)}")
+    
+    def _get_service_environment(self, service_name):
+        """Get the environment (system or user) for a given service.
+        
+        Args:
+            service_name: Name of the service (with or without .service suffix)
+            
+        Returns:
+            'system', 'user', or None if service not found
+        """
+        # Normalize service name (remove .service suffix if present)
+        normalized_name = service_name
+        if normalized_name.endswith('.service'):
+            normalized_name = normalized_name[:-8]
+        
+        return self.service_environments.get(normalized_name)
+    
+    def _run_service_cmd(self, args: List[str], service_name: Optional[str] = None) -> Tuple[bool, str, str]:
+        """Run a systemctl command in the correct environment for a service."""
+        if service_name:
+            env = self._get_service_environment(service_name)
+            if env == 'user' and self.user_name and self.user_uid is not None:
+                # User service environment - use systemd-run for proper root-to-user switching
+                cmd = [
+                    "systemd-run", "--uid", str(self.user_uid), "--gid", str(self.user_uid),
+                    "--setenv", f"XDG_RUNTIME_DIR={self.user_runtime_dir}",
+                    "--pipe", "--wait", "--quiet",
+                    "systemctl", "--user"
+                ] + args
+                return self._run_command(cmd)
+        # System (default)
+        cmd = [self.systemctl_cmd] + args
+        return self._run_command(cmd)
+    
     def enable(self, service_name: str) -> Tuple[bool, str]:
         """
         Enable a systemd service
@@ -65,7 +211,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "enable", service_name])
+        success, stdout, stderr = self._run_service_cmd(["enable", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' enabled successfully"
@@ -83,7 +229,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "disable", service_name])
+        success, stdout, stderr = self._run_service_cmd(["disable", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' disabled successfully"
@@ -101,7 +247,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "start", service_name])
+        success, stdout, stderr = self._run_service_cmd(["start", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' started successfully"
@@ -119,7 +265,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "stop", service_name])
+        success, stdout, stderr = self._run_service_cmd(["stop", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' stopped successfully"
@@ -137,7 +283,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "restart", service_name])
+        success, stdout, stderr = self._run_service_cmd(["restart", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' restarted successfully"
@@ -155,7 +301,7 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "reload", service_name])
+        success, stdout, stderr = self._run_service_cmd(["reload", service_name], service_name)
         
         if success:
             return True, f"Service '{service_name}' reloaded successfully"
@@ -174,18 +320,19 @@ class SystemdServiceManager:
             Tuple of (success, status_dict)
         """
         # Get basic status
-        success, stdout, stderr = self._run_command([self.systemctl_cmd, "status", service_name])
+        success, stdout, stderr = self._run_service_cmd(["status", service_name], service_name)
         
         # Get machine-readable status
-        is_active_success, is_active_stdout, _ = self._run_command([self.systemctl_cmd, "is-active", service_name])
-        is_enabled_success, is_enabled_stdout, _ = self._run_command([self.systemctl_cmd, "is-enabled", service_name])
+        is_active_success, is_active_stdout, _ = self._run_service_cmd(["is-active", service_name], service_name)
+        is_enabled_success, is_enabled_stdout, _ = self._run_service_cmd(["is-enabled", service_name], service_name)
         
         status_dict = {
             "service_name": service_name,
             "active": is_active_stdout if is_active_success else "unknown",
             "enabled": is_enabled_stdout if is_enabled_success else "unknown",
             "status_output": stdout if success else stderr,
-            "status_available": success
+            "status_available": success,
+            "environment": self._get_service_environment(service_name) or "unknown"
         }
         
         return True, status_dict
@@ -200,7 +347,7 @@ class SystemdServiceManager:
         Returns:
             True if service is active, False otherwise
         """
-        success, stdout, _ = self._run_command([self.systemctl_cmd, "is-active", service_name])
+        success, stdout, _ = self._run_service_cmd(["is-active", service_name], service_name)
         return success and stdout == "active"
     
     def is_enabled(self, service_name: str) -> bool:
@@ -213,12 +360,12 @@ class SystemdServiceManager:
         Returns:
             True if service is enabled, False otherwise
         """
-        success, stdout, _ = self._run_command([self.systemctl_cmd, "is-enabled", service_name])
+        success, stdout, _ = self._run_service_cmd(["is-enabled", service_name], service_name)
         return success and stdout == "enabled"
     
     def list_services(self, pattern: Optional[str] = None) -> Tuple[bool, List[Dict]]:
         """
-        List systemd services
+        List systemd services from both system and user environments
         
         Args:
             pattern: Optional pattern to filter services
@@ -226,15 +373,45 @@ class SystemdServiceManager:
         Returns:
             Tuple of (success, list_of_service_dicts)
         """
-        cmd = [self.systemctl_cmd, "list-units", "--type=service", "--no-pager"]
-        if pattern:
-            cmd.append(f"--all")
+        all_services = []
         
-        success, stdout, stderr = self._run_command(cmd)
+        # Get system services
+        try:
+            cmd = [self.systemctl_cmd, "list-units", "--type=service", "--no-pager"]
+            if pattern:
+                cmd.append("--all")
+            
+            success, stdout, stderr = self._run_command(cmd)
+            
+            if success:
+                services = self._parse_service_list(stdout, "system", pattern)
+                all_services.extend(services)
+        except Exception as e:
+            logger.warning(f"Failed to list system services: {e}")
         
-        if not success:
-            return False, []
+        # Get user services if available
+        if self.user_name and self.user_uid is not None:
+            try:
+                cmd = [
+                    "sudo", "-u", self.user_name,
+                    f"XDG_RUNTIME_DIR={self.user_runtime_dir}",
+                    self.systemctl_cmd, "--user", "list-units", "--type=service", "--no-pager"
+                ]
+                if pattern:
+                    cmd.append("--all")
+                
+                success, stdout, stderr = self._run_command(cmd)
+                
+                if success:
+                    services = self._parse_service_list(stdout, "user", pattern)
+                    all_services.extend(services)
+            except Exception as e:
+                logger.warning(f"Failed to list user services: {e}")
         
+        return True, all_services
+    
+    def _parse_service_list(self, stdout: str, environment: str, pattern: Optional[str] = None) -> List[Dict]:
+        """Parse systemctl list-units output into service dictionaries"""
         services = []
         lines = stdout.split('\n')
         
@@ -270,10 +447,11 @@ class SystemdServiceManager:
                     "load": load_state,
                     "active": active_state,
                     "sub": sub_state,
-                    "description": description
+                    "description": description,
+                    "environment": environment
                 })
         
-        return True, services
+        return services
     
     def daemon_reload(self) -> Tuple[bool, str]:
         """
