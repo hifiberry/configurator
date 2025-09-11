@@ -1,3 +1,10 @@
+hifiberry-configurator (2.4.0) stable; urgency=medium
+
+  * Enhanced systemd service management with user service support
+  * Build on Debian 13 (trixie)
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 11 Sep 2025 11:00:00 +0000
+
 hifiberry-configurator (2.3.0) stable; urgency=medium
 
   * Added "swapped" mode to PipeWire monostereo (swap left/right channels)
