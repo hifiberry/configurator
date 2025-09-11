@@ -19,6 +19,7 @@ except ImportError:
     jsonify = None
 
 from ..config_parser import get_config_section
+from ..systemd_service import SystemdServiceManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -32,6 +33,18 @@ class SystemdHandler:
             'all': ['start', 'stop', 'restart', 'enable', 'disable', 'status'],
             'status': ['status']
         }
+        # Initialize the systemd service manager that handles both system and user services
+        try:
+            self.service_manager = SystemdServiceManager()
+            logger.info(f"SystemdServiceManager initialized successfully")
+            # Log some debug info about detected services
+            if hasattr(self.service_manager, 'service_environments'):
+                logger.info(f"Service environment map: {self.service_manager.service_environments}")
+            if hasattr(self.service_manager, 'user_name'):
+                logger.info(f"Detected user: {self.service_manager.user_name}")
+        except Exception as e:
+            logger.error(f"Failed to initialize SystemdServiceManager: {e}")
+            self.service_manager = None
     
     def _get_service_permissions(self, service: str) -> List[str]:
         """Get allowed operations for a service"""
@@ -51,41 +64,55 @@ class SystemdHandler:
     def _service_exists(self, service: str) -> bool:
         """Check if a systemd service exists on the system"""
         try:
-            # Use systemctl cat to check if service exists
-            # This works with or without .service suffix
-            result = subprocess.run(
-                ['systemctl', 'cat', service],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            # If service exists, systemctl cat will return 0
-            return result.returncode == 0
+            if not self.service_manager:
+                logger.error("SystemdServiceManager not available")
+                return False
+                
+            # Use the service manager to check if service exists
+            # This will check both system and user services automatically
+            status_success, status_data = self.service_manager.status(service)
+            return status_success and isinstance(status_data, dict) and status_data.get('status_available', False)
             
         except Exception as e:
             logger.error(f"Error checking if service exists: {e}")
             return False
     
     def _execute_systemctl(self, operation: str, service: str) -> tuple:
-        """Execute systemctl command safely"""
+        """Execute systemctl command safely using the service manager"""
         try:
-            # Build the command
-            cmd = ['systemctl', operation, service]
-            
-            # Execute the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            return result.returncode, result.stdout, result.stderr
-            
-        except subprocess.TimeoutExpired:
-            logger.error(f"Timeout executing systemctl {operation} {service}")
-            return 1, "", "Command timed out"
+            # Use the service manager which handles both system and user services
+            if operation == 'start':
+                success, message = self.service_manager.start(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'stop':
+                success, message = self.service_manager.stop(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'restart':
+                success, message = self.service_manager.restart(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'enable':
+                success, message = self.service_manager.enable(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'disable':
+                success, message = self.service_manager.disable(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'status':
+                success, data = self.service_manager.status(service)
+                output = ''
+                if isinstance(data, dict):
+                    output = data.get('status_output', '')
+                else:
+                    output = str(data)
+                return (0 if success else 1), output, ''
+            elif operation == 'is-active':
+                active = self.service_manager.is_active(service)
+                return (0 if active else 1), ('active' if active else 'inactive'), ''
+            elif operation == 'is-enabled':
+                enabled = self.service_manager.is_enabled(service)
+                return (0 if enabled else 1), ('enabled' if enabled else 'disabled'), ''
+            else:
+                return 1, "", f"Unknown operation: {operation}"
+                
         except Exception as e:
             logger.error(f"Error executing systemctl {operation} {service}: {e}")
             return 1, "", str(e)
@@ -159,26 +186,25 @@ class SystemdHandler:
                     'status': 'error',
                     'message': f'Service "{service}" does not exist on the system'
                 }), 404
-            
-            # Status is always allowed
-            returncode, stdout, stderr = self._execute_systemctl('status', service)
-            
-            # Also get is-active and is-enabled status
-            active_code, active_output, _ = self._execute_systemctl('is-active', service)
-            enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
-            
+
+            # Get comprehensive status using the service manager
+            status_success, status_data = self.service_manager.status(service)
+            is_active = self.service_manager.is_active(service)
+            is_enabled = self.service_manager.is_enabled(service)
+
             return jsonify({
                 'status': 'success',
                 'data': {
                     'service': service,
-                    'active': active_output.strip(),
-                    'enabled': enabled_output.strip(),
-                    'status_output': stdout.strip(),
-                    'status_returncode': returncode,
+                    'active': 'active' if is_active else 'inactive',
+                    'enabled': 'enabled' if is_enabled else 'disabled',
+                    'environment': status_data.get('environment', 'unknown') if isinstance(status_data, dict) else 'unknown',
+                    'status_output': status_data.get('status_output', '').strip() if isinstance(status_data, dict) else '',
+                    'status_success': status_data.get('status_available', False) if isinstance(status_data, dict) else False,
                     'allowed_operations': self._get_service_permissions(service)
                 }
             })
-            
+
         except Exception as e:
             logger.error(f"Error getting status for service {service}: {e}")
             return jsonify({
@@ -198,13 +224,15 @@ class SystemdHandler:
             
             # If service exists, also provide basic info
             if service_exists:
-                # Get current status
-                active_code, active_output, _ = self._execute_systemctl('is-active', service)
-                enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
+                # Get current status using service manager
+                is_active = self.service_manager.is_active(service)
+                is_enabled = self.service_manager.is_enabled(service)
+                status_success, status_data = self.service_manager.status(service)
                 
                 response_data.update({
-                    'active': active_output.strip(),
-                    'enabled': enabled_output.strip(),
+                    'active': 'active' if is_active else 'inactive',
+                    'enabled': 'enabled' if is_enabled else 'disabled',
+                    'environment': status_data.get('environment', 'unknown') if isinstance(status_data, dict) else 'unknown',
                     'allowed_operations': self._get_service_permissions(service)
                 })
             
@@ -229,7 +257,7 @@ class SystemdHandler:
             for service, permission in systemd_config.items():
                 allowed_ops = self.allowed_operations.get(permission, ['status'])
                 
-                # Check if service exists
+                # Check if service exists using service manager
                 service_exists = self._service_exists(service)
                 
                 service_info = {
@@ -241,18 +269,21 @@ class SystemdHandler:
                 
                 # Only get status if service exists
                 if service_exists:
-                    # Get current status
-                    active_code, active_output, _ = self._execute_systemctl('is-active', service)
-                    enabled_code, enabled_output, _ = self._execute_systemctl('is-enabled', service)
+                    # Get current status using service manager
+                    is_active = self.service_manager.is_active(service)
+                    is_enabled = self.service_manager.is_enabled(service)
+                    status_success, status_data = self.service_manager.status(service)
                     
                     service_info.update({
-                        'active': active_output.strip(),
-                        'enabled': enabled_output.strip()
+                        'active': 'active' if is_active else 'inactive',
+                        'enabled': 'enabled' if is_enabled else 'disabled',
+                        'environment': status_data.get('environment', 'unknown') if isinstance(status_data, dict) else 'unknown'
                     })
                 else:
                     service_info.update({
                         'active': 'not-available',
-                        'enabled': 'not-available'
+                        'enabled': 'not-available',
+                        'environment': 'unknown'
                     })
                 
                 services.append(service_info)
