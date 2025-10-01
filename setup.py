@@ -17,8 +17,10 @@ with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
 setup(
     name="configurator",
     version=get_version(),
-    description="System configuration scripts",
-    long_description="System configuration scripts",
+    description="HiFiBerry System Configuration",
+    long_description="HiFiBerry system configuration scripts including audio control, "
+                     "network management, and PipeWire integration with proxy architecture "
+                     "for root/user session isolation.",
     author="HiFiBerry",
     author_email="support@hifiberry.com",
     license="MIT",
