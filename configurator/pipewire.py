@@ -151,6 +151,8 @@ import subprocess
 import re
 import math
 import logging
+import time
+import os
 from typing import List, Optional, Tuple, Dict, Union
 
 logger = logging.getLogger(__name__)
@@ -162,14 +164,79 @@ _last_mixer_source: str = ""  # live | cache | default
 def _run_wpctl(args: List[str]) -> Optional[str]:
     try:
         logger.debug(f"Running wpctl command: wpctl {' '.join(args)}")
-        result = subprocess.run(["wpctl"] + args, capture_output=True, text=True, check=True)
+        result = subprocess.run(["wpctl"] + args, capture_output=True, text=True, check=False)
+        
+        logger.debug(f"wpctl return code: {result.returncode}")
         logger.debug(f"wpctl stdout length: {len(result.stdout)}")
+        logger.debug(f"wpctl stderr length: {len(result.stderr)}")
+        
         if len(result.stdout) < 500:  # Only log short outputs to avoid spam
             logger.debug(f"wpctl stdout: {repr(result.stdout)}")
+        if result.stderr:
+            logger.debug(f"wpctl stderr: {repr(result.stderr)}")
+            
+        if result.returncode != 0:
+            logger.error(f"wpctl command failed with return code {result.returncode}: {result.stderr}")
+            return None
+            
         return result.stdout
     except Exception as e:
         logger.error(f"wpctl command failed: {e}")
         return None
+
+def get_wpctl_debug_info() -> dict:
+    """
+    Get detailed debugging information about wpctl command execution.
+    
+    Returns:
+        Dictionary with debugging information including stdout, stderr, return codes
+    """
+    debug_info = {
+        'timestamp': time.time(),
+        'environment': {},
+        'commands': {}
+    }
+    
+    # Capture relevant environment variables
+    env_vars = ['XDG_RUNTIME_DIR', 'PIPEWIRE_RUNTIME_DIR', 'PULSE_RUNTIME_PATH', 'USER', 'HOME']
+    for var in env_vars:
+        debug_info['environment'][var] = os.environ.get(var, 'NOT_SET')
+    
+    # Test various wpctl commands
+    test_commands = [
+        ['--version'],
+        ['status'],
+        ['get-volume', '@DEFAULT_AUDIO_SINK@']
+    ]
+    
+    for cmd_args in test_commands:
+        cmd_key = ' '.join(cmd_args)
+        try:
+            logger.debug(f"Debug: Running wpctl command: wpctl {cmd_key}")
+            result = subprocess.run(["wpctl"] + cmd_args, capture_output=True, text=True, check=False, timeout=5)
+            
+            debug_info['commands'][cmd_key] = {
+                'return_code': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'success': result.returncode == 0
+            }
+        except subprocess.TimeoutExpired:
+            debug_info['commands'][cmd_key] = {
+                'return_code': -1,
+                'stdout': '',
+                'stderr': 'Command timed out',
+                'success': False
+            }
+        except Exception as e:
+            debug_info['commands'][cmd_key] = {
+                'return_code': -2,
+                'stdout': '',
+                'stderr': str(e),
+                'success': False
+            }
+    
+    return debug_info
 
 def _volume_to_db(volume: float) -> float:
     """
