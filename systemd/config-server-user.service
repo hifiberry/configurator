@@ -15,8 +15,9 @@ RestartSec=5
 # User service - will run as the user who enables it
 # No User= directive needed for user services
 
-# Environment for PipeWire access (will use user's runtime dir)
-Environment="PIPEWIRE_RUNTIME_DIR=%t/pipewire"
+# Environment for PipeWire access
+Environment="XDG_RUNTIME_DIR=%t"
+#Environment="PIPEWIRE_RUNTIME_DIR=%t/pipewire"
 
 # Resource limits
 LimitNOFILE=1024

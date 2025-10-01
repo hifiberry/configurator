@@ -460,6 +460,7 @@ class ConfigAPIServer:
                     'pipewire_monostereo_set': '/api/v1/pipewire/monostereo',
                     'pipewire_balance_get': '/api/v1/pipewire/balance',
                     'pipewire_balance_set': '/api/v1/pipewire/balance',
+                    'pipewire_debug': '/api/v1/pipewire/debug',
                     'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
@@ -742,6 +743,14 @@ class ConfigAPIServer:
             """Set balance (-1 to 1)"""
             if self.pipewire_handler:
                 return self.pipewire_handler.handle_set_balance()
+            else:
+                return self._proxy_to_user_daemon(request.path)
+
+        @self.app.route('/api/v1/pipewire/debug', methods=['GET'])
+        def get_pipewire_debug():
+            """Get PipeWire debugging information"""
+            if self.pipewire_handler:
+                return self.pipewire_handler.handle_debug_info()
             else:
                 return self._proxy_to_user_daemon(request.path)
 
