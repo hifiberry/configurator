@@ -109,7 +109,12 @@ Get system information including Pi model, HAT details, sound card information, 
 {
   "pi_model": {
     "name": "Raspberry Pi 4 Model B Rev 1.4",
-    "version": "4"
+    "version": "4",
+    "memory": {
+      "total_kb": 4010496,
+      "total_mb": 3916,
+      "total_gb": 3.82
+    }
   },
   "hat_info": {
     "vendor": "HiFiBerry",
@@ -143,7 +148,12 @@ Get system information including Pi model, HAT details, sound card information, 
 {
   "pi_model": {
     "name": "unknown",
-    "version": "unknown"
+    "version": "unknown",
+    "memory": {
+      "total_kb": null,
+      "total_mb": null,
+      "total_gb": null
+    }
   },
   "hat_info": {
     "vendor": null,

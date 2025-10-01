@@ -69,6 +69,32 @@ class SystemInfo:
             self.logger.error(f"Error getting hostnames: {e}")
             return None, None
     
+    def _get_memory_info(self) -> Dict[str, Any]:
+        """Get physical memory information"""
+        try:
+            # Read /proc/meminfo to get memory information
+            with open('/proc/meminfo', 'r') as f:
+                meminfo = f.read()
+            
+            memory_data = {}
+            for line in meminfo.split('\n'):
+                if line.startswith('MemTotal:'):
+                    # Extract total memory in kB
+                    total_kb = int(line.split()[1])
+                    memory_data['total_kb'] = total_kb
+                    memory_data['total_mb'] = round(total_kb / 1024)
+                    memory_data['total_gb'] = round(total_kb / 1024 / 1024, 2)
+                    break
+            
+            return memory_data
+        except Exception as e:
+            self.logger.error(f"Failed to get memory info: {e}")
+            return {
+                'total_kb': None,
+                'total_mb': None,
+                'total_gb': None
+            }
+    
     def get_pi_model_name(self) -> str:
         """Get the Pi model name"""
         try:
@@ -178,11 +204,13 @@ class SystemInfo:
             system_uuid = self._get_system_uuid()
             soundcard_info = self.get_soundcard_info()
             hostname, pretty_hostname = self._get_hostname_info()
+            memory_info = self._get_memory_info()
             
             return {
                 'pi_model': {
                     'name': pi_model.get_model_name().strip('\x00'),  # Remove null characters
-                    'version': getattr(pi_model, 'version', 'unknown')
+                    'version': getattr(pi_model, 'version', 'unknown'),
+                    'memory': memory_info
                 },
                 'hat_info': {
                     'vendor': hat_info.get('vendor'),
@@ -203,7 +231,12 @@ class SystemInfo:
             return {
                 'pi_model': {
                     'name': 'unknown',
-                    'version': 'unknown'
+                    'version': 'unknown',
+                    'memory': {
+                        'total_kb': None,
+                        'total_mb': None,
+                        'total_gb': None
+                    }
                 },
                 'hat_info': {
                     'vendor': None,
@@ -239,6 +272,7 @@ class SystemInfo:
             system_uuid = self._get_system_uuid()
             soundcard_info = self.get_soundcard_info()
             hostname, pretty_hostname = self._get_hostname_info()
+            memory_info = self._get_memory_info()
             
             # Build Pi Model string (name + version)
             pi_model_name = pi_model.get_model_name().strip('\x00')  # Remove null characters
@@ -253,8 +287,16 @@ class SystemInfo:
             product = hat_info.get('product') or 'unknown'
             hat_full = f"{vendor} {product}"
             
+            # Format memory info
+            memory_str = 'unknown'
+            if memory_info.get('total_gb'):
+                memory_str = f"{memory_info['total_gb']} GB ({memory_info['total_mb']} MB)"
+            elif memory_info.get('total_mb'):
+                memory_str = f"{memory_info['total_mb']} MB"
+            
             flat_dict = {
                 'Pi Model': pi_model_full,
+                'Memory': memory_str,
                 'HAT': hat_full,
                 'Sound Card': soundcard_info.get('name', 'unknown'),
                 'UUID': system_uuid or 'unknown',
@@ -267,6 +309,7 @@ class SystemInfo:
             self.logger.error(f"Failed to collect system info: {e}")
             return {
                 'Pi Model': 'unknown',
+                'Memory': 'unknown',
                 'HAT': 'unknown',
                 'Sound Card': 'unknown',
                 'UUID': 'unknown',
