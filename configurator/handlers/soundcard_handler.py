@@ -35,6 +35,7 @@ class SoundcardHandler:
                     "name": card_name,
                     "dtoverlay": attributes.get("dtoverlay", "unknown"),
                     "volume_control": attributes.get("volume_control"),
+                    "headphone_volume_control": attributes.get("headphone_volume_control"),
                     "output_channels": attributes.get("output_channels", 0),
                     "input_channels": attributes.get("input_channels", 0),
                     "features": attributes.get("features", []),
@@ -177,6 +178,15 @@ class SoundcardHandler:
                     "data": {
                         "card_name": soundcard.name,
                         "dtoverlay": dtoverlay,
+                        "volume_control": soundcard.volume_control,
+                        "headphone_volume_control": soundcard.headphone_volume_control,
+                        "hardware_index": soundcard.get_hardware_index(),
+                        "output_channels": soundcard.output_channels,
+                        "input_channels": soundcard.input_channels,
+                        "features": soundcard.features,
+                        "hat_name": soundcard.hat_name,
+                        "supports_dsp": soundcard.supports_dsp,
+                        "card_type": soundcard.card_type,
                         "card_detected": True,
                         "definition_found": card_def is not None
                     }
