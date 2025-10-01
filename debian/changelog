@@ -1,3 +1,18 @@
+hifiberry-configurator (2.5.0) stable; urgency=medium
+
+  * Fixed config-server startup errors when running as root without PipeWire access
+  * Added HTTP proxy architecture for PipeWire operations to support root/user session isolation
+  * Added missing analyze_mixer() function to pipewire module
+  * Modified PipeWire handler to use HTTP requests instead of direct PipeWire access
+  * Updated server.py to communicate with PipeWire daemon via HTTP for settings operations
+  * Changed PipeWire daemon port configuration from 7999 to 1082
+  * Added graceful degradation when PipeWire daemon is unavailable (returns 503 errors)
+  * Fixed volume save/restore functionality to work with proxy pattern
+  * Maintains backward compatibility with existing API structure
+  * Enhanced error handling and logging for PipeWire operations
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 01 Oct 2025 13:30:00 +0000
+
 hifiberry-configurator (2.4.0) stable; urgency=medium
 
   * Enhanced systemd service management with user service support
