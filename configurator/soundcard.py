@@ -188,6 +188,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC2 Pro": {
         "hat_name": "DAC2 Pro",
         "volume_control": "Digital",
+        "headphone_volume_control": "Headphone",
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -324,6 +325,7 @@ class Soundcard:
         self,
         name=None,
         volume_control=None,
+        headphone_volume_control=None,
         output_channels=2,
         input_channels=0,
         features=None,
@@ -337,6 +339,7 @@ class Soundcard:
             if detected_card:
                 self.name = detected_card["name"]
                 self.volume_control = detected_card.get("volume_control")
+                self.headphone_volume_control = detected_card.get("headphone_volume_control")
                 self.output_channels = detected_card.get("output_channels", 2)
                 self.input_channels = detected_card.get("input_channels", 0)
                 self.features = detected_card.get("features", [])
@@ -346,6 +349,7 @@ class Soundcard:
             else:
                 self.name = "Unknown"
                 self.volume_control = volume_control
+                self.headphone_volume_control = headphone_volume_control
                 self.output_channels = output_channels
                 self.input_channels = input_channels
                 self.features = features or []
@@ -355,6 +359,7 @@ class Soundcard:
         else:
             self.name = name
             self.volume_control = volume_control
+            self.headphone_volume_control = headphone_volume_control
             self.output_channels = output_channels
             self.input_channels = input_channels
             self.features = features or []
@@ -365,6 +370,7 @@ class Soundcard:
     def __str__(self):
         return (
             f"Soundcard(name={self.name}, volume_control={self.volume_control}, "
+            f"headphone_volume_control={self.headphone_volume_control}, "
             f"output_channels={self.output_channels}, input_channels={self.input_channels}, "
             f"features={self.features}, hat_name={self.hat_name}, supports_dsp={self.supports_dsp}, "
             f"card_type={self.card_type})"
@@ -513,6 +519,13 @@ class Soundcard:
         else:
             return None
 
+    def get_headphone_volume_control_name(self):
+        """
+        Returns the name of the headphone volume control for the detected sound card.
+        Returns None if no headphone volume control is defined.
+        """
+        return self.headphone_volume_control
+
     def get_hardware_index(self):
         """
         Returns the hardware index of the detected sound card.
@@ -643,6 +656,11 @@ def main():
         help="Print the volume control of the detected sound card, falling back to 'Softvol' if none defined.",
     )
     parser.add_argument(
+        "--headphone-volume-control",
+        action="store_true",
+        help="Print only the headphone volume control of the detected sound card.",
+    )
+    parser.add_argument(
         "--hw",
         action="store_true",
         help="Print only the hardware index of the detected sound card.",
@@ -696,6 +714,7 @@ def main():
         args.name, 
         args.volume_control,
         args.volume_control_softvol,
+        args.headphone_volume_control,
         args.hw,
         args.output_channels, 
         args.input_channels, 
@@ -708,6 +727,7 @@ def main():
         card_data = {
             "name": card.name,
             "volume_control": card.volume_control,
+            "headphone_volume_control": card.headphone_volume_control,
             "hardware_index": card.get_hardware_index(),
             "output_channels": card.output_channels,
             "input_channels": card.input_channels,
@@ -723,6 +743,8 @@ def main():
         print(card.volume_control if card.volume_control else "")
     elif args.volume_control_softvol:
         print(card.get_mixer_control_name(use_softvol_fallback=True))
+    elif args.headphone_volume_control:
+        print(card.get_headphone_volume_control_name() if card.get_headphone_volume_control_name() else "")
     elif args.hw:
         hw_index = card.get_hardware_index()
         print(hw_index if hw_index is not None else "")
@@ -737,6 +759,7 @@ def main():
         print("Sound card details:")
         print(f"Name: {card.name}")
         print(f"Volume Control: {card.volume_control}")
+        print(f"Headphone Volume Control: {card.headphone_volume_control or 'None'}")
         print(f"Hardware Index: {card.get_hardware_index()}")
         print(f"Output Channels: {card.output_channels}")
         print(f"Input Channels: {card.input_channels}")

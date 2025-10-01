@@ -119,6 +119,7 @@ class SystemInfo:
             return {
                 'name': soundcard.name,
                 'volume_control': soundcard.volume_control,
+                'headphone_volume_control': soundcard.headphone_volume_control,
                 'hardware_index': soundcard.get_hardware_index(),
                 'output_channels': soundcard.output_channels,
                 'input_channels': soundcard.input_channels,
@@ -144,6 +145,7 @@ class SystemInfo:
                                 return {
                                     'name': card_name,
                                     'volume_control': 'unknown',
+                                    'headphone_volume_control': None,
                                     'hardware_index': 0,
                                     'output_channels': 2,
                                     'input_channels': 0,
@@ -158,6 +160,7 @@ class SystemInfo:
             return {
                 'name': 'unknown',
                 'volume_control': None,
+                'headphone_volume_control': None,
                 'hardware_index': None,
                 'output_channels': 0,
                 'input_channels': 0,

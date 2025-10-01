@@ -120,6 +120,7 @@ Get system information including Pi model, HAT details, sound card information, 
   "soundcard": {
     "name": "DAC+ Pro",
     "volume_control": "Digital",
+    "headphone_volume_control": null,
     "hardware_index": 0,
     "output_channels": 2,
     "input_channels": 0,
@@ -153,6 +154,7 @@ Get system information including Pi model, HAT details, sound card information, 
   "soundcard": {
     "name": "unknown",
     "volume_control": null,
+    "headphone_volume_control": null,
     "hardware_index": null,
     "output_channels": 0,
     "input_channels": 0,
@@ -1026,11 +1028,12 @@ List all available HiFiBerry sound cards with their specifications and device tr
 - **name**: Display name of the sound card
 - **dtoverlay**: Device tree overlay required in config.txt
 - **volume_control**: Volume control method (null if no hardware volume control)
+- **headphone_volume_control**: Headphone volume control method (null if no headphone amplifier)
 - **output_channels**: Number of output audio channels
 - **input_channels**: Number of input audio channels
 - **features**: Array of special features (e.g., "dsp", "toslink", "analoginput")
 - **supports_dsp**: Boolean indicating if the card supports DSP processing
-- **card_type**: Array of card types (e.g., "DAC", "ADC", "Amp", "Digi")
+- **card_type**: Array of card types (e.g., "DAC", "ADC", "Amp", "Digi", "Headphone")
 - **is_pro**: Boolean indicating if this is a professional-grade card
 
 ### `POST /api/v1/soundcard/dtoverlay`
@@ -1141,8 +1144,17 @@ Sound card detected:
   "status": "success",
   "message": "Sound card detected successfully",
   "data": {
-    "card_name": "DAC+ Light",
-    "dtoverlay": "hifiberry-dac",
+    "card_name": "DAC2 Pro",
+    "dtoverlay": "hifiberry-dacplus-pro",
+    "volume_control": "Digital",
+    "headphone_volume_control": "Headphone",
+    "hardware_index": 0,
+    "output_channels": 2,
+    "input_channels": 0,
+    "features": [],
+    "hat_name": "DAC2 Pro",
+    "supports_dsp": true,
+    "card_type": ["DAC", "Headphone"],
     "card_detected": true,
     "definition_found": true
   }
@@ -1175,6 +1187,15 @@ Error response:
 **Response Data Fields:**
 - **card_name**: Name of the detected sound card (or null if none detected)
 - **dtoverlay**: Required device tree overlay for the detected card (or null if none detected)
+- **volume_control**: Volume control method (or null if no hardware volume control)
+- **headphone_volume_control**: Headphone volume control method (or null if no headphone amplifier)
+- **hardware_index**: ALSA hardware index of the detected card
+- **output_channels**: Number of output audio channels
+- **input_channels**: Number of input audio channels
+- **features**: Array of special features (e.g., "dsp", "toslink", "analoginput")
+- **hat_name**: HAT name from EEPROM (or null if unavailable)
+- **supports_dsp**: Boolean indicating if the card supports DSP processing
+- **card_type**: Array of card types (e.g., "DAC", "ADC", "Amp", "Digi", "Headphone")
 - **card_detected**: Boolean indicating if a sound card was detected
 - **definition_found**: Boolean indicating if the detected card is in the known definitions
 
