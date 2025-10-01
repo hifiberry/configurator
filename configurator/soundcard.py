@@ -191,7 +191,7 @@ SOUND_CARD_DEFINITIONS = {
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
-        "supports_dsp": False,
+        "supports_dsp": True,
         "card_type": ["DAC", "Headphone"],
         "dtoverlay": "hifiberry-dacplus-pro",
         "is_pro": True,
