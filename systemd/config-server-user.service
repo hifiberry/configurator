@@ -1,0 +1,26 @@
+[Unit]
+Description=HiFiBerry Configuration Server (User Service)
+Documentation=man:config-server(1)
+Wants=pipewire.service
+After=pipewire.service
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/config-server --host 127.0.0.1 --port 1082 --verbose --auto-restore-settings --user-mode
+Restart=always
+RestartSec=5
+
+# User service - will run as the user who enables it
+# No User= directive needed for user services
+
+# Environment for PipeWire access (will use user's runtime dir)
+Environment="PIPEWIRE_RUNTIME_DIR=%t/pipewire"
+
+# Resource limits
+LimitNOFILE=1024
+LimitNPROC=64
+
+[Install]
+WantedBy=default.target

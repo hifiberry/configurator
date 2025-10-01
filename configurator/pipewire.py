@@ -774,6 +774,31 @@ def get_balance() -> Optional[float]:
     # Default to center if pattern doesn't match
     return 0.0
 
+def analyze_mixer() -> Optional[Dict[str, any]]:
+    """
+    Analyze current mixer gains to infer monostereo mode and balance.
+    
+    Returns:
+        dict: Dictionary with 'monostereo_mode' and 'balance' keys, or None if unavailable
+    """
+    try:
+        # Get current monostereo mode and balance
+        monostereo_mode = get_monostereo()
+        balance = get_balance()
+        
+        if monostereo_mode is None or balance is None:
+            logger.warning("Cannot analyze mixer: unable to get current monostereo mode or balance")
+            return None
+            
+        return {
+            'monostereo_mode': monostereo_mode,
+            'balance': balance
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing mixer: {e}")
+        return None
+
 def main():
     import sys
     def print_usage():

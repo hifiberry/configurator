@@ -26,9 +26,16 @@
 
 The HiFiBerry Configuration API provides REST endpoints for managing configuration settings and system services in the HiFiBerry system. All responses are in JSON format with consistent structure.
 
-**Base URL:** `http://localhost:1081`
+**Dual-Daemon Architecture:**
 
-> **Note:** Replace localhost:1081 with your actual server address and port.
+- **System Daemon** - `http://localhost:1081` - System-level operations (network, services, mounts, etc.)
+- **User Daemon** - `http://localhost:1082` - PipeWire audio operations (volume, mixer, etc.)
+
+**Endpoint Routing:**
+- All `/api/v1/pipewire/*` endpoints → Port 1082 (User Daemon)
+- All other endpoints → Port 1081 (System Daemon)
+
+> **Note:** Replace localhost with your actual server address. System operations use port 1081, PipeWire operations use port 1082.
 
 ## Endpoints
 
@@ -2425,112 +2432,112 @@ curl "http://localhost:1081/api/v1/i2c/devices?bus=0"
 
 **List all PipeWire volume controls:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/controls
+curl http://localhost:1082/api/v1/pipewire/controls
 ```
 
 **Get default sink:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/default-sink
+curl http://localhost:1082/api/v1/pipewire/default-sink
 ```
 
 **Get default source:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/default-source
+curl http://localhost:1082/api/v1/pipewire/default-source
 ```
 
 **Get volume of default sink:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/volume/default
+curl http://localhost:1082/api/v1/pipewire/volume/default
 ```
 
 **Get volume of specific control:**
 ```bash
-curl "http://localhost:1081/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
+curl "http://localhost:1082/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
 ```
 
 **Set volume using linear value (0.0-1.0):**
 ```bash
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume": 0.75}' \
-     http://localhost:1081/api/v1/pipewire/volume/default
+     http://localhost:1082/api/v1/pipewire/volume/default
 ```
 
 **Set volume using decibel value:**
 ```bash
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume_db": -12.0}' \
-     http://localhost:1081/api/v1/pipewire/volume/default
+     http://localhost:1082/api/v1/pipewire/volume/default
 ```
 
 **Set volume of specific control:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"volume": 0.5}' \
-     "http://localhost:1081/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
+     "http://localhost:1082/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
 ```
 
 **Mute a control (set volume to 0):**
 ```bash
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume": 0.0}' \
-     http://localhost:1081/api/v1/pipewire/volume/default
+     http://localhost:1082/api/v1/pipewire/volume/default
 ```
 
 **Set very quiet volume (-40 dB):**
 ```bash
 curl -X PUT -H "Content-Type: application/json" \
      -d '{"volume_db": -40.0}' \
-     http://localhost:1081/api/v1/pipewire/volume/default
+     http://localhost:1082/api/v1/pipewire/volume/default
 ```
 
 **Get mixer analysis (inferred mode and balance):**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/mixer/analysis
+curl http://localhost:1082/api/v1/pipewire/mixer/analysis
 ```
 
 **Get current monostereo mode:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/monostereo
+curl http://localhost:1082/api/v1/pipewire/monostereo
 ```
 
 **Set monostereo mode to mono:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"mode": "mono"}' \
-     http://localhost:1081/api/v1/pipewire/monostereo
+     http://localhost:1082/api/v1/pipewire/monostereo
 ```
 
 **Set monostereo mode to left channel only:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"mode": "left"}' \
-     http://localhost:1081/api/v1/pipewire/monostereo
+     http://localhost:1082/api/v1/pipewire/monostereo
 ```
 
 **Get current balance:**
 ```bash
-curl http://localhost:1081/api/v1/pipewire/balance
+curl http://localhost:1082/api/v1/pipewire/balance
 ```
 
 **Set balance to favor left channel:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"balance": -0.3}' \
-     http://localhost:1081/api/v1/pipewire/balance
+     http://localhost:1082/api/v1/pipewire/balance
 ```
 
 **Set balance to full right:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"balance": 1.0}' \
-     http://localhost:1081/api/v1/pipewire/balance
+     http://localhost:1082/api/v1/pipewire/balance
 ```
 
 **Set balance to center:**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
      -d '{"balance": 0.0}' \
-     http://localhost:1081/api/v1/pipewire/balance
+     http://localhost:1082/api/v1/pipewire/balance
 ```
 
 ### Settings Management
@@ -2552,7 +2559,7 @@ curl -X POST http://localhost:1081/api/v1/settings/restore
 
 **Save current default PipeWire volume:**
 ```bash
-curl -X POST http://localhost:1081/api/v1/pipewire/save-default-volume
+curl -X POST http://localhost:1082/api/v1/pipewire/save-default-volume
 ```
 
 ### Filesystem Management

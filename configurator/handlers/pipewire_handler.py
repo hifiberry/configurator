@@ -3,14 +3,17 @@
 PipeWire Handler for HiFiBerry Configuration API
 
 Provides API endpoints for managing PipeWire volume controls and settings.
+Uses HTTP proxy to communicate with user's PipeWire session via pipewire daemon.
 """
 
 import logging
+import requests
 from flask import request, jsonify
-from .. import pipewire
 
 logger = logging.getLogger(__name__)
 
+# Default PipeWire daemon URL (runs as user session)
+PIPEWIRE_DAEMON_URL = "http://localhost:1082"
 
 class PipewireHandler:
     """Handler for PipeWire-related API operations"""
@@ -18,11 +21,44 @@ class PipewireHandler:
     def __init__(self):
         """Initialize the PipeWire handler"""
         self.settings_manager = None  # Will be set by server
-        pass
+        self.daemon_url = PIPEWIRE_DAEMON_URL
     
     def set_settings_manager(self, settings_manager):
         """Set the settings manager for auto-saving volumes"""
         self.settings_manager = settings_manager
+    
+    def _make_request(self, method, endpoint, data=None, timeout=5):
+        """
+        Make HTTP request to PipeWire daemon
+        
+        Args:
+            method: HTTP method (GET, POST, PUT)
+            endpoint: API endpoint (without /api/v1 prefix)
+            data: Request data for POST/PUT
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Response object or None if failed
+        """
+        try:
+            url = f"{self.daemon_url}/api/v1{endpoint}"
+            logger.debug(f"Making {method} request to {url}")
+            
+            if method == 'GET':
+                response = requests.get(url, timeout=timeout)
+            elif method == 'POST':
+                response = requests.post(url, json=data, timeout=timeout)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, timeout=timeout)
+            else:
+                logger.error(f"Unsupported HTTP method: {method}")
+                return None
+                
+            return response
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"PipeWire daemon request failed: {e}")
+            return None
     
     def handle_list_controls(self):
         """
@@ -31,21 +67,24 @@ class PipewireHandler:
         Returns:
             JSON response with list of PipeWire controls
         """
-        try:
-            controls = pipewire.get_volume_controls()
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'controls': controls,
-                    'count': len(controls)
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error getting PipeWire controls: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+        response = self._make_request('GET', '/volume/controls')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                controls = data.get('data', [])
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'controls': controls,
+                        'count': len(controls)
+                    }
+                })
+        
+        logger.error("Failed to get PipeWire controls from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
 
     def handle_get_default_sink(self):
         """
@@ -54,26 +93,23 @@ class PipewireHandler:
         Returns:
             JSON response with the default sink information
         """
-        try:
-            default_sink = pipewire.get_default_sink()
-            if default_sink:
+        response = self._make_request('GET', '/devices/default-sink')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                default_sink = data.get('data', {}).get('default_sink')
                 return jsonify({
                     'status': 'success',
                     'data': {
                         'default_sink': default_sink
                     }
                 })
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'No default sink found'
-                }), 404
-        except Exception as e:
-            logger.error(f"Error getting default sink: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+        
+        logger.error("Failed to get default sink from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
 
     def handle_get_default_source(self):
         """
@@ -82,26 +118,23 @@ class PipewireHandler:
         Returns:
             JSON response with the default source information
         """
-        try:
-            default_source = pipewire.get_default_source()
-            if default_source:
+        response = self._make_request('GET', '/devices/default-source')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                default_source = data.get('data', {}).get('default_source')
                 return jsonify({
                     'status': 'success',
                     'data': {
                         'default_source': default_source
                     }
                 })
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'No default source found'
-                }), 404
-        except Exception as e:
-            logger.error(f"Error getting default source: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+        
+        logger.error("Failed to get default source from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
 
     def handle_get_volume(self, control):
         """
@@ -113,42 +146,59 @@ class PipewireHandler:
         Returns:
             JSON response with volume information (both linear and dB)
         """
-        try:
-            # Handle "default" or empty control name
-            if control == 'default' or control == '':
-                default_sink = pipewire.get_default_sink()
-                if not default_sink:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'No default sink found'
-                    }), 404
-                control = default_sink
-            
-            # Get linear volume (0.0-1.0)
-            volume = pipewire.get_volume(control)
-            if volume is None:
+        # Handle "default" control
+        if control == 'default' or control == '':
+            default_response = self._make_request('GET', '/devices/default-sink')
+            if not (default_response and default_response.status_code == 200):
                 return jsonify({
                     'status': 'error',
-                    'message': f'Control "{control}" not found'
+                    'message': 'No default sink found'
                 }), 404
             
-            # Get dB volume
-            volume_db = pipewire.get_volume_db(control)
-            
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'control': control,
-                    'volume': volume,
-                    'volume_db': volume_db
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error getting volume for {control}: {e}")
+            default_data = default_response.json()
+            if not default_data.get('success'):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No default sink found'
+                }), 404
+                
+            control = default_data.get('data', {}).get('default_sink')
+            if not control:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No default sink found'
+                }), 404
+        
+        # Get volume and volume_db
+        volume_response = self._make_request('GET', f'/volume/{control}')
+        volume_db_response = self._make_request('GET', f'/volume/{control}/db')
+        
+        if not (volume_response and volume_response.status_code == 200):
             return jsonify({
                 'status': 'error',
-                'message': str(e)
-            }), 500
+                'message': f'Control "{control}" not found'
+            }), 404
+        
+        volume_data = volume_response.json()
+        volume_db_data = volume_db_response.json() if volume_db_response and volume_db_response.status_code == 200 else None
+        
+        if not volume_data.get('success'):
+            return jsonify({
+                'status': 'error',
+                'message': f'Control "{control}" not found'
+            }), 404
+        
+        volume = volume_data.get('data', {}).get('volume')
+        volume_db = volume_db_data.get('data', {}).get('volume_db') if volume_db_data and volume_db_data.get('success') else None
+        
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'control': control,
+                'volume': volume,
+                'volume_db': volume_db
+            }
+        })
 
     def handle_set_volume(self, control):
         """
@@ -160,132 +210,106 @@ class PipewireHandler:
         Returns:
             JSON response with updated volume information
         """
-        try:
-            # Handle "default" or empty control name
-            if control == 'default' or control == '':
-                default_sink = pipewire.get_default_sink()
-                if not default_sink:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'No default sink found'
-                    }), 404
-                control = default_sink
-                resolved_default = True
-            else:
-                resolved_default = False
-            
-            # Get JSON data from request
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'JSON data required'
-                }), 400
-            
-            success = False
-            
-            # Check if volume_db is provided
-            if 'volume_db' in data:
-                try:
-                    volume_db = float(data['volume_db'])
-                    success = pipewire.set_volume_db(control, volume_db)
-                except ValueError:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Invalid volume_db value'
-                    }), 400
-            
-            # Check if volume (linear) is provided
-            elif 'volume' in data:
-                try:
-                    volume = float(data['volume'])
-                    if not 0.0 <= volume <= 1.0:
-                        return jsonify({
-                            'status': 'error',
-                            'message': 'Volume must be between 0.0 and 1.0'
-                        }), 400
-                    success = pipewire.set_volume(control, volume)
-                except ValueError:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Invalid volume value'
-                    }), 400
-            
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Either "volume" or "volume_db" must be provided'
-                }), 400
-            
-            if success:
-                # Return current volume values
-                new_volume = pipewire.get_volume(control)
-                new_volume_db = pipewire.get_volume_db(control)
-                
-                # Auto-save if this is the default sink and settings manager is available
-                self._auto_save_if_default_sink(control, resolved_default)
-                
-                return jsonify({
-                    'status': 'success',
-                    'data': {
-                        'control': control,
-                        'volume': new_volume,
-                        'volume_db': new_volume_db
-                    }
-                })
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Failed to set volume for control "{control}"'
-                }), 500
-                
-        except Exception as e:
-            logger.error(f"Error setting volume for {control}: {e}")
+        # Get JSON data from request
+        data = request.get_json()
+        if not data:
             return jsonify({
                 'status': 'error',
-                'message': str(e)
-            }), 500
+                'message': 'JSON data required'
+            }), 400
+        
+        # Handle "default" control
+        resolved_default = False
+        if control == 'default' or control == '':
+            default_response = self._make_request('GET', '/devices/default-sink')
+            if not (default_response and default_response.status_code == 200):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No default sink found'
+                }), 404
+            
+            default_data = default_response.json()
+            if not default_data.get('success'):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No default sink found'
+                }), 404
+                
+            control = default_data.get('data', {}).get('default_sink')
+            if not control:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No default sink found'
+                }), 404
+            resolved_default = True
+        
+        # Set volume using daemon API
+        if 'volume_db' in data:
+            response = self._make_request('POST', f'/volume/{control}/db', {'volume_db': data['volume_db']})
+        elif 'volume' in data:
+            response = self._make_request('POST', f'/volume/{control}', {'volume': data['volume']})
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Either "volume" or "volume_db" must be provided'
+            }), 400
+        
+        if response and response.status_code == 200:
+            # Get updated values
+            updated_response = self.handle_get_volume(control)
+            if isinstance(updated_response, tuple):
+                return updated_response
+            
+            # Auto-save if this affects the default sink
+            self._auto_save_if_default_sink(control, data, resolved_default)
+            return updated_response
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'PipeWire daemon not available'
+            }), 503
 
     def handle_get_filtergraph(self):
         """Handle GET /api/v1/pipewire/filtergraph - Return PipeWire graph in DOT format.
 
         Returns plain text (text/plain) response with GraphViz DOT content.
         """
-        try:
-            dot = pipewire.get_filtergraph_dot()
-            if dot is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'pw-dot command failed or not available'
-                }), 500
-            # Flask shortcut: return (response_text, status, headers)
-            return dot, 200, {'Content-Type': 'text/plain; charset=utf-8'}
-        except Exception as e:
-            logger.error(f"Error generating PipeWire filtergraph: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+        response = self._make_request('GET', '/graph/dot')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                dot_graph = data.get('data', {}).get('dot_graph', '')
+                return dot_graph, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+        
+        logger.error("Failed to get filtergraph from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
     
-    def _auto_save_if_default_sink(self, control, resolved_default=False):
+    def _auto_save_if_default_sink(self, control, data, resolved_default=False):
         """
         Automatically save the volume if the control is the default sink
         
         Args:
             control: The control that was modified
+            data: The request data that was sent
             resolved_default: True if control was resolved from "default" parameter
         """
         try:
             if self.settings_manager is None:
                 return
                 
-            # If we already resolved from "default", we know this is the default sink
-            if resolved_default:
-                should_save = True
-            else:
+            # Check if control is "default" or try to get the default sink
+            should_save = resolved_default
+            if not should_save:
                 # Get the default sink to compare
-                default_sink = pipewire.get_default_sink()
-                should_save = default_sink and control == default_sink
+                response = self._make_request('GET', '/devices/default-sink')
+                if response and response.status_code == 200:
+                    sink_data = response.json()
+                    if sink_data.get('success'):
+                        default_sink = sink_data.get('data', {}).get('default_sink')
+                        should_save = default_sink and control == default_sink
                 
             if should_save:
                 # This was a change to the default sink, auto-save it
@@ -302,65 +326,56 @@ class PipewireHandler:
     # ------------------------------------------------------------------
     def handle_get_monostereo(self):
         """Handle GET monostereo mode"""
-        try:
-            mode = pipewire.get_monostereo()
-            if mode is None:
-                return jsonify({'status': 'error', 'message': 'Monostereo status unavailable'}), 503
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'monostereo_mode': mode
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error getting monostereo: {e}")
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+        response = self._make_request('GET', '/mixer/monostereo')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                mode = data.get('data', {}).get('mode')
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'monostereo_mode': mode
+                    }
+                })
+        
+        logger.error("Failed to get monostereo from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
 
     def handle_get_balance(self):
         """Handle GET balance"""
-        try:
-            balance = pipewire.get_balance()
-            if balance is None:
-                return jsonify({'status': 'error', 'message': 'Balance status unavailable'}), 503
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'balance': balance
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error getting balance: {e}")
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+        response = self._make_request('GET', '/mixer/balance')
+        if response and response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                balance = data.get('data', {}).get('balance')
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'balance': balance
+                    }
+                })
+        
+        logger.error("Failed to get balance from daemon")
+        return jsonify({
+            'status': 'error',
+            'message': 'PipeWire daemon not available'
+        }), 503
 
     def handle_set_monostereo(self):
         """Handle monostereo mode setting"""
-        try:
-            # Get JSON data from request
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'JSON data required'
-                }), 400
-            
-            mode = data.get('mode')
-            if mode is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Mode must be provided'
-                }), 400
-            
-            # Apply monostereo mode
-            ok = pipewire.set_monostereo(mode)
-            if not ok:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to set monostereo mode'
-                }), 400
-            
-            # Get current monostereo mode for response
-            current_mode = pipewire.get_monostereo()
-            
+        # Get JSON data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'JSON data required'
+            }), 400
+        
+        response = self._make_request('POST', '/mixer/monostereo', data)
+        if response and response.status_code == 200:
             # Auto-save mixer state if settings manager present
             try:
                 if self.settings_manager:
@@ -368,62 +383,28 @@ class PipewireHandler:
             except Exception as e:
                 logger.warning(f"Auto-save mixer state failed after monostereo set: {e}")
             
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'monostereo_mode': current_mode
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error setting monostereo: {e}")
+            # Get current mode for response
+            current_response = self.handle_get_monostereo()
+            return current_response
+        else:
+            logger.error("Failed to set monostereo via daemon")
             return jsonify({
                 'status': 'error',
-                'message': str(e)
-            }), 500
+                'message': 'PipeWire daemon not available'
+            }), 503
 
     def handle_set_balance(self):
         """Handle balance setting"""
-        try:
-            # Get JSON data from request
-            data = request.get_json()
-            if not data:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'JSON data required'
-                }), 400
-            
-            balance = data.get('balance')
-            if balance is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Balance must be provided'
-                }), 400
-            
-            # Validate balance
-            try:
-                balance = float(balance)
-                if not -1.0 <= balance <= 1.0:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Balance must be between -1.0 and 1.0'
-                    }), 400
-            except (ValueError, TypeError):
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Balance must be a number'
-                }), 400
-            
-            # Apply balance
-            ok = pipewire.set_balance(balance)
-            if not ok:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to set balance'
-                }), 400
-            
-            # Get current balance for response
-            current_balance = pipewire.get_balance()
-            
+        # Get JSON data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'JSON data required'
+            }), 400
+        
+        response = self._make_request('POST', '/mixer/balance', data)
+        if response and response.status_code == 200:
             # Auto-save mixer state if settings manager present
             try:
                 if self.settings_manager:
@@ -431,34 +412,54 @@ class PipewireHandler:
             except Exception as e:
                 logger.warning(f"Auto-save mixer state failed after balance set: {e}")
             
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'balance': current_balance
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error setting balance: {e}")
+            # Get current balance for response
+            current_response = self.handle_get_balance()
+            return current_response
+        else:
+            logger.error("Failed to set balance via daemon")
             return jsonify({
                 'status': 'error',
-                'message': str(e)
-            }), 500
+                'message': 'PipeWire daemon not available'
+            }), 503
 
     def handle_get_mixer_mode(self):
         """Analyze mixer gains and return inferred monostereo mode and balance."""
-        try:
-            analysis = pipewire.analyze_mixer()
-            if analysis is None:
-                return jsonify({'status': 'error', 'message': 'Mixer analysis unavailable'}), 503
-            gains = pipewire.get_mixer_status() or {}
+        # Get monostereo mode and balance
+        mono_response = self._make_request('GET', '/mixer/monostereo')
+        balance_response = self._make_request('GET', '/mixer/balance')
+        mixer_response = self._make_request('GET', '/mixer/status')
+        
+        monostereo_mode = None
+        balance = None
+        gains = {}
+        
+        if mono_response and mono_response.status_code == 200:
+            mono_data = mono_response.json()
+            if mono_data.get('success'):
+                monostereo_mode = mono_data.get('data', {}).get('mode')
+        
+        if balance_response and balance_response.status_code == 200:
+            balance_data = balance_response.json()
+            if balance_data.get('success'):
+                balance = balance_data.get('data', {}).get('balance')
+        
+        if mixer_response and mixer_response.status_code == 200:
+            mixer_data = mixer_response.json()
+            if mixer_data.get('success'):
+                gains = mixer_data.get('data', {})
+        
+        if monostereo_mode is None and balance is None:
+            logger.error("Failed to get mixer analysis from daemon")
             return jsonify({
-                'status': 'success', 
-                'data': {
-                    'monostereo_mode': analysis.get('monostereo_mode'), 
-                    'balance': analysis.get('balance'), 
-                    'gains': gains
-                }
-            })
-        except Exception as e:
-            logger.error(f"Error analyzing mixer: {e}")
-            return jsonify({'status': 'error', 'message': str(e)}), 500
+                'status': 'error',
+                'message': 'PipeWire daemon not available'
+            }), 503
+        
+        return jsonify({
+            'status': 'success', 
+            'data': {
+                'monostereo_mode': monostereo_mode, 
+                'balance': balance, 
+                'gains': gains
+            }
+        })
