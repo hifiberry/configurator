@@ -173,6 +173,18 @@ SOUND_CARD_DEFINITIONS = {
         "dtoverlay": "hifiberry-dacplus-std",
         "is_pro": False,
     },
+    "DAC+ Pro": {
+        "aplay_contains": "DAC+ Pro",
+        "hat_name": "DAC+ Pro", 
+        "volume_control": "Digital",
+        "output_channels": 2,
+        "input_channels": 0,
+        "features": [],
+        "supports_dsp": False,
+        "card_type": ["DAC"],
+        "dtoverlay": "hifiberry-dacplus-pro",
+        "is_pro": True,
+    },
     "DAC2 Pro": {
         "hat_name": "DAC2 Pro",
         "volume_control": "Digital",
@@ -181,7 +193,7 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["DAC", "Headphone"],
-        "dtoverlay": "hifiberry-dacplus-std",
+        "dtoverlay": "hifiberry-dacplus-pro",
         "is_pro": True,
     },
     "Amp+": {
@@ -358,6 +370,85 @@ class Soundcard:
             f"card_type={self.card_type})"
         )
 
+    def _additional_card_checks(self, aplay_output, initial_detection):
+        """
+        Perform additional checks to refine sound card detection based on aplay output
+        and hardware-specific features.
+        
+        Args:
+            aplay_output: Output from aplay -l command
+            initial_detection: Initial card detection result from pattern matching
+            
+        Returns:
+            Refined card detection result or original if no refinement needed
+        """
+        if not initial_detection:
+            return initial_detection
+            
+        # Check for DAC+ Pro vs DAC2 Pro distinction
+        # This handles both direct matches and cases where "DAC+/Amp2" was detected first
+        if (initial_detection["name"] in ["DAC+ Pro", "DAC2 Pro", "DAC+/Amp2"] and 
+            "dacplus" in aplay_output.lower()):
+            return self._distinguish_dac_pro_models(aplay_output, initial_detection)
+            
+        return initial_detection
+    
+    def _distinguish_dac_pro_models(self, aplay_output, initial_detection):
+        """
+        Distinguish between DAC+ Pro and DAC2 Pro based on headphone mixer control.
+        
+        DAC2 Pro has a 'Headphone' mixer control, DAC+ Pro does not.
+        """
+        try:
+            # First check if this is actually a DAC+ Pro model based on aplay output
+            if "HiFiBerry DAC+ Pro" not in aplay_output:
+                # If not a DAC+ Pro, return original detection
+                return initial_detection
+            
+            # Extract card number from aplay output
+            card_number = None
+            for line in aplay_output.split('\n'):
+                if 'hifiberry' in line.lower() and 'dacplus' in line.lower():
+                    # Parse line like: "card 0: sndrpihifiberry [snd_rpi_hifiberry_dacplus], device 0:"
+                    if line.strip().startswith('card '):
+                        parts = line.split(':')
+                        if len(parts) > 0:
+                            card_part = parts[0].strip()
+                            if card_part.startswith('card '):
+                                try:
+                                    card_number = int(card_part.split()[1])
+                                    break
+                                except (ValueError, IndexError):
+                                    continue
+            
+            if card_number is not None:
+                # Check for headphone mixer control
+                amixer_output = subprocess.check_output(
+                    f"amixer -c {card_number} | grep -i head", 
+                    shell=True, text=True
+                ).strip()
+                
+                if "Headphone" in amixer_output:
+                    logging.info("Detected DAC2 Pro (has Headphone mixer control)")
+                    # Return DAC2 Pro configuration
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        if card_name == "DAC2 Pro":
+                            return {"name": card_name, **attributes}
+                else:
+                    logging.info("Detected DAC+ Pro (no Headphone mixer control)")
+                    # Return DAC+ Pro configuration  
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        if card_name == "DAC+ Pro":
+                            return {"name": card_name, **attributes}
+                            
+        except subprocess.CalledProcessError:
+            logging.debug("Could not run amixer command for DAC Pro distinction")
+        except Exception as e:
+            logging.debug(f"Error during DAC Pro distinction: {e}")
+            
+        # If we can't determine, return the initial detection
+        return initial_detection
+
     def _detect_card(self, no_eeprom=False):
         try:
             # Use get_hat_info function to get HAT information (unless disabled)
@@ -391,10 +482,18 @@ class Soundcard:
                 logging.warning("No HiFiBerry sound card detected.")
                 return None
 
+            # First pass: try to match based on aplay_contains patterns
+            initial_detection = None
             for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
                 aplay_contains = attributes.get("aplay_contains", "")
                 if aplay_contains and aplay_contains.lower() in output.lower():
-                    return {"name": card_name, **attributes}
+                    initial_detection = {"name": card_name, **attributes}
+                    break
+            
+            # Second pass: perform additional checks to refine detection
+            final_detection = self._additional_card_checks(output, initial_detection)
+            if final_detection:
+                return final_detection
         except subprocess.CalledProcessError:
             logging.error("Error: Unable to execute `aplay -l`. Ensure ALSA is installed and configured.")
 
