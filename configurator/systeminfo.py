@@ -83,7 +83,9 @@ class SystemInfo:
                     total_kb = int(line.split()[1])
                     memory_data['total_kb'] = total_kb
                     memory_data['total_mb'] = round(total_kb / 1024)
-                    memory_data['total_gb'] = round(total_kb / 1024 / 1024, 2)
+                    # Round GB up to full GB using math.ceil
+                    import math
+                    memory_data['total_gb'] = math.ceil(total_kb / 1024 / 1024)
                     break
             
             return memory_data
