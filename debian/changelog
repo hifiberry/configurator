@@ -1,3 +1,15 @@
+hifiberry-configurator (2.5.1) stable; urgency=medium
+
+  * Added headphone volume control support for DAC2 Pro (only card with headphone amplifier)
+  * Enhanced soundcard definitions with headphone_volume_control field
+  * Updated API endpoints (/api/v1/soundcards, /api/v1/systeminfo, /api/v1/soundcard/detect) to include headphone volume control information
+  * Added --headphone-volume-control CLI option to config-soundcard
+  * Added physical memory information to systeminfo API in pi_model section
+  * Memory information includes total_kb, total_mb, and total_gb (rounded up to full GB)
+  * Updated API documentation with comprehensive soundcard and memory field descriptions
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 02 Oct 2025 07:40:00 +0000
+
 hifiberry-configurator (2.5.0) stable; urgency=medium
 
   * Fixed config-server startup errors when running as root without PipeWire access
