@@ -113,7 +113,7 @@ Get system information including Pi model, HAT details, sound card information, 
     "memory": {
       "total_kb": 4010496,
       "total_mb": 3916,
-      "total_gb": 3.82
+      "total_gb": 4
     }
   },
   "hat_info": {
