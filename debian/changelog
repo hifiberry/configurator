@@ -1,14 +1,30 @@
+hifiberry-configurator (2.5.2) stable; urgency=medium
+
+  * Added comprehensive volume API with headphone volume management endpoints
+  * New REST API endpoints: /api/v1/volume/headphone/* for get/set/store/restore operations
+  * Enhanced volume.py with headphone volume control detection and management functions
+  * Added VolumeHandler class for REST API volume operations
+  * Implemented sound card index caching to improve performance and reduce system calls
+  * Added command-line interface for headphone volume operations 
+    (--get-headphone, --set-headphone, etc.)
+  * Updated API documentation with comprehensive volume endpoint examples and error responses
+  * Performance optimization: eliminated repeated HAT EEPROM reads and aplay calls 
+    through caching
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 02 Oct 2025 08:00:00 +0000
+
 hifiberry-configurator (2.5.1) stable; urgency=medium
 
   * Added headphone volume control support for DAC2 Pro (only card with headphone amplifier)
   * Enhanced soundcard definitions with headphone_volume_control field
-  * Updated API endpoints (/api/v1/soundcards, /api/v1/systeminfo, /api/v1/soundcard/detect) to include headphone volume control information
+  * Updated API endpoints (/api/v1/soundcards, /api/v1/systeminfo, /api/v1/soundcard/detect) 
+    to include headphone volume control information
   * Added --headphone-volume-control CLI option to config-soundcard
   * Added physical memory information to systeminfo API in pi_model section
   * Memory information includes total_kb, total_mb, and total_gb (rounded up to full GB)
   * Updated API documentation with comprehensive soundcard and memory field descriptions
 
- -- HiFiBerry <support@hifiberry.com>  Wed, 02 Oct 2025 07:40:00 +0000
+ -- HiFiBerry <support@hifiberry.com>  Tue, 02 Oct 2025 07:40:00 +0000
 
 hifiberry-configurator (2.5.0) stable; urgency=medium
 
