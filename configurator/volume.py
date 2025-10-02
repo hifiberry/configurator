@@ -38,6 +38,25 @@ PIPEWIRE_CAPTURE_VOLUME_KEY = "system.volume.pipewire.capture"
 # List of known headphone volume control names
 HEADPHONE_VOLUME_CONTROLS = ["Headphone"]
 
+# Cache for sound card information
+_cached_card_index = None
+_cached_soundcard = None
+
+def get_cached_card_index():
+    """
+    Get the cached sound card index, initializing cache if needed
+    
+    Returns:
+        ALSA card index or None if no card detected
+    """
+    global _cached_card_index, _cached_soundcard
+    
+    if _cached_card_index is None:
+        _cached_soundcard = Soundcard()
+        _cached_card_index = _cached_soundcard.get_hardware_index()
+    
+    return _cached_card_index
+
 def get_current_volume(card_index, control_name):
     """
     Get the current volume setting from ALSA
@@ -162,9 +181,12 @@ def store_volume():
     
     try:
         # Store physical card volume if available
-        card = Soundcard()
-        card_index = card.get_hardware_index()
-        control_name = card.get_mixer_control_name(use_softvol_fallback=True)
+        card_index = get_cached_card_index()
+        
+        if card_index is not None:
+            # Get the cached soundcard instance
+            global _cached_soundcard
+            control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)
         
         if card_index is not None and control_name is not None:
             # Get current volume from physical card
@@ -235,9 +257,12 @@ def restore_volume():
         
         if volume is not None and stored_card_index is not None and stored_control_name is not None:
             # Get current sound card information
-            card = Soundcard()
-            card_index = card.get_hardware_index()
-            control_name = card.get_mixer_control_name(use_softvol_fallback=True)
+            card_index = get_cached_card_index()
+            
+            if card_index is not None:
+                # Get the cached soundcard instance
+                global _cached_soundcard
+                control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)
             
             if card_index is not None and control_name is not None:
                 # Check if the sound card has changed
@@ -421,8 +446,7 @@ def get_available_headphone_controls():
         List of available headphone control names, empty if none found
     """
     try:
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         
         if card_index is None:
             logging.error("No sound card detected")
@@ -450,8 +474,7 @@ def get_headphone_volume():
         Tuple of (volume_value, control_name) if successful, (None, None) if failed
     """
     try:
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         
         if card_index is None:
             logging.error("No sound card detected")
@@ -489,8 +512,7 @@ def set_headphone_volume(volume_value):
         True if successful, False otherwise
     """
     try:
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         
         if card_index is None:
             logging.error("No sound card detected")
@@ -526,8 +548,7 @@ def store_headphone_volume():
         True if successful, False otherwise
     """
     try:
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         
         if card_index is None:
             logging.error("No sound card detected")
@@ -581,8 +602,7 @@ def restore_headphone_volume():
             return False
         
         # Get current sound card information
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         
         if card_index is None:
             logging.error("No sound card detected for headphone volume restoration")
@@ -711,8 +731,7 @@ def main():
         print("Available ALSA mixer controls:")
         
         # List physical card controls
-        card = Soundcard()
-        card_index = card.get_hardware_index()
+        card_index = get_cached_card_index()
         if card_index is not None:
             print(f"\nPhysical card {card_index} controls:")
             controls = list_available_controls(card_index)
