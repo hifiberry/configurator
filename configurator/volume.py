@@ -26,9 +26,17 @@ VOLUME_DB_KEY = "system.volume"
 VOLUME_CARD_DB_KEY = "system.volume.card"
 VOLUME_CONTROL_DB_KEY = "system.volume.control"
 
+# Headphone volume configuration keys
+HEADPHONE_VOLUME_DB_KEY = "system.volume.headphone"
+HEADPHONE_VOLUME_CARD_DB_KEY = "system.volume.headphone.card"
+HEADPHONE_VOLUME_CONTROL_DB_KEY = "system.volume.headphone.control"
+
 # PipeWire virtual device configuration keys
 PIPEWIRE_MASTER_VOLUME_KEY = "system.volume.pipewire.master"
 PIPEWIRE_CAPTURE_VOLUME_KEY = "system.volume.pipewire.capture"
+
+# List of known headphone volume control names
+HEADPHONE_VOLUME_CONTROLS = ["Headphone"]
 
 def get_current_volume(card_index, control_name):
     """
@@ -176,6 +184,11 @@ def store_volume():
             logging.warning("No HiFiBerry sound card detected or no volume control available")
             success = False
         
+        # Store headphone volume if available
+        headphone_result = store_headphone_volume()
+        if not headphone_result:
+            logging.info("No headphone volume controls available or failed to store")
+        
         # Store PipeWire virtual controls if available
         if is_pipewire_available():
             db = ConfigDB()
@@ -245,6 +258,11 @@ def restore_volume():
         else:
             logging.warning("No physical card volume setting found in configuration database")
             success = False
+        
+        # Restore headphone volume if available
+        headphone_result = restore_headphone_volume()
+        if not headphone_result:
+            logging.info("No headphone volume settings found or failed to restore")
         
         # Restore PipeWire virtual controls if available
         if is_pipewire_available():
@@ -395,6 +413,211 @@ def set_pipewire_volume(control_name, volume_value):
             logging.error(f"Error setting PipeWire volume: {str(e)}")
             return False
 
+def get_available_headphone_controls():
+    """
+    Get list of available headphone volume controls on the current sound card
+    
+    Returns:
+        List of available headphone control names, empty if none found
+    """
+    try:
+        card = Soundcard()
+        card_index = card.get_hardware_index()
+        
+        if card_index is None:
+            logging.error("No sound card detected")
+            return []
+        
+        # Get all available controls on the sound card
+        available_controls = list_available_controls(card_index)
+        
+        # Filter for headphone controls
+        headphone_controls = []
+        for control in HEADPHONE_VOLUME_CONTROLS:
+            if control in available_controls:
+                headphone_controls.append(control)
+        
+        return headphone_controls
+    except Exception as e:
+        logging.error(f"Error getting available headphone controls: {str(e)}")
+        return []
+
+def get_headphone_volume():
+    """
+    Get the current headphone volume setting
+    
+    Returns:
+        Tuple of (volume_value, control_name) if successful, (None, None) if failed
+    """
+    try:
+        card = Soundcard()
+        card_index = card.get_hardware_index()
+        
+        if card_index is None:
+            logging.error("No sound card detected")
+            return None, None
+        
+        # Get available headphone controls
+        headphone_controls = get_available_headphone_controls()
+        
+        if not headphone_controls:
+            logging.error("No headphone volume controls available on this sound card")
+            return None, None
+        
+        # Use the first available headphone control
+        control_name = headphone_controls[0]
+        volume = get_current_volume(card_index, control_name)
+        
+        if volume is not None:
+            return volume, control_name
+        else:
+            logging.error(f"Failed to get volume for headphone control '{control_name}'")
+            return None, None
+            
+    except Exception as e:
+        logging.error(f"Error getting headphone volume: {str(e)}")
+        return None, None
+
+def set_headphone_volume(volume_value):
+    """
+    Set the headphone volume
+    
+    Args:
+        volume_value: Volume value to set (percentage or dB)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        card = Soundcard()
+        card_index = card.get_hardware_index()
+        
+        if card_index is None:
+            logging.error("No sound card detected")
+            return False
+        
+        # Get available headphone controls
+        headphone_controls = get_available_headphone_controls()
+        
+        if not headphone_controls:
+            logging.error("No headphone volume controls available on this sound card")
+            return False
+        
+        # Use the first available headphone control
+        control_name = headphone_controls[0]
+        result = set_volume(card_index, control_name, volume_value)
+        
+        if result:
+            logging.info(f"Headphone volume set to {volume_value} for control '{control_name}'")
+            return True
+        else:
+            logging.error(f"Failed to set headphone volume for control '{control_name}'")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error setting headphone volume: {str(e)}")
+        return False
+
+def store_headphone_volume():
+    """
+    Store the current headphone volume setting in the configuration database
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        card = Soundcard()
+        card_index = card.get_hardware_index()
+        
+        if card_index is None:
+            logging.error("No sound card detected")
+            return False
+        
+        # Get available headphone controls
+        headphone_controls = get_available_headphone_controls()
+        
+        if not headphone_controls:
+            logging.error("No headphone volume controls available on this sound card")
+            return False
+        
+        # Use the first available headphone control
+        control_name = headphone_controls[0]
+        volume = get_current_volume(card_index, control_name)
+        
+        if volume is not None:
+            # Store in database
+            db = ConfigDB()
+            db.set(HEADPHONE_VOLUME_DB_KEY, volume)
+            db.set(HEADPHONE_VOLUME_CARD_DB_KEY, str(card_index))
+            db.set(HEADPHONE_VOLUME_CONTROL_DB_KEY, control_name)
+            
+            logging.info(f"Headphone volume {volume} stored for card {card_index}, control '{control_name}'")
+            return True
+        else:
+            logging.error("Could not retrieve current headphone volume")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error storing headphone volume: {str(e)}")
+        return False
+
+def restore_headphone_volume():
+    """
+    Restore headphone volume from the configuration database
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        db = ConfigDB()
+        
+        # Get stored headphone volume settings
+        volume = db.get(HEADPHONE_VOLUME_DB_KEY)
+        stored_card_index = db.get(HEADPHONE_VOLUME_CARD_DB_KEY)
+        stored_control_name = db.get(HEADPHONE_VOLUME_CONTROL_DB_KEY)
+        
+        if volume is None:
+            logging.warning("No headphone volume setting found in configuration database")
+            return False
+        
+        # Get current sound card information
+        card = Soundcard()
+        card_index = card.get_hardware_index()
+        
+        if card_index is None:
+            logging.error("No sound card detected for headphone volume restoration")
+            return False
+        
+        # Get available headphone controls
+        headphone_controls = get_available_headphone_controls()
+        
+        if not headphone_controls:
+            logging.error("No headphone volume controls available on current sound card")
+            return False
+        
+        # Use the first available headphone control
+        control_name = headphone_controls[0]
+        
+        # Check if the sound card or control has changed
+        if stored_card_index and stored_control_name:
+            if stored_card_index != str(card_index) or stored_control_name != control_name:
+                logging.warning(f"Headphone configuration has changed from card {stored_card_index}, "
+                               f"control '{stored_control_name}' to card {card_index}, control '{control_name}'")
+        
+        # Set the headphone volume
+        result = set_volume(card_index, control_name, volume)
+        
+        if result:
+            logging.info(f"Headphone volume restored to {volume} for card {card_index}, control '{control_name}'")
+            return True
+        else:
+            logging.error("Failed to restore headphone volume")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error restoring headphone volume: {str(e)}")
+        return False
+
 def list_available_controls(card_index=None):
     """
     List available ALSA mixer controls for debugging
@@ -442,14 +665,26 @@ def main():
 
     # Create the parser
     parser = argparse.ArgumentParser(
-        description='Store and restore ALSA volume settings (including PipeWire virtual controls) in the configuration database')
+        description='Store and restore ALSA volume settings (including PipeWire virtual controls and headphone volume) in the configuration database')
     
     # Add store/restore group
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--store', action='store_true', 
-                      help='Store the current volume settings (both physical card and PipeWire virtual controls)')
+                      help='Store the current volume settings (both physical card, headphone, and PipeWire virtual controls)')
     group.add_argument('--restore', action='store_true', 
-                      help='Restore the stored volume settings (both physical card and PipeWire virtual controls)')
+                      help='Restore the stored volume settings (both physical card, headphone, and PipeWire virtual controls)')
+    
+    # Add headphone volume specific options
+    group.add_argument('--store-headphone', action='store_true',
+                      help='Store only the current headphone volume setting')
+    group.add_argument('--restore-headphone', action='store_true',
+                      help='Restore only the stored headphone volume setting')
+    group.add_argument('--get-headphone', action='store_true',
+                      help='Get the current headphone volume')
+    group.add_argument('--set-headphone', type=str, metavar='VOLUME',
+                      help='Set the headphone volume (percentage or dB value)')
+    group.add_argument('--list-headphone', action='store_true',
+                      help='List available headphone volume controls')
     
     # Add verbosity option
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
@@ -492,7 +727,54 @@ def main():
         
         return 0
     
-    # Execute command
+    # Handle headphone-specific operations
+    if args.list_headphone:
+        headphone_controls = get_available_headphone_controls()
+        if headphone_controls:
+            print("Available headphone volume controls:")
+            for control in headphone_controls:
+                print(f"  - {control}")
+        else:
+            print("No headphone volume controls available on this sound card")
+        return 0
+    
+    if args.get_headphone:
+        volume, control_name = get_headphone_volume()
+        if volume is not None:
+            print(f"Headphone volume: {volume}% (control: {control_name})")
+            return 0
+        else:
+            print("Error: No headphone volume controls available", file=sys.stderr)
+            return 1
+    
+    if args.set_headphone:
+        result = set_headphone_volume(args.set_headphone)
+        if result:
+            print(f"Headphone volume set to {args.set_headphone}")
+            return 0
+        else:
+            print("Error: Failed to set headphone volume", file=sys.stderr)
+            return 1
+    
+    if args.store_headphone:
+        result = store_headphone_volume()
+        if result:
+            print("Headphone volume stored successfully")
+            return 0
+        else:
+            print("Error: Failed to store headphone volume", file=sys.stderr)
+            return 1
+    
+    if args.restore_headphone:
+        result = restore_headphone_volume()
+        if result:
+            print("Headphone volume restored successfully")
+            return 0
+        else:
+            print("Error: Failed to restore headphone volume", file=sys.stderr)
+            return 1
+    
+    # Execute main command
     if args.store:
         result = store_volume()
     elif args.restore:

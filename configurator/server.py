@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler, VolumeHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -63,6 +63,7 @@ class ConfigAPIServer:
             self.script_handler = ScriptHandler()
             self.network_handler = NetworkHandler()
             self.i2c_handler = I2CHandler()
+            self.volume_handler = VolumeHandler()
         else:
             # User mode - minimal handlers
             self.systemd_handler = None
@@ -74,6 +75,7 @@ class ConfigAPIServer:
             self.script_handler = None
             self.network_handler = None
             self.i2c_handler = None
+            self.volume_handler = None
             
         if not system_mode:  # User mode only
             self.pipewire_handler = PipewireHandler()
@@ -582,6 +584,57 @@ class ConfigAPIServer:
         def detect_soundcard():
             """Detect current sound card and return name and dtoverlay"""
             return self.soundcard_handler.handle_detect_soundcard()
+
+        # Volume endpoints
+        @self.app.route('/api/v1/volume/headphone/controls', methods=['GET'])
+        def list_headphone_controls():
+            """List available headphone volume controls"""
+            if self.volume_handler is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Volume operations not available in user mode'
+                }), 503
+            return self.volume_handler.handle_list_headphone_controls()
+
+        @self.app.route('/api/v1/volume/headphone', methods=['GET'])
+        def get_headphone_volume():
+            """Get current headphone volume"""
+            if self.volume_handler is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Volume operations not available in user mode'
+                }), 503
+            return self.volume_handler.handle_get_headphone_volume()
+
+        @self.app.route('/api/v1/volume/headphone', methods=['POST'])
+        def set_headphone_volume():
+            """Set headphone volume"""
+            if self.volume_handler is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Volume operations not available in user mode'
+                }), 503
+            return self.volume_handler.handle_set_headphone_volume()
+
+        @self.app.route('/api/v1/volume/headphone/store', methods=['POST'])
+        def store_headphone_volume():
+            """Store current headphone volume"""
+            if self.volume_handler is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Volume operations not available in user mode'
+                }), 503
+            return self.volume_handler.handle_store_headphone_volume()
+
+        @self.app.route('/api/v1/volume/headphone/restore', methods=['POST'])
+        def restore_headphone_volume():
+            """Restore stored headphone volume"""
+            if self.volume_handler is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Volume operations not available in user mode'
+                }), 503
+            return self.volume_handler.handle_restore_headphone_volume()
 
         # System endpoints
         @self.app.route('/api/v1/system/reboot', methods=['POST'])
