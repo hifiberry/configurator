@@ -2760,6 +2760,151 @@ curl -X POST -H "Content-Type: application/json" \
      http://localhost:1081/api/v1/scripts/resetsystem/execute
 ```
 
+## Volume Management
+
+### `GET /api/v1/volume/headphone/controls`
+
+List available headphone volume controls on the current sound card.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "controls": ["Headphone"],
+    "count": 1
+  }
+}
+```
+
+**Response (No headphone controls):**
+```json
+{
+  "status": "success",
+  "data": {
+    "controls": [],
+    "count": 0
+  }
+}
+```
+
+### `GET /api/v1/volume/headphone`
+
+Get the current headphone volume.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "volume": 75,
+    "control": "Headphone"
+  }
+}
+```
+
+**Error Response (No headphone controls):**
+```json
+{
+  "status": "error",
+  "message": "No headphone volume controls available on this sound card"
+}
+```
+
+### `POST /api/v1/volume/headphone`
+
+Set the headphone volume.
+
+**Request Body:**
+```json
+{
+  "volume": 80
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Headphone volume set to 80%",
+  "data": {
+    "volume": 80
+  }
+}
+```
+
+**Error Responses:**
+
+Missing volume parameter:
+```json
+{
+  "status": "error",
+  "message": "volume parameter is required"
+}
+```
+
+Invalid volume range:
+```json
+{
+  "status": "error",
+  "message": "Volume must be between 0 and 100"
+}
+```
+
+No headphone controls:
+```json
+{
+  "status": "error",
+  "message": "No headphone volume controls available on this sound card"
+}
+```
+
+### `POST /api/v1/volume/headphone/store`
+
+Store the current headphone volume setting.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Headphone volume stored successfully"
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "No headphone volume controls available on this sound card"
+}
+```
+
+### `POST /api/v1/volume/headphone/restore`
+
+Restore the previously stored headphone volume setting.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Headphone volume restored successfully"
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "No headphone volume settings found or no compatible controls available"
+}
+```
+
+**Notes:**
+- Headphone volume controls are only available on sound cards with headphone amplifiers (currently only DAC2 Pro)
+- Volume values are specified as percentages (0-100)
+- The system automatically detects available headphone controls from a predefined list
+- Store/restore operations save settings in the configuration database for persistence across reboots
+
 ## Error Responses
 
 | HTTP Code | Description | Example Response |
