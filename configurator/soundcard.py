@@ -2,9 +2,34 @@ import subprocess
 import logging
 import argparse
 import sys
+import tempfile
+import os
 
 # Import the get_hat_info function from hattools
 from configurator.hattools import get_hat_info
+
+# ALSA state file template for creating dummy mixer controls
+ALSA_STATE_FILE_TEMPLATE = """
+state.sndrpihifiberry {
+    control.98 {
+        iface MIXER
+        name '%CONTROL_NAME%'
+        value.0 255
+        value.1 255
+        comment {
+            access 'read write user'
+            type INTEGER
+            count 2
+            range '0 - 255'
+            tlv '0000000100000008ffffdcc400000023'
+            dbmin -9020
+            dbmax -95
+            dbvalue.0 -95
+            dbvalue.1 -95
+        }
+    }
+}
+"""
 
 # Sound card definitions as a constant dictionary
 SOUND_CARD_DEFINITIONS = {
@@ -34,7 +59,7 @@ SOUND_CARD_DEFINITIONS = {
     },
     "Digi2 Pro": {
         "hat_name": "Digi2 Pro",
-        "volume_control": "Softvol",
+        "volume_control": None,
         "output_channels": 2,
         "input_channels": 0,
         "features": ["dsp"],
@@ -248,7 +273,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ Light": {
         "aplay_contains": "snd_rpi_hifiberry_dac",
         "hat_name": None,
-        "volume_control": "Softvol",
+        "volume_control": None,
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -260,7 +285,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ Zero": {
         "aplay_contains": "snd_rpi_hifiberry_dac",
         "hat_name": None,
-        "volume_control": "Softvol",
+        "volume_control": None,
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -272,7 +297,7 @@ SOUND_CARD_DEFINITIONS = {
     "MiniAmp": {
         "aplay_contains": "snd_rpi_hifiberry_dac",
         "hat_name": None,
-        "volume_control": "Softvol",
+        "volume_control": None,
         "output_channels": 2,
         "input_channels": 0,
         "features": [],
@@ -607,6 +632,129 @@ class Soundcard:
             logging.error("Error running aplay -l command")
             return None
 
+    def create_dummy_alsa_control(self, control_name):
+        """
+        Create a dummy ALSA mixer control using a state file.
+        
+        This creates a software mixer control that can be used for volume control
+        when the sound card doesn't provide hardware volume controls.
+        
+        Args:
+            control_name (str): Name of the mixer control to create
+            
+        Returns:
+            bool: True if the control was created successfully, False otherwise
+            
+        Raises:
+            Exception: If there's an error creating the control
+        """
+        try:
+            # Check if the control already exists
+            if self._check_mixer_control_exists(control_name):
+                logging.info(f"ALSA mixer control '{control_name}' already exists")
+                return True
+            
+            # Create temporary state file
+            with tempfile.NamedTemporaryFile(mode='w', dir="/tmp", delete=False, suffix='.state') as statefile:
+                content = ALSA_STATE_FILE_TEMPLATE.replace('%CONTROL_NAME%', control_name)
+                logging.debug(f"Creating ALSA state file with content:\n{content}")
+                statefile.write(content)
+                statefile.flush()
+                
+                # Apply the state file using alsactl
+                command = f"/usr/sbin/alsactl -f {statefile.name} restore"
+                logging.debug(f"Running command: {command}")
+                
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                
+                # Note: alsactl may return non-zero exit codes for warnings, not just errors
+                # We should check if the control was actually created rather than just the exit code
+                if result.returncode != 0:
+                    logging.warning(f"alsactl returned non-zero exit code: {result.stderr}")
+                
+                # Verify the control was created (this is the definitive test)
+                if self._check_mixer_control_exists(control_name):
+                    logging.info(f"Successfully created ALSA mixer control '{control_name}'")
+                    return True
+                else:
+                    logging.error(f"ALSA mixer control '{control_name}' was not created")
+                    if result.returncode != 0:
+                        logging.error(f"alsactl error: {result.stderr}")
+                    return False
+                    
+        except Exception as e:
+            logging.error(f"Error creating ALSA mixer control '{control_name}': {str(e)}")
+            return False
+        finally:
+            # Clean up temporary file
+            try:
+                if 'statefile' in locals():
+                    os.unlink(statefile.name)
+            except Exception as e:
+                logging.warning(f"Could not remove temporary state file: {str(e)}")
+
+    def _check_mixer_control_exists(self, control_name):
+        """
+        Check if a mixer control exists on the sound card.
+        
+        Args:
+            control_name (str): Name of the mixer control to check
+            
+        Returns:
+            bool: True if the control exists, False otherwise
+        """
+        try:
+            # First try with alsaaudio if available
+            try:
+                import alsaaudio
+                hw_index = self.get_hardware_index()
+                if hw_index is not None:
+                    mixers = alsaaudio.mixers(cardindex=hw_index)
+                    return control_name in mixers
+            except ImportError:
+                logging.debug("alsaaudio not available, using amixer command")
+            
+            # Fallback to amixer command
+            hw_index = self.get_hardware_index()
+            if hw_index is not None:
+                result = subprocess.run(
+                    f"amixer -c {hw_index} | grep -q '{control_name}'",
+                    shell=True,
+                    capture_output=True
+                )
+                return result.returncode == 0
+            
+            return False
+            
+        except Exception as e:
+            logging.debug(f"Error checking mixer control '{control_name}': {str(e)}")
+            return False
+
+    def get_or_create_volume_control(self, preferred_name=None):
+        """
+        Get the existing volume control or create a dummy one if none exists.
+        
+        Args:
+            preferred_name (str, optional): Preferred name for the volume control.
+                                          Defaults to "Softvol" if not specified.
+            
+        Returns:
+            str or None: Name of the volume control, or None if creation failed
+        """
+        # If the card already has a hardware volume control, use it
+        if self.volume_control:
+            return self.volume_control
+        
+        # Determine the control name to create
+        control_name = preferred_name or "Softvol"
+        
+        # Try to create the dummy control
+        if self.create_dummy_alsa_control(control_name):
+            return control_name
+        else:
+            logging.error(f"Failed to create volume control '{control_name}'")
+            return None
+
 
 def main():
     # Configure logging FIRST, before any other operations
@@ -685,6 +833,16 @@ def main():
         action="store_true",
         help="Disable EEPROM check and use only aplay -l for detection.",
     )
+    parser.add_argument(
+        "--create-volume-control",
+        metavar="CONTROL_NAME",
+        help="Create a dummy ALSA volume control with the specified name.",
+    )
+    parser.add_argument(
+        "--get-or-create-volume-control",
+        metavar="CONTROL_NAME",
+        help="Get existing volume control or create a dummy one with the specified name (defaults to 'Softvol').",
+    )
     args = parser.parse_args()
 
     # Configure logging immediately after parsing args
@@ -707,6 +865,26 @@ def main():
         list_all_sound_cards(args.list_format)
         return
 
+    # Handle dummy control creation (requires sound card detection)
+    if args.create_volume_control:
+        card = Soundcard(no_eeprom=args.no_eeprom)
+        if card.create_dummy_alsa_control(args.create_volume_control):
+            print(f"Successfully created volume control: {args.create_volume_control}")
+        else:
+            print(f"Failed to create volume control: {args.create_volume_control}")
+            sys.exit(1)
+        return
+
+    if args.get_or_create_volume_control:
+        card = Soundcard(no_eeprom=args.no_eeprom)
+        control_name = card.get_or_create_volume_control(args.get_or_create_volume_control)
+        if control_name:
+            print(control_name)
+        else:
+            print("Failed to get or create volume control")
+            sys.exit(1)
+        return
+
     card = Soundcard(no_eeprom=args.no_eeprom)
 
     # Check if any specific output option is selected
@@ -719,7 +897,9 @@ def main():
         args.output_channels, 
         args.input_channels, 
         args.features,
-        args.json
+        args.json,
+        args.create_volume_control,
+        args.get_or_create_volume_control
     ])
 
     if args.json:
