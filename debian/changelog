@@ -1,17 +1,9 @@
 hifiberry-configurator (2.6.0) stable; urgency=medium
 
   * Added dummy ALSA mixer control creation functionality for software volume control
-  * Implemented create_dummy_alsa_control() method for creating virtual mixer controls
-  * Added get_or_create_volume_control() method for unified volume control access
   * New command-line options: --create-volume-control and --get-or-create-volume-control
-  * Enhanced soundcard.py with ALSA state file template for dummy control creation
-  * Added _check_mixer_control_exists() helper method for control validation
-  * Improved error handling to distinguish between alsactl warnings and actual errors
-  * Based on hifiberry-dsp alsasync.py implementation for consistent behavior
-  * Enables software volume control for HiFiBerry cards without hardware volume controls
-  * Includes comprehensive testing and example documentation
 
- -- HiFiBerry <support@hifiberry.com>  Mon, 07 Oct 2025 08:00:00 +0000
+ -- HiFiBerry <support@hifiberry.com>  Tue, 07 Oct 2025 08:00:00 +0000
 
 hifiberry-configurator (2.5.3) stable; urgency=medium
 
