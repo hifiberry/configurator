@@ -10,6 +10,7 @@ Type=oneshot
 User=root
 Group=root
 ExecStartPre=/bin/sleep 2
+ExecStartPre=/usr/bin/config-soundcard --get-or-create-volume-control Softvol
 ExecStart=/usr/bin/config-volume --restore
 RemainAfterExit=yes
 StandardOutput=journal
