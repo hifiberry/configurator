@@ -8,6 +8,9 @@ import os
 # Import the get_hat_info function from hattools
 from configurator.hattools import get_hat_info
 
+# Constants
+UNKNOWN_CARD_NAME = "Unknown"
+
 # ALSA state file template for creating dummy mixer controls
 ALSA_STATE_FILE_TEMPLATE = """
 state.sndrpihifiberry {
@@ -372,7 +375,7 @@ class Soundcard:
                 self.supports_dsp = detected_card.get("supports_dsp", False)
                 self.card_type = detected_card.get("card_type", [])
             else:
-                self.name = "Unknown"
+                self.name = UNKNOWN_CARD_NAME
                 self.volume_control = volume_control
                 self.headphone_volume_control = headphone_volume_control
                 self.output_channels = output_channels
@@ -843,6 +846,11 @@ def main():
         metavar="CONTROL_NAME",
         help="Get existing volume control or create a dummy one with the specified name (defaults to 'Softvol').",
     )
+    parser.add_argument(
+        "--detected",
+        action="store_true",
+        help="Print the name of the detected sound card if one is found, nothing otherwise. Exit code 1 if no card detected.",
+    )
     args = parser.parse_args()
 
     # Configure logging immediately after parsing args
@@ -864,6 +872,16 @@ def main():
     if args.list:
         list_all_sound_cards(args.list_format)
         return
+
+    # Handle --detected option (check if sound card is detected)
+    if args.detected:
+        card = Soundcard(no_eeprom=args.no_eeprom)
+        if card.name != UNKNOWN_CARD_NAME:
+            print(card.name)
+            sys.exit(0)
+        else:
+            # No sound card detected, exit with code 1
+            sys.exit(1)
 
     # Handle dummy control creation (requires sound card detection)
     if args.create_volume_control:
@@ -899,7 +917,8 @@ def main():
         args.features,
         args.json,
         args.create_volume_control,
-        args.get_or_create_volume_control
+        args.get_or_create_volume_control,
+        args.detected
     ])
 
     if args.json:
