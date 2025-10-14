@@ -206,7 +206,7 @@ class SoundcardDetector:
         ]
 
         for address, expected, card in i2c_checks:
-            result = self._run_command(f"i2cget -y 1 {address} 2>/dev/null")
+            result = self._run_command(f"i2cget -f -y 1 {address} 2>/dev/null")
             if result == expected:
                 return card
 
@@ -316,8 +316,16 @@ class SoundcardDetector:
         with open(self.reboot_file, "w") as reboot_file:
             reboot_file.write(f"Configuring {self.detected_card} requires a reboot.\n")
 
-    def detect_and_configure(self, store=False):
+    def detect_and_configure(self, store=False, fallback_dac=False):
         self.detect_card()
+        
+        # If no card detected and fallback_dac is True, assume DAC+ Light
+        if not self.detected_card and fallback_dac:
+            logging.info("No card detected, assuming DAC+ Light as fallback")
+            self.detected_overlay = "dac"  # DAC+ Light uses hifiberry-dac overlay
+            self.detected_card = "DAC+ Light"  # Set directly to avoid mapping confusion
+            logging.info(f"Fallback card: {self.detected_card} (overlay: {self.detected_overlay})")
+        
         if store:
             self.configure_card()
         else:
@@ -334,10 +342,11 @@ def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description="HiFiBerry Sound Card Detector")
     parser.add_argument("--store", action="store_true", help="Store detected card configuration in config.txt")
+    parser.add_argument("--fallback-dac", action="store_true", help="Assume DAC+ Light if no card is detected")
     args = parser.parse_args()
 
     detector = SoundcardDetector()
-    detector.detect_and_configure(store=args.store)
+    detector.detect_and_configure(store=args.store, fallback_dac=getattr(args, 'fallback_dac'))
 
 if __name__ == "__main__":
     main()
