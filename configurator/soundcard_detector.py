@@ -53,15 +53,17 @@ class SoundcardDetector:
         except subprocess.CalledProcessError:
             return ""
 
-    def _overlay_to_card_name(self, overlay):
+    def _overlay_to_card_name(self, overlay, no_hat_only=False):
         """
-        Map overlay name to proper card name from SOUND_CARD_DEFINITIONS
+        Map overlay name to proper card name(s) from SOUND_CARD_DEFINITIONS
         
         Args:
             overlay: Overlay name (e.g., "dacplusdsp")
+            no_hat_only: If True, prefer cards without hat_name, but fall back to HAT cards if none found
             
         Returns:
-            Card name (e.g., "DAC+ DSP") or overlay name if not found
+            String with all matching card names separated by "/" if multiple cards use the same overlay,
+            or single card name if only one match, or overlay name if not found
         """
         # Import here to avoid circular imports
         from configurator.soundcard import SOUND_CARD_DEFINITIONS
@@ -70,6 +72,9 @@ class SoundcardDetector:
         base_overlay = overlay.split(',')[0] if ',' in overlay else overlay
         
         # Look through all card definitions to find matching dtoverlay
+        all_matching_cards = []
+        no_hat_cards = []
+        
         for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
             dtoverlay = attributes.get("dtoverlay", "")
             if dtoverlay:
@@ -77,46 +82,84 @@ class SoundcardDetector:
                 if dtoverlay.startswith("hifiberry-"):
                     overlay_base = dtoverlay.replace("hifiberry-", "").split(',')[0]
                     if overlay_base == base_overlay:
-                        return card_name
+                        all_matching_cards.append(card_name)
+                        
+                        # Check if this card has no hat_name
+                        hat_name = attributes.get("hat_name")
+                        if hat_name is None:
+                            no_hat_cards.append(card_name)
         
-        # If no match found, return the overlay name as fallback
-        logging.warning(f"No card name found for overlay '{overlay}', using overlay name")
-        return overlay
+        # Determine which cards to use
+        if no_hat_only:
+            if no_hat_cards:
+                # Prefer cards without hat_name
+                matching_cards = no_hat_cards
+                filter_info = " (no HAT cards only)"
+            else:
+                # Fall back to all cards if no cards without hat_name found
+                matching_cards = all_matching_cards
+                filter_info = " (fallback to HAT cards)"
+        else:
+            # Use all matching cards
+            matching_cards = all_matching_cards
+            filter_info = ""
+        
+        if matching_cards:
+            # Return all matching cards separated by "/"
+            result = "/".join(matching_cards)
+            logging.info(f"Mapped overlay '{overlay}' to card(s): {result}{filter_info}")
+            return result
+        else:
+            # If no match found, return the overlay name as fallback
+            logging.warning(f"No card name found for overlay '{overlay}', using overlay name")
+            return overlay
 
     def detect_card(self):
         logging.info("Detecting HiFiBerry sound card...")
+        
+        # Check if HAT EEPROM has valid info
+        hat_info = get_hat_info(verbose=False)
+        hat_card = hat_info.get("product")
+        has_hat_info = hat_card is not None
+        
+        # Try aplay detection first
         found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
-
-        if not found:
-            # Use the imported get_hat_info function (silent mode for detection)
-            hat_info = get_hat_info(verbose=False)
-            hat_card = hat_info.get("product")
-            logging.info(f"Retrieved HAT info: {hat_info}")
-            detected_overlay = self._map_hat_to_overlay(hat_card)
-            if detected_overlay and self._validate_detected_card(detected_overlay):
-                self.detected_overlay = detected_overlay
-                self.detected_card = self._overlay_to_card_name(detected_overlay)
-            else:
-                detected_overlay = self._probe_i2c()
-                if detected_overlay and self._validate_detected_card(detected_overlay):
-                    self.detected_overlay = detected_overlay
-                    self.detected_card = self._overlay_to_card_name(detected_overlay)
-                else:
-                    # Try DSP detection as final fallback
-                    detected_overlay = self._probe_dsp()
-                    if detected_overlay and self._validate_detected_card(detected_overlay):
-                        self.detected_overlay = detected_overlay
-                        self.detected_card = self._overlay_to_card_name(detected_overlay)
-        else:
+        if found:
             logging.info(f"Found HiFiBerry card via aplay: {found}")
             detected_overlay = self._map_aplay_to_overlay(found)
             if detected_overlay and self._validate_detected_card(detected_overlay):
+                # Use no_hat_only if no HAT info was found
                 self.detected_overlay = detected_overlay
-                self.detected_card = self._overlay_to_card_name(detected_overlay)
+                self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
+                return  # Successfully detected and validated
             else:
-                logging.warning(f"Detected overlay {detected_overlay} failed validation")
-                self.detected_overlay = None
-                self.detected_card = None
+                logging.warning(f"Detected overlay {detected_overlay} failed validation, trying other methods")
+
+        # Try HAT info detection
+        logging.info(f"Retrieved HAT info: {hat_info}")
+        detected_overlay = self._map_hat_to_overlay(hat_card)
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=False)  # Always show all when HAT detected
+            return  # Successfully detected and validated
+
+        # If HAT detection failed, try I2C probing
+        detected_overlay = self._probe_i2c()
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
+            return  # Successfully detected and validated
+
+        # If I2C detection failed, try DSP detection as final fallback
+        detected_overlay = self._probe_dsp()
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
+            return  # Successfully detected and validated
+
+        # If all detection methods failed, leave as None (fallback will be handled elsewhere)
+        self.detected_overlay = None
+        self.detected_card = None
 
     def _map_aplay_to_overlay(self, aplay_output):
         """
