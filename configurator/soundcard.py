@@ -117,18 +117,6 @@ SOUND_CARD_DEFINITIONS = {
         "dtoverlay": "hifiberry-amp4pro",
         "is_pro": True,
     },
-    "DSP 2x4": {
-        "aplay_contains": "DSP 2x4",
-        "hat_name": "DSP 2x4",
-        "volume_control": None,
-        "output_channels": 2,
-        "input_channels": 0,
-        "features": ["dsp"],
-        "supports_dsp": False,
-        "card_type": ["DAC", "ADC", "Digi"],
-        "dtoverlay": "hifiberry-dacplusdsp",
-        "is_pro": False,
-    },
     "DAC+ ADC Pro": {
         "aplay_contains": "DAC+ADC Pro",
         "hat_name": "DAC+ ADC Pro",
