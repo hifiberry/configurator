@@ -3,8 +3,9 @@ set -e
 
 case "$1" in
     remove|purge)
-        # Stop and disable the config-server service
+        # Stop and disable the services
         if command -v systemctl >/dev/null 2>&1; then
+            # Stop and disable config-server service
             if systemctl is-active --quiet config-server.service; then
                 systemctl stop config-server.service
             fi
@@ -13,10 +14,15 @@ case "$1" in
                 systemctl disable config-server.service
             fi
             
+            # Stop and disable config-detect service
+            if systemctl is-enabled --quiet config-detect.service; then
+                systemctl disable config-detect.service
+            fi
+            
             # Reload systemd daemon
             systemctl daemon-reload
             
-            echo "HiFiBerry Configuration Server has been stopped and disabled."
+            echo "HiFiBerry Configuration Server and Detection services have been stopped and disabled."
         fi
         ;;
     

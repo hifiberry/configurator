@@ -4,6 +4,8 @@ import os
 import subprocess
 import logging
 import argparse
+import time
+from datetime import datetime
 from configurator.configtxt import ConfigTxt
 from configurator.hattools import get_hat_info  # Import the get_hat_info module
 from configurator.dsptoolkit import detect_dsp
@@ -37,12 +39,45 @@ def _validate_dsp_card():
         return False
 
 class SoundcardDetector:
-    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot"):
+    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
         self.detected_card = None  # Card name (e.g., "DAC+ DSP")
         self.detected_overlay = None  # Overlay name (e.g., "dacplusdsp")
         self.eeprom = 1
+        self.hifiberry_log_file = hifiberry_log_file
+        self.hifiberry_logger = None
+        
+        # Setup HiFiBerry logging if requested
+        if self.hifiberry_log_file:
+            self._setup_hifiberry_logger()
+
+    def _setup_hifiberry_logger(self):
+        """Setup a separate logger for HiFiBerry-specific events"""
+        self.hifiberry_logger = logging.getLogger('hifiberry_events')
+        self.hifiberry_logger.setLevel(logging.INFO)
+        
+        # Create file handler
+        handler = logging.FileHandler(self.hifiberry_log_file)
+        handler.setLevel(logging.INFO)
+        
+        # Create formatter with timestamp
+        formatter = logging.Formatter('%(asctime)s - %(message)s', 
+                                    datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        
+        # Add handler to logger (avoid duplicates)
+        if not self.hifiberry_logger.handlers:
+            self.hifiberry_logger.addHandler(handler)
+            
+        # Prevent propagation to root logger to avoid duplicate messages
+        self.hifiberry_logger.propagate = False
+
+    def _log_hifiberry_event(self, message):
+        """Log a HiFiBerry-specific event to both standard and HiFiBerry logs"""
+        logging.info(message)  # Standard logging
+        if self.hifiberry_logger:
+            self.hifiberry_logger.info(message)  # HiFiBerry-specific logging
 
     def _run_command(self, command):
         try:
@@ -52,6 +87,27 @@ class SoundcardDetector:
             return result
         except subprocess.CalledProcessError:
             return ""
+
+    def _get_card_name(self, overlay, hat_product=None, no_hat_only=False):
+        """
+        Get the appropriate card name, prioritizing HAT info over overlay mapping
+        
+        Args:
+            overlay: Overlay name (e.g., "dacplusadcpro")
+            hat_product: HAT product name from EEPROM (e.g., "DAC+ ADC Pro")
+            no_hat_only: If True, prefer cards without hat_name when using overlay mapping
+            
+        Returns:
+            Card name - HAT product name if available, otherwise overlay mapping result
+        """
+        # If we have valid HAT product info, use it directly
+        if hat_product and hat_product.strip():
+            logging.info(f"Using HAT product name directly: {hat_product}")
+            return hat_product
+        
+        # Fall back to overlay mapping if no HAT info
+        logging.info(f"No HAT product info, using overlay mapping for: {overlay}")
+        return self._overlay_to_card_name(overlay, no_hat_only=no_hat_only)
 
     def _overlay_to_card_name(self, overlay, no_hat_only=False):
         """
@@ -117,12 +173,63 @@ class SoundcardDetector:
     def detect_card(self):
         logging.info("Detecting HiFiBerry sound card...")
         
-        # Check if HAT EEPROM has valid info
-        hat_info = get_hat_info(verbose=False)
-        hat_card = hat_info.get("product")
-        has_hat_info = hat_card is not None
+        # Check if HAT EEPROM has valid info with retry
+        hat_info = None
+        hat_card = None
+        has_hat_info = False
         
-        # Try aplay detection first
+        # Retry HAT detection up to 3 times with delay (for boot-time reliability)
+        for attempt in range(3):
+            try:
+                hat_info = get_hat_info(verbose=True)  # Enable verbose for detailed error info
+                hat_card = hat_info.get("product")
+                has_hat_info = hat_card is not None
+                
+                if has_hat_info:
+                    logging.info(f"HAT detection successful on attempt {attempt + 1}")
+                    self._log_hifiberry_event(f"HAT EEPROM read successful on attempt {attempt + 1}: {hat_card}")
+                    break
+                else:
+                    reason = "HAT info returned None/empty product field"
+                    if hat_info:
+                        reason = f"HAT info: vendor={hat_info.get('vendor')}, product={hat_info.get('product')}, uuid={hat_info.get('uuid')}"
+                    logging.warning(f"HAT detection attempt {attempt + 1} failed: {reason}")
+                    self._log_hifiberry_event(f"HAT detection attempt {attempt + 1} failed: {reason}")
+                    
+            except Exception as e:
+                error_reason = f"HAT detection exception: {str(e)}"
+                logging.warning(f"HAT detection attempt {attempt + 1} failed: {error_reason}")
+                self._log_hifiberry_event(f"HAT detection attempt {attempt + 1} failed: {error_reason}")
+                hat_info = {"vendor": None, "product": None, "uuid": None}
+                
+            if attempt < 2:  # Don't sleep on the last attempt
+                logging.debug(f"Retrying HAT detection in 1 second...")
+                time.sleep(1)
+        
+        # Final status
+        if not has_hat_info:
+            final_reason = "All HAT detection attempts failed"
+            logging.warning(final_reason)
+            self._log_hifiberry_event(final_reason)
+        
+        # Try HAT info detection first
+        logging.info(f"Retrieved HAT info: {hat_info}")
+        detected_overlay = self._map_hat_to_overlay(hat_card)
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=False)
+            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via HAT EEPROM)")
+            return  # Successfully detected and validated
+
+        # Try I2C probing second
+        detected_overlay = self._probe_i2c()
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
+            return  # Successfully detected and validated
+
+        # Try aplay detection as fallback
         found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
         if found:
             logging.info(f"Found HiFiBerry card via aplay: {found}")
@@ -130,36 +237,24 @@ class SoundcardDetector:
             if detected_overlay and self._validate_detected_card(detected_overlay):
                 # Use no_hat_only if no HAT info was found
                 self.detected_overlay = detected_overlay
-                self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
+                self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+                self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via aplay)")
                 return  # Successfully detected and validated
             else:
                 logging.warning(f"Detected overlay {detected_overlay} failed validation, trying other methods")
 
-        # Try HAT info detection
-        logging.info(f"Retrieved HAT info: {hat_info}")
-        detected_overlay = self._map_hat_to_overlay(hat_card)
-        if detected_overlay and self._validate_detected_card(detected_overlay):
-            self.detected_overlay = detected_overlay
-            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=False)  # Always show all when HAT detected
-            return  # Successfully detected and validated
-
-        # If HAT detection failed, try I2C probing
-        detected_overlay = self._probe_i2c()
-        if detected_overlay and self._validate_detected_card(detected_overlay):
-            self.detected_overlay = detected_overlay
-            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
-            return  # Successfully detected and validated
-
-        # If I2C detection failed, try DSP detection as final fallback
+        # If aplay detection failed, try DSP detection as final fallback
         detected_overlay = self._probe_dsp()
         if detected_overlay and self._validate_detected_card(detected_overlay):
             self.detected_overlay = detected_overlay
-            self.detected_card = self._overlay_to_card_name(detected_overlay, no_hat_only=not has_hat_info)
+            self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via DSP detection)")
             return  # Successfully detected and validated
 
         # If all detection methods failed, leave as None (fallback will be handled elsewhere)
         self.detected_overlay = None
         self.detected_card = None
+        self._log_hifiberry_event("No sound card detected (all detection methods failed)")
 
     def _map_aplay_to_overlay(self, aplay_output):
         """
@@ -201,6 +296,12 @@ class SoundcardDetector:
         if "dacplusdsp" in aplay_lower or "dsp" in aplay_lower:
             logging.info("Detected DSP-related card from aplay output")
             return "dacplusdsp"
+        elif "dacplusadcpro" in aplay_lower:
+            logging.info("Detected DAC+ ADC Pro from aplay output")
+            return "dacplusadcpro"
+        elif "dacplusadc" in aplay_lower:
+            logging.info("Detected DAC+ ADC from aplay output")
+            return "dacplusadc"
         elif "dacplus" in aplay_lower:
             logging.info("Detected DAC+ related card from aplay output")
             return "dacplus-std"
@@ -317,7 +418,7 @@ class SoundcardDetector:
             logging.debug(f"No additional validation required for {card_overlay}")
             return True
 
-    def configure_card(self):
+    def configure_card(self, load_overlay=False, reboot_on_change=False):
         if not self.detected_overlay:
             logging.error("No sound card detected to configure.")
             return
@@ -335,31 +436,88 @@ class SoundcardDetector:
                 current_hifiberry_overlays.append(overlay_part)
         
         # Check if the expected overlay is already present
-        if expected_overlay in current_hifiberry_overlays:
+        overlay_already_configured = expected_overlay in current_hifiberry_overlays
+        
+        if overlay_already_configured:
             logging.info(f"Card {self.detected_card} is already configured with overlay {expected_overlay}")
             logging.info("No changes needed to config.txt")
-            return
-        
-        # Check if any other HiFiBerry overlay is configured
-        if current_hifiberry_overlays:
-            logging.info(f"Found existing HiFiBerry overlays: {current_hifiberry_overlays}")
-            logging.info(f"Replacing with detected card: {self.detected_card}")
+            config_changed = False
         else:
-            logging.info(f"No existing HiFiBerry overlays found")
-            logging.info(f"Adding overlay for detected card: {self.detected_card}")
+            # Check if any other HiFiBerry overlay is configured
+            if current_hifiberry_overlays:
+                logging.info(f"Found existing HiFiBerry overlays: {current_hifiberry_overlays}")
+                logging.info(f"Replacing with detected card: {self.detected_card}")
+            else:
+                logging.info(f"No existing HiFiBerry overlays found")
+                logging.info(f"Adding overlay for detected card: {self.detected_card}")
 
-        logging.info(f"Configuring card: {self.detected_card} (overlay: {self.detected_overlay})")
-        self.config.remove_hifiberry_overlays()
-        self.config.enable_overlay(expected_overlay)
+            logging.info(f"Configuring card: {self.detected_card} (overlay: {self.detected_overlay})")
+            self.config.remove_hifiberry_overlays()
+            self.config.enable_overlay(expected_overlay)
 
-        if self.eeprom == 0:
-            self.config.disable_eeprom()
+            if self.eeprom == 0:
+                self.config.disable_eeprom()
 
-        self.config.save()
-        with open(self.reboot_file, "w") as reboot_file:
-            reboot_file.write(f"Configuring {self.detected_card} requires a reboot.\n")
+            self.config.save()
+            config_changed = True
+            
+            # Log overlay configuration to HiFiBerry log
+            self._log_hifiberry_event(f"Overlay written to config.txt: {expected_overlay}")
+            
+            with open(self.reboot_file, "w") as reboot_file:
+                reboot_file.write(f"Configuring {self.detected_card} requires a reboot.\n")
+        
+        # Load overlay directly if requested
+        if load_overlay:
+            self._load_overlay_directly(expected_overlay)
+            
+        # Reboot if config.txt was changed and reboot_on_change is True
+        if config_changed and reboot_on_change:
+            logging.info("Config.txt was changed, rebooting system...")
+            self._log_hifiberry_event("System reboot initiated due to config.txt changes")
+            try:
+                subprocess.run(["systemctl", "reboot"], check=True)
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to reboot system: {e}")
+            except Exception as e:
+                logging.error(f"Error during reboot: {e}")
 
-    def detect_and_configure(self, store=False, fallback_dac=False):
+    def _load_overlay_directly(self, overlay_name):
+        """
+        Load the device tree overlay directly using dtoverlay command
+        
+        Args:
+            overlay_name: Full overlay name (e.g., "hifiberry-dacplus-std")
+        """
+        try:
+            # Remove "hifiberry-" prefix for dtoverlay command
+            if overlay_name.startswith("hifiberry-"):
+                dtoverlay_name = overlay_name.replace("hifiberry-", "")
+            else:
+                dtoverlay_name = overlay_name
+            
+            # Handle overlay parameters (e.g., "amp100,automute" -> "amp100 automute")
+            if "," in dtoverlay_name:
+                parts = dtoverlay_name.split(",")
+                dtoverlay_name = parts[0]
+                params = " ".join(parts[1:])
+                cmd = f"dtoverlay {dtoverlay_name} {params}"
+            else:
+                cmd = f"dtoverlay {dtoverlay_name}"
+            
+            logging.info(f"Loading overlay directly: {cmd}")
+            result = self._run_command(cmd)
+            
+            if result == "" or "dtoverlay" in result.lower():
+                # dtoverlay typically doesn't output anything on success
+                logging.info(f"Successfully loaded overlay: {dtoverlay_name}")
+            else:
+                logging.warning(f"dtoverlay command output: {result}")
+                
+        except Exception as e:
+            logging.error(f"Failed to load overlay {overlay_name}: {str(e)}")
+
+    def detect_and_configure(self, store=False, fallback_dac=False, load_overlay=False, reboot_on_change=False):
         self.detect_card()
         
         # If no card detected and fallback_dac is True, assume DAC+ Light
@@ -368,9 +526,10 @@ class SoundcardDetector:
             self.detected_overlay = "dac"  # DAC+ Light uses hifiberry-dac overlay
             self.detected_card = "DAC+ Light"  # Set directly to avoid mapping confusion
             logging.info(f"Fallback card: {self.detected_card} (overlay: {self.detected_overlay})")
+            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (fallback)")
         
         if store:
-            self.configure_card()
+            self.configure_card(load_overlay=load_overlay, reboot_on_change=reboot_on_change)
         else:
             # Output the proper card name
             if self.detected_card:
@@ -379,6 +538,7 @@ class SoundcardDetector:
                 print(self.detected_card)
             else:
                 logging.info("No sound card detected")
+                self._log_hifiberry_event("No sound card detected (detection output)")
                 print("Unknown")
 
 def main():
@@ -386,10 +546,18 @@ def main():
     parser = argparse.ArgumentParser(description="HiFiBerry Sound Card Detector")
     parser.add_argument("--store", action="store_true", help="Store detected card configuration in config.txt")
     parser.add_argument("--fallback-dac", action="store_true", help="Assume DAC+ Light if no card is detected")
+    parser.add_argument("--dtoverlay", action="store_true", help="Load the overlay directly with dtoverlay command after configuring config.txt")
+    parser.add_argument("--reboot", action="store_true", help="Reboot the system if config.txt has been changed")
+    parser.add_argument("--logfile", type=str, help="Log HiFiBerry events to specified file (with timestamps)")
     args = parser.parse_args()
 
-    detector = SoundcardDetector()
-    detector.detect_and_configure(store=args.store, fallback_dac=getattr(args, 'fallback_dac'))
+    detector = SoundcardDetector(hifiberry_log_file=args.logfile)
+    detector.detect_and_configure(
+        store=args.store, 
+        fallback_dac=getattr(args, 'fallback_dac'), 
+        load_overlay=args.dtoverlay,
+        reboot_on_change=args.reboot
+    )
 
 if __name__ == "__main__":
     main()

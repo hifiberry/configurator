@@ -1,1 +1,2 @@
 configserver.json etc/configserver/
+etc/modules-load.d/config-server-i2c.conf etc/modules-load.d/

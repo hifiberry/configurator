@@ -32,7 +32,8 @@ setup(
             'systemd/volume-store.timer', 
             'systemd/sambamount.service', 
             'systemd/volume-restore.service',
-            'systemd/config-server.service'
+            'systemd/config-server.service',
+            'systemd/config-detect.service'
         ]),
         ('/usr/lib/systemd/user', [
             'systemd/config-server-user.service'
