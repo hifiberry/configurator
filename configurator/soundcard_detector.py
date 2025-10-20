@@ -321,6 +321,7 @@ class SoundcardDetector:
             "DAC+ ADC Pro": "dacplusadcpro",
             "DAC+ ADC": "dacplusadc",
             "DAC2 ADC Pro": "dacplusadcpro",
+            "DAC2 Pro": "dacplus-pro",
             "DAC 2 HD": "dacplushd",
             "Digi2 Pro": "digi-pro",
             "Amp3": "amp3",
