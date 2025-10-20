@@ -1,3 +1,9 @@
+hifiberry-configurator (2.6.3) stable; urgency=medium
+
+  * Improved sound card detection
+
+ -- HiFiBerry <support@hifiberry.com>  Sun, 20 Oct 2025 08:00:00 +0000
+
 hifiberry-configurator (2.6.2) stable; urgency=medium
 
   * Added new dsptoolkit.py module for DSP hardware detection

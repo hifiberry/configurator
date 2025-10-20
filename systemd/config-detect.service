@@ -1,0 +1,20 @@
+[Unit]
+Description=HiFiBerry Sound Card Detection and Configuration
+Documentation=man:config-detect(1)
+After=sigmatcpserver.service systemd-modules-load.service systemd-udev-settle.service dev-gpiomem.device dev-i2c-1.device
+Wants=sigmatcpserver.service systemd-udev-settle.service dev-gpiomem.device dev-i2c-1.device
+Before=config-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/config-detect --store --reboot --logfile /var/log/hifiberry-detect.log
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+# Timeout for detection process
+# Give devices and detection logic extra time (e.g., bitbang I2C) to become available
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

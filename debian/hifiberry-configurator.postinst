@@ -15,15 +15,19 @@ case "$1" in
             # Reload systemd daemon to recognize new service
             systemctl daemon-reload
             
-            # Enable the service for automatic startup
+            # Enable the config-server service for automatic startup
             systemctl enable config-server.service
             
-            # Start the service if not already running
+            # Enable the config-detect service for automatic startup
+            systemctl enable config-detect.service
+            
+            # Start the config-server service if not already running
             if ! systemctl is-active --quiet config-server.service; then
                 systemctl start config-server.service
             fi
             
             echo "HiFiBerry Configuration Server has been enabled and started."
+            echo "HiFiBerry Sound Card Detection service has been enabled."
             echo "The API is available at http://localhost:1081"
         fi
         ;;

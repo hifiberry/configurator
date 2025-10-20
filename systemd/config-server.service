@@ -1,14 +1,13 @@
 [Unit]
 Description=HiFiBerry Configuration Server
 Documentation=man:config-server(1)
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target config-detect.service
+After=network-online.target systemd-modules-load.service config-detect.service
 StartLimitIntervalSec=30
 StartLimitBurst=3
 
 [Service]
 Type=simple
-ExecStartPre=-/sbin/modprobe i2c-dev
 ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose --auto-restore-settings --system-mode
 Restart=always
 RestartSec=5
