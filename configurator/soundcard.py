@@ -154,8 +154,8 @@ SOUND_CARD_DEFINITIONS = {
         "is_pro": True,
     },
     "DAC2 HD": {
-        "aplay_contains": "DAC2 HD",
-        "hat_name": "DAC2 HD",
+        "aplay_contains": "DAC+ HD",
+        "hat_name": "DAC 2 HD",
         "volume_control": "DAC",
         "output_channels": 2,
         "input_channels": 0,
