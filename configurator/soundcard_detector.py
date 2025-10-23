@@ -11,6 +11,9 @@ from configurator.hattools import get_hat_info  # Import the get_hat_info module
 from configurator.dsptoolkit import detect_dsp
 from configurator.soundcard import Soundcard
 
+# Constants
+HIFIBERRY_CARD_COMMENT_PREFIX = "# HiFiBerry card:"
+
 # Additional validation tests for sound cards
 # These functions provide extra verification beyond basic detection
 SOUND_CARD_VALIDATION_TESTS = {
@@ -39,7 +42,7 @@ def _validate_dsp_card():
         return False
 
 class SoundcardDetector:
-    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None):
+    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
         self.detected_card = None  # Card name (e.g., "DAC+ DSP")
@@ -47,6 +50,7 @@ class SoundcardDetector:
         self.eeprom = 1
         self.hifiberry_log_file = hifiberry_log_file
         self.hifiberry_logger = None
+        self.hat_attempts = hat_attempts
         
         # Setup HiFiBerry logging if requested
         if self.hifiberry_log_file:
@@ -78,6 +82,69 @@ class SoundcardDetector:
         logging.info(message)  # Standard logging
         if self.hifiberry_logger:
             self.hifiberry_logger.info(message)  # HiFiBerry-specific logging
+
+    def _remove_hifiberry_comments(self):
+        """Remove existing HiFiBerry card comments from config.txt"""
+        original_length = len(self.config.lines)
+        self.config.lines = [line for line in self.config.lines if not line.strip().startswith(HIFIBERRY_CARD_COMMENT_PREFIX)]
+        if len(self.config.lines) < original_length:
+            logging.debug("Removed existing HiFiBerry card comments.")
+
+    def detect_from_config_txt_comment(self):
+        """
+        Parse config.txt and return the card name from HiFiBerry comments
+        
+        Looks for lines like "# HiFiBerry card: DAC+ DSP" and extracts the card name
+        
+        Returns:
+            str: Card name if found in comment, None if no comment found
+        """
+        logging.info("Detecting card from config.txt comments...")
+        
+        # Read all lines from config.txt
+        for line in self.config.lines:
+            stripped_line = line.strip()
+            
+            # Look for HiFiBerry card comment lines
+            if stripped_line.startswith(HIFIBERRY_CARD_COMMENT_PREFIX):
+                # Extract the card name after the colon
+                try:
+                    # Split on the comment prefix and get the part after it
+                    card_name = stripped_line.split(HIFIBERRY_CARD_COMMENT_PREFIX, 1)[1].strip()
+                    
+                    if card_name:
+                        logging.info(f"Found card name in config.txt comment: {card_name}")
+                        return card_name
+                    else:
+                        logging.warning("Found HiFiBerry comment but card name is empty")
+                        
+                except IndexError:
+                    logging.warning(f"Malformed HiFiBerry comment line: {stripped_line}")
+                    continue
+        
+        logging.info("No HiFiBerry card comment found in config.txt")
+        return None
+
+    def _add_card_comment_before_overlay(self, overlay_name):
+        """
+        Add HiFiBerry card comment directly before the specified overlay line
+        
+        Args:
+            overlay_name: The full overlay name (e.g., "hifiberry-dacplus-std")
+        """
+        overlay_line = f"dtoverlay={overlay_name}"
+        
+        # Find the overlay line and insert comment before it
+        for i, line in enumerate(self.config.lines):
+            if line.strip() == overlay_line:
+                # Insert the comment line before the overlay
+                comment_line = f"{HIFIBERRY_CARD_COMMENT_PREFIX} {self.detected_card}\n"
+                self.config.lines.insert(i, comment_line)
+                logging.debug(f"Added card comment before overlay at line {i + 1}")
+                return
+        
+        # If overlay line not found, log warning
+        logging.warning(f"Could not find overlay line '{overlay_line}' to add comment before it")
 
     def _run_command(self, command):
         try:
@@ -178,8 +245,8 @@ class SoundcardDetector:
         hat_card = None
         has_hat_info = False
         
-        # Retry HAT detection up to 3 times with delay (for boot-time reliability)
-        for attempt in range(3):
+        # Retry HAT detection up to specified number of times with delay (for boot-time reliability)
+        for attempt in range(self.hat_attempts):
             try:
                 hat_info = get_hat_info(verbose=True)  # Enable verbose for detailed error info
                 hat_card = hat_info.get("product")
@@ -202,7 +269,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"HAT detection attempt {attempt + 1} failed: {error_reason}")
                 hat_info = {"vendor": None, "product": None, "uuid": None}
                 
-            if attempt < 2:  # Don't sleep on the last attempt
+            if attempt < self.hat_attempts - 1:  # Don't sleep on the last attempt
                 logging.debug(f"Retrying HAT detection in 1 second...")
                 time.sleep(1)
         
@@ -222,12 +289,26 @@ class SoundcardDetector:
             return  # Successfully detected and validated
 
         # Try I2C probing second
-        detected_overlay = self._probe_i2c()
-        if detected_overlay and self._validate_detected_card(detected_overlay):
-            self.detected_overlay = detected_overlay
-            self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
-            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
-            return  # Successfully detected and validated
+        i2c_result = self._probe_i2c()
+        if i2c_result:
+            # Handle tuple return for special cases (overlay, card_name) or just overlay
+            if isinstance(i2c_result, tuple):
+                detected_overlay, detected_card_name = i2c_result
+            else:
+                detected_overlay = i2c_result
+                detected_card_name = None
+                
+            if self._validate_detected_card(detected_overlay):
+                self.detected_overlay = detected_overlay
+                if detected_card_name:
+                    # Use the specific card name provided by I2C detection
+                    self.detected_card = detected_card_name
+                    logging.info(f"Using I2C-provided card name: {detected_card_name}")
+                else:
+                    # Use standard card name resolution
+                    self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+                self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
+                return  # Successfully detected and validated
 
         # Try aplay detection as fallback
         found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
@@ -282,7 +363,6 @@ class SoundcardDetector:
             "snd_rpi_hifiberry_amp3": "amp3",
             "snd_rpi_hifiberry_amp4pro": "amp4pro",
             "snd_rpi_hifiberry_dac8x": "dac8x",
-            "snd_rpi_hifiberry_beocreate": "beo",
         }
         
         # Check each pattern against the aplay output (case insensitive)
@@ -341,19 +421,24 @@ class SoundcardDetector:
         self.config.save()
 
         i2c_checks = [
-            ("0x4a 25", "0x07", "dacplusadcpro"),
-            ("0x3b 1", "0x88", "digi"),
-            ("0x4d 40", "0x02", "dacplus-std"),
-            ("0x1b 0", "0x6c", "amp"),
-            ("0x1b 0", "0x60", "amp"),
-            ("0x62 17", "0x8c", "dacplushd"),
-            ("0x60 2", "0x03", "beo"),
+            ("0x4a 25", "0x07", "dacplusadcpro", None),
+            ("0x3b 1", "0x88", "digi", None),
+            ("0x4d 40", "0x02", "dacplus-std", None),
+            ("0x1b 0", "0x6c", "amp", None),
+            ("0x1b 0", "0x60", "amp", None),
+            ("0x62 17", "0x8c", "dacplushd", None),
+            ("0x60 2", "0x03", "dac", "Beocreate 4CA"),
         ]
 
-        for address, expected, card in i2c_checks:
+        for address, expected, overlay, card_name in i2c_checks:
             result = self._run_command(f"i2cget -f -y 1 {address} 2>/dev/null")
             if result == expected:
-                return card
+                if card_name:
+                    # Return tuple (overlay, card_name) for special cases like Beocreate
+                    return (overlay, card_name)
+                else:
+                    # Return just overlay for standard cases
+                    return overlay
 
         logging.warning("No I2C-enabled sound card detected.")
         return None
@@ -441,7 +526,13 @@ class SoundcardDetector:
         
         if overlay_already_configured:
             logging.info(f"Card {self.detected_card} is already configured with overlay {expected_overlay}")
-            logging.info("No changes needed to config.txt")
+            
+            # Still update the comment even if overlay is already configured
+            self._remove_hifiberry_comments()
+            self._add_card_comment_before_overlay(expected_overlay)
+            self.config.save()
+            
+            logging.info("Updated HiFiBerry card comment in config.txt")
             config_changed = False
         else:
             # Check if any other HiFiBerry overlay is configured
@@ -454,7 +545,11 @@ class SoundcardDetector:
 
             logging.info(f"Configuring card: {self.detected_card} (overlay: {self.detected_overlay})")
             self.config.remove_hifiberry_overlays()
+            self._remove_hifiberry_comments()
+            
+            # Enable overlay first, then add comment before it
             self.config.enable_overlay(expected_overlay)
+            self._add_card_comment_before_overlay(expected_overlay)
 
             if self.eeprom == 0:
                 self.config.disable_eeprom()

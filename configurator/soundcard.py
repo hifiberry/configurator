@@ -252,6 +252,7 @@ SOUND_CARD_DEFINITIONS = {
     "Beocreate 4-Channel Amplifier": {
         "aplay_contains": "beocreate",
         "hat_name": "Beocreate 4-Channel Amplifier",
+        "aliases": ["Beocreate 4CA"],
         "volume_control": None,
         "output_channels": 2,
         "input_channels": 0,
@@ -473,6 +474,33 @@ class Soundcard:
 
     def _detect_card(self, no_eeprom=False):
         try:
+            # First try to detect from config.txt comments using SoundcardDetector
+            try:
+                from configurator.soundcard_detector import SoundcardDetector
+                detector = SoundcardDetector()
+                config_card_name = detector.detect_from_config_txt_comment()
+                
+                if config_card_name:
+                    # First try exact name matching
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        if card_name == config_card_name:
+                            logging.info(f"Found sound card from config.txt comment (exact match): {config_card_name}")
+                            return {"name": card_name, **attributes}
+                    
+                    # Then try alias matching
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        aliases = attributes.get("aliases", [])
+                        if config_card_name in aliases:
+                            logging.info(f"Found sound card from config.txt comment (alias match): {config_card_name} -> {card_name}")
+                            return {"name": card_name, **attributes}
+                    
+                    # If no match found, log warning but continue with other methods
+                    logging.warning(f"Card name '{config_card_name}' from config.txt not found in definitions or aliases. Falling back to other detection methods.")
+                else:
+                    logging.debug("No sound card found in config.txt comments.")
+            except Exception as e:
+                logging.warning(f"Config.txt comment detection failed: {str(e)}")
+            
             # Use get_hat_info function to get HAT information (unless disabled)
             if not no_eeprom:
                 try:
