@@ -1,3 +1,16 @@
+hifiberry-configurator (2.6.6) stable; urgency=medium
+
+  * Enhanced config.txt detection to match both exact names and aliases
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 23 Oct 2025 09:00:00 +0000
+
+hifiberry-configurator (2.6.5) stable; urgency=medium
+
+  * Enhanced sound card detection with config.txt comment integration
+  * Config.txt structure now shows "# HiFiBerry card: [Name]" followed by "dtoverlay=..."
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 23 Oct 2025 08:00:00 +0000
+
 hifiberry-configurator (2.6.4) stable; urgency=medium
 
   * Fix DAC2HD detection
