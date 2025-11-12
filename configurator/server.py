@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler, VolumeHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler, VolumeHandler, BluetoothHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -64,6 +64,7 @@ class ConfigAPIServer:
             self.network_handler = NetworkHandler()
             self.i2c_handler = I2CHandler()
             self.volume_handler = VolumeHandler()
+            self.bluetooth_handler = BluetoothHandler()
         else:
             # User mode - minimal handlers
             self.systemd_handler = None
@@ -76,6 +77,7 @@ class ConfigAPIServer:
             self.network_handler = None
             self.i2c_handler = None
             self.volume_handler = None
+            self.bluetooth_handler = None
             
         if not system_mode:  # User mode only
             self.pipewire_handler = PipewireHandler()
@@ -451,6 +453,9 @@ class ConfigAPIServer:
                     'script_execute': '/api/v1/scripts/<script_id>/execute',
                     'network': '/api/v1/network',
                     'i2c_devices': '/api/v1/i2c/devices',
+                    'bluetooth_settings': '/api/v1/bluetooth/settings',
+                    'bluetooth_paired_devices': '/api/v1/bluetooth/paired-devices',
+                    'bluetooth_unpair': '/api/v1/bluetooth/unpair',
                     'pipewire_controls': '/api/v1/pipewire/controls',
                     'pipewire_default_sink': '/api/v1/pipewire/default-sink',
                     'pipewire_default_source': '/api/v1/pipewire/default-source',
@@ -680,6 +685,36 @@ class ConfigAPIServer:
         def get_i2c_devices():
             """Scan I2C bus for devices"""
             return self.i2c_handler.handle_get_i2c_devices()
+
+        # Bluetooth endpoints
+        @self.app.route('/api/v1/bluetooth/settings', methods=['GET'])
+        def get_bluetooth_settings():
+            """Get bluetooth settings"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_get_bluetooth_settings()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
+        @self.app.route('/api/v1/bluetooth/settings', methods=['POST'])
+        def set_bluetooth_settings():
+            """Set bluetooth settings"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_set_bluetooth_settings()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
+        @self.app.route('/api/v1/bluetooth/paired-devices', methods=['GET'])
+        def get_paired_devices():
+            """Get paired bluetooth devices"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_get_paired_devices()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
+        @self.app.route('/api/v1/bluetooth/unpair', methods=['POST'])
+        def unpair_bluetooth_device():
+            """Unpair a bluetooth device"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_unpair_device()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
 
         # PipeWire endpoints
         @self.app.route('/api/v1/pipewire/controls', methods=['GET'])
