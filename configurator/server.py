@@ -456,6 +456,7 @@ class ConfigAPIServer:
                     'bluetooth_settings': '/api/v1/bluetooth/settings',
                     'bluetooth_paired_devices': '/api/v1/bluetooth/paired-devices',
                     'bluetooth_passkey': '/api/v1/bluetooth/passkey',
+                    'bluetooth_modal': '/api/v1/bluetooth/modal',
                     'bluetooth_unpair': '/api/v1/bluetooth/unpair',
                     'pipewire_controls': '/api/v1/pipewire/controls',
                     'pipewire_default_sink': '/api/v1/pipewire/default-sink',
@@ -729,6 +730,21 @@ class ConfigAPIServer:
             if self.bluetooth_handler:
                 return self.bluetooth_handler.handle_set_bluetooth_passkey()
             return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
+        @self.app.route('/api/v1/bluetooth/modal', methods=['GET'])
+        def get_bluetooth_modal():
+            """Get and clear the stored Bluetooth modal"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_get_show_modal()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
+        @self.app.route('/api/v1/bluetooth/modal', methods=['POST'])
+        def set_bluetooth_modal():
+            """Store a Bluetooth modal"""
+            if self.bluetooth_handler:
+                return self.bluetooth_handler.handle_set_show_modal()
+            return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
+
 
 
 
