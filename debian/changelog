@@ -1,3 +1,13 @@
+hifiberry-configurator (2.6.7) stable; urgency=medium
+
+  * Added HiFiBerry detection disable/enable functionality
+  * New config.txt comment "# HiFiBerry detection disabled" to prevent auto-detection
+  * Added --force option to config-detect to override detection disabled state
+  * Added API endpoints for detection control: GET/POST /api/v1/soundcard/detection
+  * Added command-line options --enable-detection and --disable-detection to config-configtxt
+
+ -- HiFiBerry <support@hifiberry.com>  Mon, 15 Dec 2025 12:00:00 +0000
+
 hifiberry-configurator (2.6.6) stable; urgency=medium
 
   * Enhanced config.txt detection to match both exact names and aliases
