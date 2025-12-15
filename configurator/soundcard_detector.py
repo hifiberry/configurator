@@ -42,7 +42,7 @@ def _validate_dsp_card():
         return False
 
 class SoundcardDetector:
-    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1):
+    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1, verbose=False):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
         self.detected_card = None  # Card name (e.g., "DAC+ DSP")
@@ -51,6 +51,7 @@ class SoundcardDetector:
         self.hifiberry_log_file = hifiberry_log_file
         self.hifiberry_logger = None
         self.hat_attempts = hat_attempts
+        self.verbose = verbose
         
         # Setup HiFiBerry logging if requested
         if self.hifiberry_log_file:
@@ -239,11 +240,16 @@ class SoundcardDetector:
 
     def detect_card(self):
         logging.info("Detecting HiFiBerry sound card...")
+        if self.verbose:
+            logging.info("Detection method order: 1) HAT EEPROM, 2) I2C probing, 3) aplay output, 4) DSP detection")
         
         # Check if HAT EEPROM has valid info with retry
         hat_info = None
         hat_card = None
         has_hat_info = False
+        
+        if self.verbose:
+            logging.info(f"Step 1: Attempting HAT EEPROM detection (up to {self.hat_attempts} attempts)...")
         
         # Retry HAT detection up to specified number of times with delay (for boot-time reliability)
         for attempt in range(self.hat_attempts):
@@ -278,6 +284,8 @@ class SoundcardDetector:
             final_reason = "All HAT detection attempts failed"
             logging.warning(final_reason)
             self._log_hifiberry_event(final_reason)
+            if self.verbose:
+                logging.info("HAT EEPROM detection: FAILED - proceeding to next method")
         
         # Try HAT info detection first
         logging.info(f"Retrieved HAT info: {hat_info}")
@@ -286,9 +294,15 @@ class SoundcardDetector:
             self.detected_overlay = detected_overlay
             self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=False)
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via HAT EEPROM)")
+            if self.verbose:
+                logging.info(f"HAT EEPROM detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
             return  # Successfully detected and validated
+        elif self.verbose and detected_overlay:
+            logging.info(f"HAT EEPROM found overlay '{detected_overlay}' but validation failed")
 
         # Try I2C probing second
+        if self.verbose:
+            logging.info("Step 2: Attempting I2C probing...")
         i2c_result = self._probe_i2c()
         if i2c_result:
             # Handle tuple return for special cases (overlay, card_name) or just overlay
@@ -308,9 +322,15 @@ class SoundcardDetector:
                     # Use standard card name resolution
                     self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
+                if self.verbose:
+                    logging.info(f"I2C probing: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
                 return  # Successfully detected and validated
+        elif self.verbose:
+            logging.info("I2C probing: FAILED - proceeding to next method")
 
         # Try aplay detection as fallback
+        if self.verbose:
+            logging.info("Step 3: Attempting aplay detection...")
         found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
         if found:
             logging.info(f"Found HiFiBerry card via aplay: {found}")
@@ -320,19 +340,33 @@ class SoundcardDetector:
                 self.detected_overlay = detected_overlay
                 self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via aplay)")
+                if self.verbose:
+                    logging.info(f"aplay detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
                 return  # Successfully detected and validated
             else:
                 logging.warning(f"Detected overlay {detected_overlay} failed validation, trying other methods")
+                if self.verbose:
+                    logging.info(f"aplay found overlay '{detected_overlay}' but validation failed")
+        elif self.verbose:
+            logging.info("aplay detection: FAILED - proceeding to next method")
 
         # If aplay detection failed, try DSP detection as final fallback
+        if self.verbose:
+            logging.info("Step 4: Attempting DSP detection...")
         detected_overlay = self._probe_dsp()
         if detected_overlay and self._validate_detected_card(detected_overlay):
             self.detected_overlay = detected_overlay
             self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via DSP detection)")
+            if self.verbose:
+                logging.info(f"DSP detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
             return  # Successfully detected and validated
+        elif self.verbose:
+            logging.info("DSP detection: FAILED")
 
         # If all detection methods failed, leave as None (fallback will be handled elsewhere)
+        if self.verbose:
+            logging.info("All detection methods failed - no sound card detected")
         self.detected_overlay = None
         self.detected_card = None
         self._log_hifiberry_event("No sound card detected (all detection methods failed)")
@@ -423,7 +457,9 @@ class SoundcardDetector:
         i2c_checks = [
             ("0x4a 25", "0x07", "dacplusadcpro", None),
             ("0x3b 1", "0x88", "digi", None),
+            ("0x4d 35", "0x01", "dacplus-std", None),
             ("0x4d 40", "0x02", "dacplus-std", None),
+            ("0x4d 42", "0x11", "dacplus-std", None),
             ("0x1b 0", "0x6c", "amp", None),
             ("0x1b 0", "0x60", "amp", None),
             ("0x62 17", "0x8c", "dacplushd", None),
@@ -432,6 +468,12 @@ class SoundcardDetector:
 
         for address, expected, overlay, card_name in i2c_checks:
             result = self._run_command(f"i2cget -f -y 1 {address} 2>/dev/null")
+            if self.verbose:
+                card_info = f" -> {overlay}" + (f" ({card_name})" if card_name else "")
+                if result == expected:
+                    logging.info(f"I2C check {address}: {result} (expected {expected}){card_info} - MATCH")
+                else:
+                    logging.info(f"I2C check {address}: {result} (expected {expected}) - no match")
             if result == expected:
                 if card_name:
                     # Return tuple (overlay, card_name) for special cases like Beocreate
@@ -504,9 +546,15 @@ class SoundcardDetector:
             logging.debug(f"No additional validation required for {card_overlay}")
             return True
 
-    def configure_card(self, load_overlay=False, reboot_on_change=False):
+    def configure_card(self, load_overlay=False, reboot_on_change=False, force=False):
         if not self.detected_overlay:
             logging.error("No sound card detected to configure.")
+            return
+
+        # Check if detection is disabled in config.txt (unless --force is used)
+        if not force and self.config.is_detection_disabled():
+            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
+            logging.info(f"Detection is disabled in config.txt ({HIFIBERRY_DETECTION_DISABLED}). Use --force to override.")
             return
 
         # Check if the same overlay is already configured
@@ -613,7 +661,7 @@ class SoundcardDetector:
         except Exception as e:
             logging.error(f"Failed to load overlay {overlay_name}: {str(e)}")
 
-    def detect_and_configure(self, store=False, fallback_dac=False, load_overlay=False, reboot_on_change=False):
+    def detect_and_configure(self, store=False, fallback_dac=False, load_overlay=False, reboot_on_change=False, force=False):
         self.detect_card()
         
         # If no card detected and fallback_dac is True, assume DAC+ Light
@@ -625,7 +673,7 @@ class SoundcardDetector:
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (fallback)")
         
         if store:
-            self.configure_card(load_overlay=load_overlay, reboot_on_change=reboot_on_change)
+            self.configure_card(load_overlay=load_overlay, reboot_on_change=reboot_on_change, force=force)
         else:
             # Output the proper card name
             if self.detected_card:
@@ -638,21 +686,26 @@ class SoundcardDetector:
                 print("Unknown")
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description="HiFiBerry Sound Card Detector")
     parser.add_argument("--store", action="store_true", help="Store detected card configuration in config.txt")
     parser.add_argument("--fallback-dac", action="store_true", help="Assume DAC+ Light if no card is detected")
     parser.add_argument("--dtoverlay", action="store_true", help="Load the overlay directly with dtoverlay command after configuring config.txt")
     parser.add_argument("--reboot", action="store_true", help="Reboot the system if config.txt has been changed")
     parser.add_argument("--logfile", type=str, help="Log HiFiBerry events to specified file (with timestamps)")
+    parser.add_argument("--force", action="store_true", help="Force configuration even if HiFiBerry detection is disabled in config.txt")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output showing each detection step")
     args = parser.parse_args()
 
-    detector = SoundcardDetector(hifiberry_log_file=args.logfile)
+    # Set logging level based on verbose flag
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+
+    detector = SoundcardDetector(hifiberry_log_file=args.logfile, verbose=args.verbose)
     detector.detect_and_configure(
         store=args.store, 
         fallback_dac=getattr(args, 'fallback_dac'), 
         load_overlay=args.dtoverlay,
-        reboot_on_change=args.reboot
+        reboot_on_change=args.reboot,
+        force=args.force
     )
 
 if __name__ == "__main__":

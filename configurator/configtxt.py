@@ -8,6 +8,9 @@ import argparse
 from typing import Optional
 from .soundcard import Soundcard
 
+# Constants
+HIFIBERRY_DETECTION_DISABLED = "# HiFiBerry sound detection disabled"
+
 
 class ConfigTxt:
     def __init__(self, file_path = "/boot/firmware/config.txt"):
@@ -27,6 +30,37 @@ class ConfigTxt:
             self.lines = file.readlines()
 
         self.original_checksum = self._compute_checksum(self.lines)
+
+    def is_detection_disabled(self):
+        """Check if HiFiBerry detection is disabled in config.txt
+        
+        Returns:
+            bool: True if HIFIBERRY_DETECTION_DISABLED comment is found, False otherwise
+        """
+        for line in self.lines:
+            if line.strip() == HIFIBERRY_DETECTION_DISABLED:
+                return True
+        return False
+
+    def enable_detection(self):
+        """Enable HiFiBerry detection by removing the disabled comment"""
+        original_length = len(self.lines)
+        self.lines = [line for line in self.lines if line.strip() != HIFIBERRY_DETECTION_DISABLED]
+        if len(self.lines) < original_length:
+            logging.info("HiFiBerry detection enabled (removed disabled comment).")
+        else:
+            logging.info("HiFiBerry detection already enabled.")
+
+    def disable_detection(self):
+        """Disable HiFiBerry detection by adding the disabled comment"""
+        # Check if already disabled
+        if self.is_detection_disabled():
+            logging.info("HiFiBerry detection already disabled.")
+            return
+        
+        # Add the disabled comment at the beginning of the file
+        self.lines.insert(0, f"{HIFIBERRY_DETECTION_DISABLED}\n")
+        logging.info("HiFiBerry detection disabled.")
 
     def _compute_checksum(self, lines):
         """Computes the checksum of the given lines."""
@@ -161,6 +195,13 @@ class ConfigTxt:
         """
         Detect the current sound card and automatically add the appropriate overlay.
         """
+        if self.is_detection_disabled():
+            logging.info("HiFiBerry detection is disabled. Skipping auto-detect overlay.")
+            return
+        
+        # Remove existing HiFiBerry overlays before adding the new one
+        self.remove_hifiberry_overlays()
+        
         try:
             soundcard = Soundcard()
             if soundcard.name:
@@ -205,6 +246,8 @@ def main():
     parser.add_argument("--enable-updi", action="store_true", help="Enable UPDI settings: enable UART, dtoverlay for uart0, and disable Bluetooth.")
     parser.add_argument("--enable-hat_i2c", action="store_true", help="Enable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
     parser.add_argument("--disable-hat_i2c", action="store_true", help="Disable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
+    parser.add_argument("--enable-detection", action="store_true", help="Enable HiFiBerry sound card detection.")
+    parser.add_argument("--disable-detection", action="store_true", help="Disable HiFiBerry sound card detection.")
     args = parser.parse_args()
 
     config = ConfigTxt()
@@ -260,6 +303,12 @@ def main():
 
         if args.disable_hat_i2c:
             config.disable_hat_i2c()
+
+        if args.enable_detection:
+            config.enable_detection()
+
+        if args.disable_detection:
+            config.disable_detection()
 
         config.save()
 
