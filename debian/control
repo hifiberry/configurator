@@ -12,7 +12,7 @@ Homepage: https://www.hifiberry.com/
 
 Package: hifiberry-configurator
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, systemd, hifiberry-eeprom, python3-netifaces
+Depends: ${python3:Depends}, ${misc:Depends}, systemd, hifiberry-eeprom, python3-netifaces, python3-dbus
 Recommends: samba-common-bin, smbclient
 Description: HiFiBerry system configuration scripts
  System configuration scripts for HiFiBerry OS, including
