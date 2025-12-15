@@ -155,6 +155,115 @@ class SoundcardHandler:
                 "error": str(e)
             }), 500
 
+    def handle_detection_status(self):
+        """
+        Handle GET /api/v1/soundcard/detection - Get detection status
+        
+        Returns:
+            JSON response with detection enabled/disabled status
+        """
+        try:
+            config = ConfigTxt()
+            is_disabled = config.is_detection_disabled()
+            
+            return jsonify({
+                "status": "success",
+                "data": {
+                    "detection_enabled": not is_disabled,
+                    "detection_disabled": is_disabled
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking detection status: {e}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to check detection status",
+                "error": str(e)
+            }), 500
+
+    def handle_enable_detection(self):
+        """
+        Handle POST /api/v1/soundcard/detection/enable - Enable sound card detection
+        
+        Returns:
+            JSON response with success/error status
+        """
+        try:
+            config = ConfigTxt()
+            was_disabled = config.is_detection_disabled()
+            
+            config.enable_detection()
+            config.save()
+            
+            if was_disabled:
+                return jsonify({
+                    "status": "success",
+                    "message": "Sound card detection enabled",
+                    "data": {
+                        "detection_enabled": True,
+                        "changes_made": config.changes_made
+                    }
+                })
+            else:
+                return jsonify({
+                    "status": "success",
+                    "message": "Sound card detection was already enabled",
+                    "data": {
+                        "detection_enabled": True,
+                        "changes_made": False
+                    }
+                })
+                
+        except Exception as e:
+            logger.error(f"Error enabling detection: {e}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to enable sound card detection",
+                "error": str(e)
+            }), 500
+
+    def handle_disable_detection(self):
+        """
+        Handle POST /api/v1/soundcard/detection/disable - Disable sound card detection
+        
+        Returns:
+            JSON response with success/error status
+        """
+        try:
+            config = ConfigTxt()
+            was_enabled = not config.is_detection_disabled()
+            
+            config.disable_detection()
+            config.save()
+            
+            if was_enabled:
+                return jsonify({
+                    "status": "success",
+                    "message": "Sound card detection disabled",
+                    "data": {
+                        "detection_enabled": False,
+                        "changes_made": config.changes_made
+                    }
+                })
+            else:
+                return jsonify({
+                    "status": "success",
+                    "message": "Sound card detection was already disabled",
+                    "data": {
+                        "detection_enabled": False,
+                        "changes_made": False
+                    }
+                })
+                
+        except Exception as e:
+            logger.error(f"Error disabling detection: {e}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to disable sound card detection",
+                "error": str(e)
+            }), 500
+
     def handle_detect_soundcard(self):
         """
         Handle GET /api/v1/soundcard/detect - Detect current sound card

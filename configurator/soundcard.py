@@ -164,6 +164,7 @@ SOUND_CARD_DEFINITIONS = {
         "card_type": ["DAC"],
         "dtoverlay": "hifiberry-dacplushd",
         "is_pro": True,
+        "aliases": ["DAC2 HD","DAC 2 HD"," DAC2HD"],
     },
     "DAC+ DSP": {
         "aplay_contains": "DAC+DSP",

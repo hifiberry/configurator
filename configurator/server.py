@@ -445,6 +445,9 @@ class ConfigAPIServer:
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'soundcard_detect': '/api/v1/soundcard/detect',
+                    'soundcard_detection': '/api/v1/soundcard/detection',
+                    'soundcard_detection_enable': '/api/v1/soundcard/detection/enable',
+                    'soundcard_detection_disable': '/api/v1/soundcard/detection/disable',
                     'system_reboot': '/api/v1/system/reboot',
                     'system_shutdown': '/api/v1/system/shutdown',
                     'filesystem_symlinks': '/api/v1/filesystem/symlinks',
@@ -589,6 +592,21 @@ class ConfigAPIServer:
         def detect_soundcard():
             """Detect current sound card and return name and dtoverlay"""
             return self.soundcard_handler.handle_detect_soundcard()
+
+        @self.app.route('/api/v1/soundcard/detection', methods=['GET'])
+        def get_detection_status():
+            """Get sound card detection enabled/disabled status"""
+            return self.soundcard_handler.handle_detection_status()
+
+        @self.app.route('/api/v1/soundcard/detection/enable', methods=['POST'])
+        def enable_detection():
+            """Enable sound card detection"""
+            return self.soundcard_handler.handle_enable_detection()
+
+        @self.app.route('/api/v1/soundcard/detection/disable', methods=['POST'])
+        def disable_detection():
+            """Disable sound card detection"""
+            return self.soundcard_handler.handle_disable_detection()
 
         # Volume endpoints
         @self.app.route('/api/v1/volume/headphone/controls', methods=['GET'])
