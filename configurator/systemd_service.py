@@ -148,6 +148,7 @@ class SystemdServiceManager:
                 logger.debug("Listing user services with command: %s", ' '.join(user_cmd))
                 result = subprocess.run(user_cmd, capture_output=True, text=True, check=False)
                 if result.returncode == 0:
+                    logger.debug(f"User services list output ({len(result.stdout)} chars):\n{result.stdout[:500]}")
                     for line in result.stdout.strip().split('\n'):
                         if line.strip():
                             parts = line.split()
@@ -236,6 +237,50 @@ class SystemdServiceManager:
         else:
             error_msg = stderr if stderr else stdout
             return False, f"Failed to disable service '{service_name}': {error_msg}"
+    
+    def enable_now(self, service_name: str) -> Tuple[bool, str]:
+        """
+        Enable and start a systemd service (equivalent to systemctl enable --now)
+        
+        Args:
+            service_name: Name of the service to enable and start
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        # First enable the service
+        enable_success, enable_msg = self.enable(service_name)
+        if not enable_success:
+            return False, enable_msg
+        
+        # Then start the service
+        start_success, start_msg = self.start(service_name)
+        if not start_success:
+            return False, f"Service enabled but failed to start: {start_msg}"
+        
+        return True, f"Service '{service_name}' enabled and started successfully"
+    
+    def disable_now(self, service_name: str) -> Tuple[bool, str]:
+        """
+        Stop and disable a systemd service (equivalent to systemctl disable --now)
+        
+        Args:
+            service_name: Name of the service to stop and disable
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        # First stop the service
+        stop_success, stop_msg = self.stop(service_name)
+        if not stop_success:
+            return False, stop_msg
+        
+        # Then disable the service
+        disable_success, disable_msg = self.disable(service_name)
+        if not disable_success:
+            return False, f"Service stopped but failed to disable: {disable_msg}"
+        
+        return True, f"Service '{service_name}' stopped and disabled successfully"
     
     def start(self, service_name: str) -> Tuple[bool, str]:
         """
