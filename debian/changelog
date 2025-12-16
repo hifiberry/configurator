@@ -1,3 +1,13 @@
+hifiberry-configurator (2.7.0) stable; urgency=medium
+
+  * Fixed systemd service detection for inactive/stopped user services
+  * Added enable-now and disable-now operations to systemd API
+  * Fixed PipeWire filtergraph endpoint function name
+  * Improved service existence check to use environment map instead of status
+  * Enhanced debug logging for user service detection
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 16 Dec 2025 13:00:00 +0000
+
 hifiberry-configurator (2.6.9) stable; urgency=high
 
   * Fixed thread exhaustion issue in config-server
