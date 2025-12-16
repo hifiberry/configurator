@@ -1,3 +1,13 @@
+hifiberry-configurator (2.6.9) stable; urgency=high
+
+  * Fixed thread exhaustion issue in config-server
+  * Replaced Flask development server with Waitress production WSGI server
+  * Limited thread pool to 6 threads to prevent resource exhaustion
+  * Added automatic fallback to Flask dev server if Waitress unavailable
+  * Improved server stability and reliability under concurrent load
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 16 Dec 2025 11:00:00 +0000
+
 hifiberry-configurator (2.6.8) stable; urgency=medium
 
   * Added argcomplete support for bash auto-completion of command-line options
