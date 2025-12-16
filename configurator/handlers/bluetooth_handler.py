@@ -6,10 +6,83 @@ logger = logging.getLogger(__name__)
 
 class BluetoothHandler:
     """Handler for bluetooth configuration API endpoints"""
+    passkey=None
+    show_modal=None
 
     def __init__(self):
         """Initialize the bluetooth handler"""
+        self.passkey = None
         pass
+
+    def handle_get_bluetooth_passkey(self):
+        """Return the stored passkey and delete it afterwards."""
+        value = self.passkey
+        self.passkey = None
+        return jsonify({
+            'status': 'success',
+            'passkey': value
+        })
+    
+    def handle_set_bluetooth_passkey(self):
+        """Store the provided Bluetooth passkey."""
+        try:
+            pk = request.args.get("passkey") or request.json.get("passkey")
+
+            if not pk:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No passkey provided'
+                }), 400
+
+            self.passkey = pk
+
+            return jsonify({
+                'status': 'success',
+                'message': 'Passkey stored successfully'
+            })
+
+        except Exception as e:
+            logger.error(f"Error setting Bluetooth passkey: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to store passkey',
+                'error': str(e)
+            }), 500
+
+    def handle_set_show_modal(self):
+        """Store a modal request payload or identifier."""
+        try:
+            modal = request.args.get("modal") or request.json.get("modal")
+
+            if not modal:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No modal value provided'
+                }), 400
+
+            self.show_modal = modal
+
+            return jsonify({
+                'status': 'success',
+                'message': 'Modal request stored successfully'
+            })
+
+        except Exception as e:
+            logger.error(f"Error setting modal: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to store modal request',
+                'error': str(e)
+            }), 500
+
+    def handle_get_show_modal(self):
+        """Return the stored modal request and clear it."""
+        value = self.show_modal
+        self.show_modal = None
+        return jsonify({
+            'status': 'success',
+            'modal': value
+        })
 
     def handle_get_bluetooth_settings(self):
         """Handle GET request for bluetooth settings."""
