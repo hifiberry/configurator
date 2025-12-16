@@ -27,13 +27,17 @@ class FilesystemHandler:
                     config = json.load(f)
                     filesystem_config = config.get('filesystem', {})
                     self.allowed_symlink_destinations = filesystem_config.get('allowed_symlink_destinations', [])
+                    self.allowed_exists_check_destinations = filesystem_config.get('allowed_exists_check_destinations', ['/etc'])
                     logger.debug(f"Loaded allowed symlink destinations: {self.allowed_symlink_destinations}")
+                    logger.debug(f"Loaded allowed exists check destinations: {self.allowed_exists_check_destinations}")
             else:
                 logger.warning(f"Config file {self.config_file} not found, no symlink destinations allowed")
                 self.allowed_symlink_destinations = []
+                self.allowed_exists_check_destinations = ['/etc']
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             self.allowed_symlink_destinations = []
+            self.allowed_exists_check_destinations = ['/etc']
     
     def handle_list_symlinks(self) -> Dict[str, Any]:
         """
@@ -185,5 +189,79 @@ class FilesystemHandler:
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to list symlinks',
+                'error': str(e)
+            }), 500
+    
+    def handle_file_exists(self) -> Dict[str, Any]:
+        """
+        Handle POST /api/v1/filesystem/file-exists
+        Check if a given file or directory exists
+        """
+        try:
+            # Get JSON data from request
+            if not request.is_json:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Content-Type must be application/json'
+                }), 400
+            
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Missing request body'
+                }), 400
+            
+            # Validate required fields
+            path = data.get('path')
+            if not path:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Missing required field: path'
+                }), 400
+            
+            # Check if directory access is allowed
+            if not self.allowed_exists_check_destinations:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'File access is not allowed - no destinations configured',
+                    'error': 'file_access_not_allowed'
+                }), 403
+            
+            # Validate path is in allowed list
+            path_allowed = False
+            for allowed_dest in self.allowed_exists_check_destinations:
+                if path.startswith(allowed_dest):
+                    path_allowed = True
+                    break
+            
+            if not path_allowed:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Path is not in allowed destinations',
+                    'error': 'path_not_allowed',
+                    'data': {
+                        'path': path,
+                        'allowed_destinations': self.allowed_exists_check_destinations
+                    }
+                }), 403
+            
+            # Check if path exists
+            exists = os.path.exists(path)
+            
+            return jsonify({
+                'status': 'success',
+                'message': f"File {'exists' if exists else 'does not exist'}",
+                'data': {
+                    'exists': exists
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking file existence: {e}")
+            logger.debug(traceback.format_exc())
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to check file existence',
                 'error': str(e)
             }), 500

@@ -9,6 +9,9 @@
     "filesystem": {
         "allowed_symlink_destinations": [
             "/var/lib/mpd/music/"
+        ],
+        "allowed_exists_check_destinations": [
+            "/etc"
         ]
     },
     "scripts": {

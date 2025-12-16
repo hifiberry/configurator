@@ -1,3 +1,11 @@
+hifiberry-configurator (2.8.0) stable; urgency=medium
+
+  * Added file-exists API endpoint to check if files exist at allowed paths
+  * Added allowed_exists_check_destinations configuration for file existence checks
+  * Default allowed path for file existence checks is /etc
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 16 Dec 2025 14:00:00 +0000
+
 hifiberry-configurator (2.7.0) stable; urgency=medium
 
   * Fixed systemd service detection for inactive/stopped user services
