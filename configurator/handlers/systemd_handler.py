@@ -30,7 +30,7 @@ class SystemdHandler:
     def __init__(self):
         """Initialize the systemd handler"""
         self.allowed_operations = {
-            'all': ['start', 'stop', 'restart', 'enable', 'disable', 'status'],
+            'all': ['start', 'stop', 'restart', 'enable', 'disable', 'enable-now', 'disable-now', 'status'],
             'status': ['status']
         }
         # Initialize the systemd service manager that handles both system and user services
@@ -68,10 +68,17 @@ class SystemdHandler:
                 logger.error("SystemdServiceManager not available")
                 return False
                 
-            # Use the service manager to check if service exists
-            # This will check both system and user services automatically
+            # Check if service is in the environment map (detected at startup)
+            env = self.service_manager._get_service_environment(service)
+            if env:
+                logger.debug(f"Service {service} exists in environment: {env}")
+                return True
+            
+            # Fallback: try to get status to see if service exists
             status_success, status_data = self.service_manager.status(service)
-            return status_success and isinstance(status_data, dict) and status_data.get('status_available', False)
+            exists = status_success and isinstance(status_data, dict)
+            logger.debug(f"Service {service} exists check (fallback): {exists}")
+            return exists
             
         except Exception as e:
             logger.error(f"Error checking if service exists: {e}")
@@ -95,6 +102,12 @@ class SystemdHandler:
                 return (0 if success else 1), message, ''
             elif operation == 'disable':
                 success, message = self.service_manager.disable(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'enable-now':
+                success, message = self.service_manager.enable_now(service)
+                return (0 if success else 1), message, ''
+            elif operation == 'disable-now':
+                success, message = self.service_manager.disable_now(service)
                 return (0 if success else 1), message, ''
             elif operation == 'status':
                 success, data = self.service_manager.status(service)
