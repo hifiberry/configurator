@@ -261,7 +261,7 @@ class PipewireHandler:
         Returns plain text (text/plain) response with GraphViz DOT content.
         """
         try:
-            dot_graph = pipewire.get_filtergraph()
+            dot_graph = pipewire.get_filtergraph_dot()
             if dot_graph is None:
                 return jsonify({
                     'status': 'error',
