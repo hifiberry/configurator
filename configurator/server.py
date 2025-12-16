@@ -456,6 +456,7 @@ class ConfigAPIServer:
                     'system_reboot': '/api/v1/system/reboot',
                     'system_shutdown': '/api/v1/system/shutdown',
                     'filesystem_symlinks': '/api/v1/filesystem/symlinks',
+                    'filesystem_file_exists': '/api/v1/filesystem/file-exists',
                     'scripts': '/api/v1/scripts',
                     'script_info': '/api/v1/scripts/<script_id>',
                     'script_execute': '/api/v1/scripts/<script_id>/execute',
@@ -682,6 +683,11 @@ class ConfigAPIServer:
         def list_symlinks():
             """List all symlinks in a given directory including their destinations"""
             return self.filesystem_handler.handle_list_symlinks()
+        
+        @self.app.route('/api/v1/filesystem/file-exists', methods=['POST'])
+        def check_file_exists():
+            """Check if a file or directory exists at a given path"""
+            return self.filesystem_handler.handle_file_exists()
 
         # Script endpoints
         @self.app.route('/api/v1/scripts', methods=['GET'])
