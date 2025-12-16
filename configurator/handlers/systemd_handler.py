@@ -133,8 +133,8 @@ class SystemdHandler:
     def handle_systemd_operation(self, service: str, operation: str):
         """Flask handler: Execute systemd operation on a service"""
         try:
-            # Validate operation
-            valid_operations = ['start', 'stop', 'restart', 'enable', 'disable', 'status']
+            # Validate operation against the 'all' permission level operations
+            valid_operations = self.allowed_operations['all']
             if operation not in valid_operations:
                 return jsonify({
                     'status': 'error',
