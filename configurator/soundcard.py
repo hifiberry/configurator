@@ -4,6 +4,11 @@ import argparse
 import sys
 import tempfile
 import os
+try:
+    import argcomplete
+    ARGCOMPLETE_AVAILABLE = True
+except ImportError:
+    ARGCOMPLETE_AVAILABLE = False
 
 # Import the get_hat_info function from hattools
 from configurator.hattools import get_hat_info
@@ -868,6 +873,10 @@ def main():
         action="store_true",
         help="Print the name of the detected sound card if one is found, nothing otherwise. Exit code 1 if no card detected.",
     )
+    
+    if ARGCOMPLETE_AVAILABLE:
+        argcomplete.autocomplete(parser)
+    
     args = parser.parse_args()
 
     # Configure logging immediately after parsing args

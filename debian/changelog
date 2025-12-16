@@ -1,3 +1,11 @@
+hifiberry-configurator (2.6.8) stable; urgency=medium
+
+  * Added argcomplete support for bash auto-completion of command-line options
+  * All config-* tools now support tab completion for arguments
+  * Improved command-line usability with intelligent option completion
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 16 Dec 2025 10:00:00 +0000
+
 hifiberry-configurator (2.6.7) stable; urgency=medium
 
   * Added HiFiBerry detection disable/enable functionality

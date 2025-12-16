@@ -6,6 +6,11 @@ import logging
 import argparse
 import time
 from datetime import datetime
+try:
+    import argcomplete
+    ARGCOMPLETE_AVAILABLE = True
+except ImportError:
+    ARGCOMPLETE_AVAILABLE = False
 from configurator.configtxt import ConfigTxt
 from configurator.hattools import get_hat_info  # Import the get_hat_info module
 from configurator.dsptoolkit import detect_dsp
@@ -694,6 +699,10 @@ def main():
     parser.add_argument("--logfile", type=str, help="Log HiFiBerry events to specified file (with timestamps)")
     parser.add_argument("--force", action="store_true", help="Force configuration even if HiFiBerry detection is disabled in config.txt")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output showing each detection step")
+    
+    if ARGCOMPLETE_AVAILABLE:
+        argcomplete.autocomplete(parser)
+    
     args = parser.parse_args()
 
     # Set logging level based on verbose flag
