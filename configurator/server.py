@@ -15,6 +15,11 @@ import requests
 from flask import Flask, request, jsonify, make_response
 from werkzeug.exceptions import BadRequest, NotFound, InternalServerError
 from typing import Dict, Any, Optional
+try:
+    from waitress import serve
+    WAITRESS_AVAILABLE = True
+except ImportError:
+    WAITRESS_AVAILABLE = False
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
@@ -1046,12 +1051,29 @@ class ConfigAPIServer:
         """Start the API server"""
         logger.info(f"Starting HiFiBerry Configuration Server on {self.host}:{self.port}")
         try:
-            self.app.run(
-                host=self.host,
-                port=self.port,
-                debug=self.debug,
-                threaded=True
-            )
+            if WAITRESS_AVAILABLE and not self.debug:
+                # Use Waitress production server (prevents thread exhaustion)
+                logger.info("Using Waitress WSGI server (production mode)")
+                serve(
+                    self.app,
+                    host=self.host,
+                    port=self.port,
+                    threads=6,  # Limit threads to prevent exhaustion
+                    channel_timeout=60,
+                    cleanup_interval=10
+                )
+            else:
+                # Fall back to Flask development server
+                if not WAITRESS_AVAILABLE:
+                    logger.warning("Waitress not available, using Flask development server (not recommended for production)")
+                else:
+                    logger.info("Using Flask development server (debug mode)")
+                self.app.run(
+                    host=self.host,
+                    port=self.port,
+                    debug=self.debug,
+                    threaded=True
+                )
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
             sys.exit(1)

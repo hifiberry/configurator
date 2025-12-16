@@ -3,5 +3,6 @@ cryptography
 netifaces  # Required for network interface detection in sambaclient.py
 hateeprom  # Required for HAT EEPROM reading in hattools.py
 flask>=2.0.0  # Required for API server in server.py
+waitress>=2.0.0  # Production WSGI server to prevent thread exhaustion
 dbus
 argcomplete  # Required for bash auto-completion of command-line arguments
