@@ -79,7 +79,7 @@ Get version information and available endpoints.
     "script_execute": "/api/v1/scripts/<script_id>/execute",
     "network": "/api/v1/network",
     "i2c_devices": "/api/v1/i2c/devices",
-    "pipewire_controls": "/api/v1/pipewire/controls",
+    "pipewire_devices": "/api/v1/pipewire/devices",
     "pipewire_default_sink": "/api/v1/pipewire/default-sink",
     "pipewire_default_source": "/api/v1/pipewire/default-source",
     "pipewire_volume": "/api/v1/pipewire/volume/<control>",
@@ -1494,21 +1494,26 @@ The PipeWire filter-chain now uses a modern architecture with:
 - Decibel values use proper conversion: 0 dB = maximum volume, negative values reduce volume
 - The API handles all conversions automatically between linear and dB representations
 
-### `GET /api/v1/pipewire/controls`
+### `GET /api/v1/pipewire/devices`
 
-List all available PipeWire volume controls including sinks and sources.
+List all available PipeWire devices (sinks and sources).
 
 **Response (Success):**
 ```json
 {
   "status": "success",
   "data": {
-    "controls": [
-      "44:Built-in Audio Stereo",
-      "45:Built-in Audio Mono",
-      "46:USB Audio Device Stereo"
-    ],
-    "count": 3
+    "devices": {
+      "sinks": [
+        "44:Built-in Audio Stereo",
+        "45:USB Audio Device Stereo"
+      ],
+      "sources": [
+        "46:Built-in Audio Mono",
+        "47:USB Microphone"
+      ]
+    },
+    "count": 4
   }
 }
 ```
@@ -1522,8 +1527,10 @@ List all available PipeWire volume controls including sinks and sources.
 ```
 
 **Response Fields:**
-- **controls**: Array of control names in format "node_id:device_name"
-- **count**: Total number of available controls
+- **devices**: Object containing categorized devices
+  - **sinks**: Array of sink device names in format "node_id:device_name"
+  - **sources**: Array of source device names in format "node_id:device_name"
+- **count**: Total number of available devices (sinks + sources)
 
 ### `GET /api/v1/pipewire/default-sink`
 

@@ -25,28 +25,30 @@ class PipewireHandler:
     
     def handle_list_controls(self):
         """
-        Handle GET /api/v1/pipewire/controls - List all available PipeWire volume controls
+        Handle GET /api/v1/pipewire/controls - List all available PipeWire devices (sinks and sources)
         
         Returns:
-            JSON response with list of PipeWire controls
+            JSON response with list of PipeWire devices categorized by type
         """
         try:
-            controls = pipewire.get_volume_controls()
-            if controls is None:
+            devices = pipewire.get_devices()
+            if devices is None:
                 return jsonify({
                     'status': 'error',
-                    'message': 'PipeWire daemon not available'
+                    'message': 'Could not connect to PipeWire. Is the PipeWire service running?'
                 }), 503
                 
+            total_count = len(devices['sinks']) + len(devices['sources'])
+            
             return jsonify({
                 'status': 'success',
                 'data': {
-                    'controls': controls,
-                    'count': len(controls)
+                    'devices': devices,
+                    'count': total_count
                 }
             })
         except Exception as e:
-            logger.error(f"Error listing PipeWire controls: {e}")
+            logger.error(f"Error listing PipeWire devices: {e}")
             return jsonify({
                 'status': 'error',
                 'message': str(e)

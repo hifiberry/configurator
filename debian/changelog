@@ -1,3 +1,13 @@
+hifiberry-configurator (2.9.0) stable; urgency=medium
+
+  * PipeWire API: Renamed "controls" to "devices" with separation of sinks and sources
+    - /api/v1/pipewire/controls renamed to /api/v1/pipewire/devices
+    - Response now returns devices.sinks and devices.sources
+    - config-pipewire list now displays SINKS and SOURCES separately
+    - Backward compatible: get_volume_controls() still available but deprecated
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 18 Dec 2024 00:00:00 +0000
+
 hifiberry-configurator (2.8.0) stable; urgency=medium
 
   * Added file-exists API endpoint to check if files exist at allowed paths

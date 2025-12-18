@@ -486,7 +486,7 @@ class ConfigAPIServer:
                     'bluetooth_passkey': '/api/v1/bluetooth/passkey',
                     'bluetooth_modal': '/api/v1/bluetooth/modal',
                     'bluetooth_unpair': '/api/v1/bluetooth/unpair',
-                    'pipewire_devices': '/api/v1/pipewire/controls',
+                    'pipewire_devices': '/api/v1/pipewire/devices',
                     'pipewire_default_sink': '/api/v1/pipewire/default-sink',
                     'pipewire_default_source': '/api/v1/pipewire/default-source',
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
@@ -797,9 +797,9 @@ class ConfigAPIServer:
 
 
         # PipeWire endpoints
-        @self.app.route('/api/v1/pipewire/controls', methods=['GET'])
-        def list_pipewire_controls():
-            """List all available PipeWire volume controls"""
+        @self.app.route('/api/v1/pipewire/devices', methods=['GET'])
+        def list_pipewire_devices():
+            """List all available PipeWire devices (sinks and sources)"""
             if self.pipewire_handler:
                 return self.pipewire_handler.handle_list_controls()
             else:
