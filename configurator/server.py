@@ -37,7 +37,7 @@ PIPEWIRE_DAEMON_URL = "http://localhost:1082"
 class ConfigAPIServer:
     """REST API server for HiFiBerry configuration services"""
     
-    def __init__(self, host='0.0.0.0', port=1081, debug=False, user_mode=False, system_mode=False):
+    def __init__(self, host='0.0.0.0', port=1081, debug=False, user_mode=False, system_mode=False, no_waitress=False):
         """
         Initialize the API server
         
@@ -47,18 +47,28 @@ class ConfigAPIServer:
             debug: Enable debug mode
             user_mode: Run in user mode (PipeWire endpoints only)
             system_mode: Run in system mode (exclude PipeWire endpoints)
+            no_waitress: Disable Waitress, use Flask server instead
         """
+        logger.info("ConfigAPIServer.__init__: Starting initialization")
         self.host = host
         self.port = port
         self.debug = debug
         self.user_mode = user_mode
         self.system_mode = system_mode
+        self.no_waitress = no_waitress
+        
+        logger.info("ConfigAPIServer.__init__: Creating Flask app")
         self.app = Flask(__name__)
+        
+        logger.info("ConfigAPIServer.__init__: Creating ConfigDB")
         self.configdb = ConfigDB()
+        
+        logger.info("ConfigAPIServer.__init__: Creating SystemInfo")
         self.systeminfo = SystemInfo()
         
         # Initialize handlers based on mode
         if not user_mode:  # System mode or full mode
+            logger.info("ConfigAPIServer.__init__: Initializing system handlers")
             self.systemd_handler = SystemdHandler()
             self.smb_handler = SMBHandler()
             self.hostname_handler = HostnameHandler()
@@ -72,6 +82,7 @@ class ConfigAPIServer:
             self.bluetooth_handler = BluetoothHandler()
         else:
             # User mode - minimal handlers
+            logger.info("ConfigAPIServer.__init__: User mode - skipping system handlers")
             self.systemd_handler = None
             self.smb_handler = None
             self.hostname_handler = None
@@ -85,15 +96,19 @@ class ConfigAPIServer:
             self.bluetooth_handler = None
             
         if not system_mode:  # User mode only
+            logger.info("ConfigAPIServer.__init__: Initializing PipeWire handler")
             self.pipewire_handler = PipewireHandler()
         else:
             # System mode - no PipeWire handler, will proxy requests
+            logger.info("ConfigAPIServer.__init__: System mode - skipping PipeWire handler")
             self.pipewire_handler = None
             
+        logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
         self.settings_manager = SettingsManager(self.configdb)
         
         # Set settings manager on handlers that need it
         if self.pipewire_handler:
+            logger.info("ConfigAPIServer.__init__: Setting settings manager on PipeWire handler")
             self.pipewire_handler.set_settings_manager(self.settings_manager)
         
         # Configure Flask logging
@@ -101,10 +116,14 @@ class ConfigAPIServer:
             self.app.logger.setLevel(logging.WARNING)
         
         # Register API routes
+        logger.info("ConfigAPIServer.__init__: Registering routes")
         self._register_routes()
         
         # Register settings for modules
+        logger.info("ConfigAPIServer.__init__: Registering module settings")
         self._register_module_settings()
+        
+        logger.info("ConfigAPIServer.__init__: Initialization complete")
     
     def _register_module_settings(self):
         """Register settings that should be saved/restored by modules"""
@@ -467,7 +486,7 @@ class ConfigAPIServer:
                     'bluetooth_passkey': '/api/v1/bluetooth/passkey',
                     'bluetooth_modal': '/api/v1/bluetooth/modal',
                     'bluetooth_unpair': '/api/v1/bluetooth/unpair',
-                    'pipewire_controls': '/api/v1/pipewire/controls',
+                    'pipewire_devices': '/api/v1/pipewire/controls',
                     'pipewire_default_sink': '/api/v1/pipewire/default-sink',
                     'pipewire_default_source': '/api/v1/pipewire/default-source',
                     'pipewire_volume': '/api/v1/pipewire/volume/<control>',
@@ -1057,14 +1076,19 @@ class ConfigAPIServer:
         """Start the API server"""
         logger.info(f"Starting HiFiBerry Configuration Server on {self.host}:{self.port}")
         try:
-            if WAITRESS_AVAILABLE and not self.debug:
+            if WAITRESS_AVAILABLE and not self.debug and not self.no_waitress:
                 # Use Waitress production server (prevents thread exhaustion)
                 logger.info("Using Waitress WSGI server (production mode)")
+                
+                # User mode only needs minimal threads (just PipeWire endpoints)
+                thread_count = 2 if self.user_mode else 6
+                logger.info(f"Waitress configuration: threads={thread_count}, host={self.host}, port={self.port}")
+                
                 serve(
                     self.app,
                     host=self.host,
                     port=self.port,
-                    threads=6,  # Limit threads to prevent exhaustion
+                    threads=thread_count,
                     channel_timeout=60,
                     cleanup_interval=10
                 )
@@ -1081,7 +1105,9 @@ class ConfigAPIServer:
                     threaded=True
                 )
         except Exception as e:
+            import traceback
             logger.error(f"Failed to start server: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             sys.exit(1)
 
 def setup_logging(verbose=False):
@@ -1127,24 +1153,48 @@ def parse_arguments():
                         help='Run in user mode (PipeWire endpoints only)')
     parser.add_argument('--system-mode', action='store_true',
                         help='Run in system mode (exclude PipeWire endpoints)')
+    parser.add_argument('--no-waitress', action='store_true',
+                        help='Disable Waitress, use Flask development server instead')
     
     return parser.parse_args()
 
 def main():
     """Main function"""
-    args = parse_arguments()
+    # Add early logging to stderr before anything else
+    import sys
+    print("config-server: main() called", file=sys.stderr, flush=True)
     
-    # Configure logging
-    setup_logging(args.verbose)
-    
-    # Create the server
-    server = ConfigAPIServer(
-        host=args.host,
-        port=args.port,
-        debug=args.debug,
-        user_mode=args.user_mode,
-        system_mode=args.system_mode
-    )
+    try:
+        print("config-server: Starting initialization...", file=sys.stderr, flush=True)
+        
+        args = parse_arguments()
+        
+        print(f"config-server: Arguments parsed - mode={'user' if args.user_mode else 'system' if args.system_mode else 'full'}, port={args.port}", file=sys.stderr, flush=True)
+        
+        # Configure logging
+        setup_logging(args.verbose)
+        
+        logger.info("Starting HiFiBerry Configuration Server")
+        logger.info(f"Version: {__version__}")
+        logger.info(f"Mode: {'user' if args.user_mode else 'system' if args.system_mode else 'full'}")
+        logger.info(f"Host: {args.host}, Port: {args.port}")
+        
+        # Create the server
+        logger.info("Creating server instance...")
+        server = ConfigAPIServer(
+            host=args.host,
+            port=args.port,
+            debug=args.debug,
+            user_mode=args.user_mode,
+            system_mode=args.system_mode,
+            no_waitress=args.no_waitress
+        )
+        logger.info("Server instance created successfully")
+    except Exception as e:
+        import traceback
+        print(f"config-server: FATAL ERROR during initialization: {e}", file=sys.stderr, flush=True)
+        print(f"config-server: Traceback:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
+        sys.exit(1)
     
     # Restore settings if requested (standalone mode)
     if args.restore_settings:
