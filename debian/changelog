@@ -1,3 +1,9 @@
+hifiberry-configurator (2.9.1) stable; urgency=medium
+
+  * Remove dependencies to i2c and gpiomem services
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 18 Dec 2024 00:00:00 +0000
+
 hifiberry-configurator (2.9.0) stable; urgency=medium
 
   * PipeWire API: Renamed "controls" to "devices" with separation of sinks and sources
