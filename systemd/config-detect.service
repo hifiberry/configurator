@@ -1,8 +1,8 @@
 [Unit]
 Description=HiFiBerry Sound Card Detection and Configuration
 Documentation=man:config-detect(1)
-After=sigmatcpserver.service systemd-modules-load.service systemd-udev-settle.service dev-gpiomem.device dev-i2c-1.device
-Wants=sigmatcpserver.service systemd-udev-settle.service dev-gpiomem.device dev-i2c-1.device
+After=sigmatcpserver.service systemd-modules-load.service systemd-udev-settle.service
+Wants=sigmatcpserver.service systemd-udev-settle.service
 Before=config-server.service
 
 [Service]
