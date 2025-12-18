@@ -176,10 +176,17 @@ def _run_wpctl(args: List[str]) -> Optional[str]:
             logger.debug(f"wpctl stderr: {repr(result.stderr)}")
             
         if result.returncode != 0:
+            # Check if it's a PipeWire connection error
+            stderr_lower = result.stderr.lower()
+            if 'could not connect' in stderr_lower or 'connection' in stderr_lower:
+                raise RuntimeError("Could not connect to PipeWire. Is the PipeWire service running?")
             logger.error(f"wpctl command failed with return code {result.returncode}: {result.stderr}")
             return None
             
         return result.stdout
+    except RuntimeError:
+        # Re-raise RuntimeError (PipeWire connection issues)
+        raise
     except Exception as e:
         logger.error(f"wpctl command failed: {e}")
         return None
@@ -259,16 +266,24 @@ def _db_to_volume(db: float) -> float:
     # PipeWire's cubic volume curve: V = 10^(dB/60)
     return 10 ** (db / 60.0)
 
-def get_volume_controls() -> List[str]:
+def get_devices() -> Optional[Dict[str, List[str]]]:
     """
-    Returns a list of all PipeWire volume control names using wpctl.
-    Format: "node_id:device_name"
+    Returns all PipeWire devices categorized by type.
+    Returns a dictionary with keys: 'sinks', 'sources'
+    Each value is a list of "node_id:device_name" strings.
+    Returns None if PipeWire is not available.
     """
-    output = _run_wpctl(["status"])
+    try:
+        output = _run_wpctl(["status"])
+    except RuntimeError:
+        # PipeWire not available
+        return None
+    if output is None:
+        return None
     if not output:
-        return []
+        return {'sinks': [], 'sources': []}
     
-    controls = []
+    devices = {'sinks': [], 'sources': []}
     in_audio_section = False
     in_sinks_section = False
     in_sources_section = False
@@ -310,9 +325,104 @@ def get_volume_controls() -> List[str]:
             if match:
                 node_id = match.group(1)
                 device_name = match.group(2).strip()
-                controls.append(f"{node_id}:{device_name}")
+                device_str = f"{node_id}:{device_name}"
+                if in_sinks_section:
+                    devices['sinks'].append(device_str)
+                elif in_sources_section:
+                    devices['sources'].append(device_str)
     
-    return controls
+    return devices
+
+def get_volume_controls() -> Optional[List[str]]:
+    """
+    Deprecated: Use get_devices() instead.
+    Returns a list of all PipeWire volume control names using wpctl.
+    Format: "node_id:device_name"
+    Returns None if PipeWire is not available.
+    """
+    devices = get_devices()
+    if devices is None:
+        return None
+    # Combine sinks and sources for backward compatibility
+    return devices['sinks'] + devices['sources']
+
+def get_all_controls() -> Optional[Dict[str, List[str]]]:
+    """
+    Returns all PipeWire controls categorized by type.
+    Returns a dictionary with keys: 'sinks', 'sources', 'filters', 'sink_streams', 'source_streams'
+    Each value is a list of "node_id:device_name" strings.
+    Returns None if PipeWire is not available.
+    """
+    try:
+        output = _run_wpctl(["status"])
+    except RuntimeError:
+        # PipeWire not available
+        return None
+    if output is None:
+        return None
+    if not output:
+        return {'sinks': [], 'sources': [], 'filters': [], 'sink_streams': [], 'source_streams': []}
+    
+    result = {
+        'sinks': [],
+        'sources': [],
+        'filters': [],
+        'sink_streams': [],
+        'source_streams': []
+    }
+    
+    in_audio_section = False
+    current_section = None
+    
+    for line in output.splitlines():
+        original_line = line
+        line = line.strip()
+        
+        if line == "Audio":
+            in_audio_section = True
+            continue
+        elif line == "Video" or line == "Settings":
+            in_audio_section = False
+            current_section = None
+            continue
+            
+        if not in_audio_section:
+            continue
+            
+        # Detect section headers
+        if "Sinks:" in line:
+            current_section = 'sinks'
+            continue
+        elif "Sources:" in line:
+            current_section = 'sources'
+            continue
+        elif "Filters:" in line:
+            current_section = 'filters'
+            continue
+        elif "Sink endpoints:" in line or "Source endpoints:" in line:
+            current_section = None  # Skip endpoints
+            continue
+        elif "Streams:" in line:
+            # Need to detect if it's under Sinks or Sources
+            continue
+        elif "Sink streams:" in line:
+            current_section = 'sink_streams'
+            continue
+        elif "Source streams:" in line:
+            current_section = 'source_streams'
+            continue
+            
+        if current_section and line:
+            # Parse lines like: " │  *   44. Built-in Audio Stereo               [vol: 0.60]"
+            # Remove tree characters and asterisks
+            clean_line = re.sub(r'^[│├└─\s]*\*?\s*', '', original_line)
+            match = re.search(r'^(\d+)\.\s+(.+?)(?:\s+\[|$)', clean_line)
+            if match:
+                node_id = match.group(1)
+                device_name = match.group(2).strip()
+                result[current_section].append(f"{node_id}:{device_name}")
+    
+    return result
 
 def get_volume(control_name: str) -> Optional[float]:
     """
@@ -871,6 +981,7 @@ def main():
     def print_usage():
         print("Usage:")
         print("  config-pipewire list")
+        print("  config-pipewire list-all")
         print("  config-pipewire default-sink")
         print("  config-pipewire default-source")
         print("  config-pipewire get <control_name>")
@@ -902,22 +1013,49 @@ def main():
     cmd = sys.argv[1]
 
     if cmd == "list":
-        controls = get_volume_controls()
-        for c in controls:
-            print(c)
+        devices = get_devices()
+        if devices is None:
+            print("Error: Could not connect to PipeWire. Is the PipeWire service running?", file=sys.stderr)
+            sys.exit(2)
+        if devices['sinks']:
+            print("\nSINKS:")
+            for d in devices['sinks']:
+                print(f"  {d}")
+        if devices['sources']:
+            print("\nSOURCES:")
+            for d in devices['sources']:
+                print(f"  {d}")
+    elif cmd == "list-all":
+        all_controls = get_all_controls()
+        if all_controls is None:
+            print("Error: Could not connect to PipeWire. Is the PipeWire service running?", file=sys.stderr)
+            sys.exit(2)
+        for category, controls in all_controls.items():
+            if controls:
+                print(f"\n{category.upper().replace('_', ' ')}:")
+                for c in controls:
+                    print(f"  {c}")
     elif cmd == "default-sink":
-        default_sink = get_default_sink()
-        if default_sink:
-            print(default_sink)
-        else:
-            print("No default sink found")
+        try:
+            default_sink = get_default_sink()
+            if default_sink:
+                print(default_sink)
+            else:
+                print("No default sink found")
+                sys.exit(2)
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)
     elif cmd == "default-source":
-        default_source = get_default_source()
-        if default_source:
-            print(default_source)
-        else:
-            print("No default source found")
+        try:
+            default_source = get_default_source()
+            if default_source:
+                print(default_source)
+            else:
+                print("No default source found")
+                sys.exit(2)
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)
     elif cmd == "get" and len(sys.argv) == 3:
         vol = get_volume(sys.argv[2])
