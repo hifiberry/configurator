@@ -1,3 +1,20 @@
+hifiberry-configurator (2.10.1) stable; urgency=medium
+
+  * Improved config database soundcard override implementation
+  * Fixed volume-store service hanging issue
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 01 Jan 2026 01:00:00 +0000
+
+hifiberry-configurator (2.10) stable; urgency=medium
+
+  * Added config database bypass for soundcard detection
+    - config-soundcard --detect now checks soundcard.name in config DB first
+    - If soundcard.name is set, detection is bypassed and that value is used
+    - Verbose mode displays when bypass is used
+    - Falls back to normal detection if key not set or card not found in definitions
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 01 Jan 2026 00:00:00 +0000
+
 hifiberry-configurator (2.9.1) stable; urgency=medium
 
   * Remove dependencies to i2c and gpiomem services
