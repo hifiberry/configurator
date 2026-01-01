@@ -15,6 +15,7 @@ from configurator.configtxt import ConfigTxt
 from configurator.hattools import get_hat_info  # Import the get_hat_info module
 from configurator.dsptoolkit import detect_dsp
 from configurator.soundcard import Soundcard
+from configurator.configdb import ConfigDB
 
 # Constants
 HIFIBERRY_CARD_COMMENT_PREFIX = "# HiFiBerry card:"
@@ -246,7 +247,21 @@ class SoundcardDetector:
     def detect_card(self):
         logging.info("Detecting HiFiBerry sound card...")
         if self.verbose:
-            logging.info("Detection method order: 1) HAT EEPROM, 2) I2C probing, 3) aplay output, 4) DSP detection")
+            logging.info("Detection method order: 1) Config database override, 2) HAT EEPROM, 3) I2C probing, 4) aplay output, 5) DSP detection")
+        
+        # Step 0: Check if soundcard.name is set in config database to bypass detection
+        try:
+            db = ConfigDB()
+            config_soundcard_name = db.get("soundcard.name")
+            if config_soundcard_name:
+                logging.info(f"Using soundcard from config database (bypassing detection): {config_soundcard_name}")
+                self._log_hifiberry_event(f"Using soundcard from config database: {config_soundcard_name}")
+                # Set the detected card directly and return
+                self.detected_card = config_soundcard_name
+                self.detected_overlay = None  # No overlay needed when using config database
+                return
+        except Exception as e:
+            logging.debug(f"Could not read from config database: {str(e)}")
         
         # Check if HAT EEPROM has valid info with retry
         hat_info = None
