@@ -304,6 +304,30 @@ SOUND_CARD_DEFINITIONS = {
         "dtoverlay": "hifiberry-dac",
         "is_pro": False,
     },
+    "ADC": {
+        "aplay_contains": "_adc]",
+        "hat_name": "ADC",
+        "volume_control": None,
+        "output_channels": ,
+        "input_channels": 2,
+        "features": [],
+        "supports_dsp": False,
+        "card_type": ["ADC"],
+        "dtoverlay": "hifiberry-adc",
+        "is_pro": False,
+    },
+    "HDMI Audio": {
+        "aplay_contains": "vc4-hdmi",
+        "hat_name": None,
+        "volume_control": None,
+        "output_channels": 2,
+        "input_channels": 0,
+        "features": [],
+        "supports_dsp": False,
+        "card_type": ["HDMI"],
+        "dtoverlay": None",
+        "is_pro": False,
+    },
 }
 
 
