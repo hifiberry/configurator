@@ -305,10 +305,10 @@ SOUND_CARD_DEFINITIONS = {
         "is_pro": False,
     },
     "ADC": {
-        "aplay_contains": "_adc]",
+        "aplay_contains": None,
         "hat_name": "ADC",
         "volume_control": None,
-        "output_channels": ,
+        "output_channels": 0,
         "input_channels": 2,
         "features": [],
         "supports_dsp": False,
@@ -325,7 +325,20 @@ SOUND_CARD_DEFINITIONS = {
         "features": [],
         "supports_dsp": False,
         "card_type": ["HDMI"],
-        "dtoverlay": None",
+        "dtoverlay": None,
+        "is_pro": False,
+        "aliases": ["HDMI"],
+    },
+    "Null": {
+        "aplay_contains": None,
+        "hat_name": None,
+        "volume_control": None,
+        "output_channels": 2,
+        "input_channels": 0,
+        "features": [],
+        "supports_dsp": False,
+        "card_type": ["Null"],
+        "dtoverlay": None,
         "is_pro": False,
     },
 }
@@ -503,82 +516,45 @@ class Soundcard:
         return initial_detection
 
     def _detect_card(self, no_eeprom=False):
+        """
+        Detect sound card using SoundcardDetector which includes config database override,
+        HAT EEPROM, I2C, aplay, and DSP detection.
+        
+        Returns:
+            Dictionary with card attributes or None if not detected
+        """
         try:
-            # First try to detect from config.txt comments using SoundcardDetector
-            try:
-                from configurator.soundcard_detector import SoundcardDetector
-                detector = SoundcardDetector()
-                config_card_name = detector.detect_from_config_txt_comment()
+            from configurator.soundcard_detector import SoundcardDetector
+            
+            # Use SoundcardDetector for comprehensive detection
+            detector = SoundcardDetector()
+            detector.detect_card()
+            
+            # Check if a card was detected
+            if detector.detected_card:
+                # First try exact name matching
+                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                    if card_name == detector.detected_card:
+                        logging.info(f"Detected sound card: {card_name}")
+                        return {"name": card_name, **attributes}
                 
-                if config_card_name:
-                    # First try exact name matching
-                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                        if card_name == config_card_name:
-                            logging.info(f"Found sound card from config.txt comment (exact match): {config_card_name}")
-                            return {"name": card_name, **attributes}
-                    
-                    # Then try alias matching
-                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                        aliases = attributes.get("aliases", [])
-                        if config_card_name in aliases:
-                            logging.info(f"Found sound card from config.txt comment (alias match): {config_card_name} -> {card_name}")
-                            return {"name": card_name, **attributes}
-                    
-                    # If no match found, log warning but continue with other methods
-                    logging.warning(f"Card name '{config_card_name}' from config.txt not found in definitions or aliases. Falling back to other detection methods.")
-                else:
-                    logging.debug("No sound card found in config.txt comments.")
-            except Exception as e:
-                logging.warning(f"Config.txt comment detection failed: {str(e)}")
-            
-            # Use get_hat_info function to get HAT information (unless disabled)
-            if not no_eeprom:
-                try:
-                    hat_info = get_hat_info(verbose=False)
-                    vendor = hat_info.get("vendor")
-                    product = hat_info.get("product")
-                    
-                    if product:
-                        potential_matches = [
-                            (card_name, attributes)
-                            for card_name, attributes in SOUND_CARD_DEFINITIONS.items()
-                            if attributes.get("hat_name") == product
-                        ]
-                        if len(potential_matches) == 1:
-                            return {"name": potential_matches[0][0], **potential_matches[0][1]}
-                        elif len(potential_matches) > 1:
-                            logging.info(f"Multiple matches for HAT {product}. Using `aplay -l` to distinguish.")
-                        else:
-                            logging.warning(f"No matching HAT found for {product}. Falling back to `aplay -l`.")
-                    else:
-                        logging.warning("No product information found in HAT. Falling back to `aplay -l`.")
-                except Exception as e:
-                    logging.warning(f"HAT detection failed: {str(e)}")
-            else:
-                logging.info("EEPROM check disabled, using aplay -l for detection")
-
-            output = subprocess.check_output("aplay -l", shell=True, text=True).strip()
-            if "hifiberry" not in output.lower():
-                logging.warning("No HiFiBerry sound card detected.")
+                # Then try alias matching
+                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                    aliases = attributes.get("aliases", [])
+                    if detector.detected_card in aliases:
+                        logging.info(f"Detected sound card via alias: {detector.detected_card} -> {card_name}")
+                        return {"name": card_name, **attributes}
+                
+                # If not found in definitions or aliases, log warning and return None
+                logging.warning(f"Detected card '{detector.detected_card}' not found in SOUND_CARD_DEFINITIONS or aliases")
                 return None
-
-            # First pass: try to match based on aplay_contains patterns
-            initial_detection = None
-            for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                aplay_contains = attributes.get("aplay_contains", "")
-                if aplay_contains and aplay_contains.lower() in output.lower():
-                    initial_detection = {"name": card_name, **attributes}
-                    break
-            
-            # Second pass: perform additional checks to refine detection
-            final_detection = self._additional_card_checks(output, initial_detection)
-            if final_detection:
-                return final_detection
-        except subprocess.CalledProcessError:
-            logging.error("Error: Unable to execute `aplay -l`. Ensure ALSA is installed and configured.")
-
-        logging.warning("No matching sound card detected.")
-        return None
+            else:
+                logging.warning("No matching sound card detected.")
+                return None
+                
+        except Exception as e:
+            logging.error(f"Error during sound card detection: {str(e)}")
+            return None
 
     def get_mixer_control_name(self, use_softvol_fallback=False):
         """
