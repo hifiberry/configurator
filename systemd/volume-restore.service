@@ -12,6 +12,7 @@ Group=root
 ExecStartPre=/bin/sleep 2
 ExecStartPre=/usr/bin/config-soundcard --get-or-create-volume-control Softvol
 ExecStart=/usr/bin/config-volume --restore
+TimeoutStartSec=10
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal

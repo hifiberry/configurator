@@ -9,6 +9,8 @@ ExecStart=/usr/bin/config-volume --store
 User=root
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=10
+RemainAfterExit=no
 
 [Install]
 WantedBy=multi-user.target
