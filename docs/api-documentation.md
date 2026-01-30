@@ -13,8 +13,6 @@
   - [System Management](#system-management)
   - [Network Configuration](#network-configuration)
   - [I2C Device Management](#i2c-device-management)
-  - [PipeWire Volume Management](#pipewire-volume-management)
-    - [PipeWire Filtergraph](#get-apiv1pipewirefiltergraph)
   - [Settings Management](#settings-management)
   - [Filesystem Management](#filesystem-management)
   - [Script Management](#script-management)
@@ -26,16 +24,7 @@
 
 The HiFiBerry Configuration API provides REST endpoints for managing configuration settings and system services in the HiFiBerry system. All responses are in JSON format with consistent structure.
 
-**Dual-Daemon Architecture:**
-
-- **System Daemon** - `http://localhost:1081` - System-level operations (network, services, mounts, etc.)
-- **User Daemon** - `http://localhost:1082` - PipeWire audio operations (volume, mixer, etc.)
-
-**Endpoint Routing:**
-- All `/api/v1/pipewire/*` endpoints → Port 1082 (User Daemon)
-- All other endpoints → Port 1081 (System Daemon)
-
-> **Note:** Replace localhost with your actual server address. System operations use port 1081, PipeWire operations use port 1082.
+> **Note:** Replace localhost with your actual server address. The default port is 1081.
 
 ## Endpoints
 
@@ -79,18 +68,6 @@ Get version information and available endpoints.
     "script_execute": "/api/v1/scripts/<script_id>/execute",
     "network": "/api/v1/network",
     "i2c_devices": "/api/v1/i2c/devices",
-    "pipewire_devices": "/api/v1/pipewire/devices",
-    "pipewire_default_sink": "/api/v1/pipewire/default-sink",
-    "pipewire_default_source": "/api/v1/pipewire/default-source",
-    "pipewire_volume": "/api/v1/pipewire/volume/<control>",
-    "pipewire_volume_set": "/api/v1/pipewire/volume/<control>",
-    "pipewire_filtergraph": "/api/v1/pipewire/filtergraph",
-    "pipewire_mixer_analysis": "/api/v1/pipewire/mixer/analysis",
-    "pipewire_monostereo_get": "/api/v1/pipewire/monostereo",
-    "pipewire_monostereo_set": "/api/v1/pipewire/monostereo",
-    "pipewire_balance_get": "/api/v1/pipewire/balance",
-    "pipewire_balance_set": "/api/v1/pipewire/balance",
-    "pipewire_save_default_volume": "/api/v1/pipewire/save-default-volume",
     "settings_list": "/api/v1/settings",
     "settings_save": "/api/v1/settings/save",
     "settings_restore": "/api/v1/settings/restore"
@@ -1468,442 +1445,6 @@ Scan I2C bus for connected devices and detect kernel-used addresses.
 - Kernel-used addresses are detected from /sys/bus/i2c/devices/
 - Similar functionality to `i2cdetect -y <bus>` command but using Python I2C library
 
-## PipeWire Volume Management
-
-The PipeWire API provides comprehensive volume control for PipeWire audio system. PipeWire is a modern audio server that can handle both professional and consumer audio applications.
-
-**Key Features:**
-- List all available volume controls (sinks and sources)
-- Get/set volume using both linear (0.0-1.0) and decibel values
-- Automatic detection of default sink and source
-- Proper volume conversion using PipeWire's cubic volume curve
-- Support for "default" control name for easy access
-- Export current PipeWire connection graph in GraphViz DOT format
-- Advanced mixer control with 16-band parametric EQ and separate monostereo/balance stages
-
-**New PipeWire Filter Architecture (v2.3+):**
-The PipeWire filter-chain now uses a modern architecture with:
-- **16-band parametric EQ**: Professional-grade frequency response control
-- **Separate monostereo mixer**: Dedicated filter block for mono/stereo/left/right/swapped channel mixing  
-- **Separate balance mixer**: Independent filter block for stereo balance control
-- **Improved API separation**: Dedicated endpoints for monostereo (`/api/v1/pipewire/monostereo`) and balance (`/api/v1/pipewire/balance`) control
-
-**Volume Scaling:**
-- PipeWire uses a non-linear (cubic) volume scale where dB ≈ 60 × log10(V)
-- Volume values are represented as floats from 0.0 (mute) to 1.0 (maximum)
-- Decibel values use proper conversion: 0 dB = maximum volume, negative values reduce volume
-- The API handles all conversions automatically between linear and dB representations
-
-### `GET /api/v1/pipewire/devices`
-
-List all available PipeWire devices (sinks and sources).
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "devices": {
-      "sinks": [
-        "44:Built-in Audio Stereo",
-        "45:USB Audio Device Stereo"
-      ],
-      "sources": [
-        "46:Built-in Audio Mono",
-        "47:USB Microphone"
-      ]
-    },
-    "count": 4
-  }
-}
-```
-
-**Response (PipeWire Not Available):**
-```json
-{
-  "status": "error",
-  "message": "wpctl command not found. PipeWire/WirePlumber may not be installed."
-}
-```
-
-**Response Fields:**
-- **devices**: Object containing categorized devices
-  - **sinks**: Array of sink device names in format "node_id:device_name"
-  - **sources**: Array of source device names in format "node_id:device_name"
-- **count**: Total number of available devices (sinks + sources)
-
-### `GET /api/v1/pipewire/default-sink`
-
-Get the default PipeWire sink (output device).
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "default_sink": "44:Built-in Audio Stereo"
-  }
-}
-```
-
-**Response (No Default Sink):**
-```json
-{
-  "status": "error",
-  "message": "No default sink found"
-}
-```
-
-### `GET /api/v1/pipewire/default-source`
-
-Get the default PipeWire source (input device).
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "default_source": "45:Built-in Audio Mono"
-  }
-}
-```
-
-**Response (No Default Source):**
-```json
-{
-  "status": "error",
-  "message": "No default source found"
-}
-```
-
-### `GET /api/v1/pipewire/volume/{control}`
-
-Get volume for a specific PipeWire control. Returns both linear and decibel values.
-
-**Parameters:**
-- **control** (path, required): Control name (e.g., "44:Built-in Audio Stereo") or "default" for default sink
-
-**Special Control Names:**
-- **"default"**: Automatically uses the default sink
-- **""** (empty): Also uses the default sink
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "control": "44:Built-in Audio Stereo",
-    "volume": 0.501,
-    "volume_db": -18.0
-  }
-}
-```
-
-**Response (Control Not Found):**
-```json
-{
-  "status": "error",
-  "message": "Control \"99:Nonexistent Device\" not found"
-}
-```
-
-**Response (No Default Sink - when using "default"):**
-```json
-{
-  "status": "error",
-  "message": "No default sink found"
-}
-```
-
-**Response Fields:**
-- **control**: The actual control name used (resolved from "default" if applicable)
-- **volume**: Linear volume value (0.0-1.0)
-- **volume_db**: Volume in decibels (negative values, 0 dB = maximum)
-
-### `PUT/POST /api/v1/pipewire/volume/{control}`
-
-Set volume for a specific PipeWire control. Accepts either linear or decibel values.
-
-**Parameters:**
-- **control** (path, required): Control name or "default" for default sink
-
-**Request Body (Linear Volume):**
-```json
-{
-  "volume": 0.75
-}
-```
-
-**Request Body (Decibel Volume):**
-```json
-{
-  "volume_db": -12.0
-}
-```
-
-**Request Parameters:**
-- **volume** (optional): Linear volume value (0.0-1.0)
-- **volume_db** (optional): Volume in decibels (negative values for reduction)
-
-> **Note:** Provide either `volume` or `volume_db`, not both. If both are provided, `volume_db` takes precedence.
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "control": "44:Built-in Audio Stereo",
-    "volume": 0.631,
-    "volume_db": -12.0
-  }
-}
-```
-
-**Response (Invalid Volume Range):**
-```json
-{
-  "status": "error",
-  "message": "Volume must be between 0.0 and 1.0"
-}
-```
-
-**Response (Invalid Volume Value):**
-```json
-{
-  "status": "error",
-  "message": "Invalid volume value"
-}
-```
-
-### `GET /api/v1/pipewire/filtergraph`
-
-Export the current PipeWire node/connection graph in GraphViz DOT format. This provides a snapshot of how nodes (sinks, sources, filters, streams) are interconnected.
-
-**Response (Success - Content-Type: text/plain):**
-```
-digraph pipewire_graph {
-  // DOT content produced by pw-dot
-}
-```
-
-**Response (pw-dot Not Available / Failure):**
-```json
-{
-  "status": "error",
-  "message": "pw-dot command failed or not available"
-}
-```
-
-**Notes:**
-- Large systems may produce large DOT outputs.
-- You can render the graph with: `dot -Tpng -o graph.png`.
-- This endpoint requires the `pw-dot` utility (part of PipeWire tools) to be installed.
-
-### `GET /api/v1/pipewire/mixer/analysis`
-
-Infer logical mixer mode (mono|stereo|left|right|balance|unknown) and balance value from current gain matrix.
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "mode": "stereo",
-    "balance": 0.0,
-    "gains": {
-      "mixer_left:Gain_1": 1.0,
-      "mixer_left:Gain_2": 0.0,
-      "mixer_right:Gain_1": 0.0,
-      "mixer_right:Gain_2": 1.0
-    }
-  }
-}
-```
-
-**Response (Unavailable):**
-```json
-{ "status": "error", "message": "Mixer analysis unavailable" }
-```
-
-### `GET /api/v1/pipewire/monostereo`
-
-Get the current monostereo mode from the PipeWire filter-chain mixer configuration.
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "monostereo_mode": "stereo"
-  }
-}
-```
-
-**Response (Unavailable):**
-```json
-{
-  "status": "error",
-  "message": "Monostereo status unavailable"
-}
-```
-
-**Response Fields:**
-- **monostereo_mode**: Current monostereo mode (`"stereo"`, `"mono"`, `"left"`, `"right"`, or `"swapped"`)
-
-### `POST /api/v1/pipewire/monostereo`
-
-Set the monostereo mode for the PipeWire filter-chain mixer. This controls how the left and right input channels are mixed to the output channels.
-
-**Request Body:**
-```json
-{
-  "mode": "stereo"
-}
-```
-
-**Request Parameters:**
-- **mode** (required): Monostereo mode to set
-  - `"stereo"` - Standard stereo (L→L, R→R)
-  - `"mono"` - Mix L+R channels equally to both outputs
-  - `"left"` - Send left channel to both outputs
-  - `"right"` - Send right channel to both outputs
-  - `"swapped"` - Swap left/right channels (L→R, R→L)
-
-**Success Response:**
-```json
-{
-  "status": "success",
-  "data": {
-    "monostereo_mode": "stereo"
-  }
-}
-```
-
-**Error Responses:**
-
-Missing mode parameter:
-```json
-{
-  "status": "error",
-  "message": "Mode must be provided"
-}
-```
-
-Invalid mode:
-```json
-{
-  "status": "error",
-  "message": "Failed to set monostereo mode"
-}
-```
-
-**Response Fields:**
-- **monostereo_mode**: The monostereo mode that was set
-- **balance**: Current balance value after setting the mode
-
-**Notes:**
-- Changes are automatically saved to mixer state if settings management is enabled
-- Setting monostereo mode may affect the current balance setting depending on the mode
-- The response includes both the new monostereo mode and current balance for reference
-
-### `GET /api/v1/pipewire/balance`
-
-Get the current balance value from the PipeWire filter-chain mixer configuration.
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "data": {
-    "balance": 0.0
-  }
-}
-```
-
-**Response (Unavailable):**
-```json
-{
-  "status": "error",
-  "message": "Balance status unavailable"
-}
-```
-
-**Response Fields:**
-- **balance**: Current balance value in the range [-1.0, 1.0]
-  - `-1.0` = full left
-  - `0.0` = center (equal)
-  - `+1.0` = full right
-
-### `POST /api/v1/pipewire/balance`
-
-Set the stereo balance for the PipeWire filter-chain mixer. This adjusts the relative levels of left and right output channels.
-
-**Request Body:**
-```json
-{
-  "balance": -0.3
-}
-```
-
-**Request Parameters:**
-- **balance** (required): Balance value in the range [-1.0, 1.0]
-  - `-1.0` = full left (right channel muted)
-  - `0.0` = center (equal levels)
-  - `+1.0` = full right (left channel muted)
-
-**Success Response:**
-```json
-{
-  "status": "success",
-  "data": {
-    "balance": -0.3
-  }
-}
-```
-
-**Error Responses:**
-
-Missing balance parameter:
-```json
-{
-  "status": "error",
-  "message": "Balance must be provided"
-}
-```
-
-Invalid balance range:
-```json
-{
-  "status": "error",
-  "message": "Balance must be between -1.0 and 1.0"
-}
-```
-
-Invalid balance value:
-```json
-{
-  "status": "error",
-  "message": "Balance must be a number"
-}
-```
-
-Balance setting failed:
-```json
-{
-  "status": "error",
-  "message": "Failed to set balance"
-}
-```
-
-**Response Fields:**
-- **balance**: The balance value that was set
-
-**Notes:**
-- Balance adjustments are independent of monostereo mode
-- Changes are automatically saved to mixer state if settings management is enabled
-- The response includes both the current monostereo mode and new balance for reference
-- Balance adjustments work by modifying the gain values of the underlying mixer matrix
-
 ## Settings Management
 
 The Settings Management API provides functionality for saving and restoring system settings. Modules can register settings that should persist across system restarts or configuration changes.
@@ -1915,9 +1456,6 @@ The Settings Management API provides functionality for saving and restoring syst
 - Per-module setting registration
 - Settings stored in configdb with `saved-setting.` prefix
 
-**Currently Supported Settings:**
-- **pipewire_default_volume**: Default PipeWire sink volume (auto-saved when changed)
-
 ### `GET /api/v1/settings`
 
 List all registered settings and their current saved values.
@@ -1927,14 +1465,10 @@ List all registered settings and their current saved values.
 {
   "status": "success",
   "data": {
-    "registered_settings": [
-      "pipewire_default_volume"
-    ],
-    "saved_settings": {
-      "pipewire_default_volume": "0.75"
-    },
-    "registered_count": 1,
-    "saved_count": 1
+    "registered_settings": [],
+    "saved_settings": {},
+    "registered_count": 0,
+    "saved_count": 0
   }
 }
 ```
@@ -1953,13 +1487,11 @@ Save all current settings to configdb for later restoration.
 ```json
 {
   "status": "success",
-  "message": "Saved 1/1 settings",
+  "message": "Saved 0/0 settings",
   "data": {
-    "results": {
-      "pipewire_default_volume": true
-    },
-    "successful": 1,
-    "total": 1
+    "results": {},
+    "successful": 0,
+    "total": 0
   }
 }
 ```
@@ -1977,13 +1509,11 @@ Restore all saved settings from configdb.
 ```json
 {
   "status": "success",
-  "message": "Restored 1/1 settings",
+  "message": "Restored 0/0 settings",
   "data": {
-    "results": {
-      "pipewire_default_volume": true
-    },
-    "successful": 1,
-    "total": 1
+    "results": {},
+    "successful": 0,
+    "total": 0
   }
 }
 ```
@@ -1993,37 +1523,7 @@ Restore all saved settings from configdb.
 - **successful**: Number of settings restored successfully
 - **total**: Total number of settings attempted
 
-### `POST /api/v1/pipewire/save-default-volume`
-
-Save the current default PipeWire sink volume as the default setting.
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "message": "Default PipeWire volume saved successfully",
-  "data": {
-    "setting": "pipewire_default_volume",
-    "saved": true
-  }
-}
-```
-
-**Response (Failed):**
-```json
-{
-  "status": "error",
-  "message": "Failed to save default PipeWire volume"
-}
-```
-
-**Notes:**
-- This endpoint manually saves the current default volume
-- Default volume is also automatically saved whenever it's changed via the volume API
-- Requires a default sink to be available
-- The saved volume will be restored on system startup when using `--restore-settings`
-
-### Script Management
+## Script Management
 
 The script management API allows execution of predefined scripts configured in the server configuration file. This provides a secure way to execute system administration scripts through the API.
 
@@ -2466,118 +1966,6 @@ curl http://localhost:1081/api/v1/i2c/devices
 curl "http://localhost:1081/api/v1/i2c/devices?bus=0"
 ```
 
-### PipeWire Volume Management
-
-**List all PipeWire volume controls:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/controls
-```
-
-**Get default sink:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/default-sink
-```
-
-**Get default source:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/default-source
-```
-
-**Get volume of default sink:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/volume/default
-```
-
-**Get volume of specific control:**
-```bash
-curl "http://localhost:1082/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
-```
-
-**Set volume using linear value (0.0-1.0):**
-```bash
-curl -X PUT -H "Content-Type: application/json" \
-     -d '{"volume": 0.75}' \
-     http://localhost:1082/api/v1/pipewire/volume/default
-```
-
-**Set volume using decibel value:**
-```bash
-curl -X PUT -H "Content-Type: application/json" \
-     -d '{"volume_db": -12.0}' \
-     http://localhost:1082/api/v1/pipewire/volume/default
-```
-
-**Set volume of specific control:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"volume": 0.5}' \
-     "http://localhost:1082/api/v1/pipewire/volume/44:Built-in%20Audio%20Stereo"
-```
-
-**Mute a control (set volume to 0):**
-```bash
-curl -X PUT -H "Content-Type: application/json" \
-     -d '{"volume": 0.0}' \
-     http://localhost:1082/api/v1/pipewire/volume/default
-```
-
-**Set very quiet volume (-40 dB):**
-```bash
-curl -X PUT -H "Content-Type: application/json" \
-     -d '{"volume_db": -40.0}' \
-     http://localhost:1082/api/v1/pipewire/volume/default
-```
-
-**Get mixer analysis (inferred mode and balance):**
-```bash
-curl http://localhost:1082/api/v1/pipewire/mixer/analysis
-```
-
-**Get current monostereo mode:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/monostereo
-```
-
-**Set monostereo mode to mono:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"mode": "mono"}' \
-     http://localhost:1082/api/v1/pipewire/monostereo
-```
-
-**Set monostereo mode to left channel only:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"mode": "left"}' \
-     http://localhost:1082/api/v1/pipewire/monostereo
-```
-
-**Get current balance:**
-```bash
-curl http://localhost:1082/api/v1/pipewire/balance
-```
-
-**Set balance to favor left channel:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"balance": -0.3}' \
-     http://localhost:1082/api/v1/pipewire/balance
-```
-
-**Set balance to full right:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"balance": 1.0}' \
-     http://localhost:1082/api/v1/pipewire/balance
-```
-
-**Set balance to center:**
-```bash
-curl -X POST -H "Content-Type: application/json" \
-     -d '{"balance": 0.0}' \
-     http://localhost:1082/api/v1/pipewire/balance
-```
-
 ### Settings Management
 
 **List all registered and saved settings:**
@@ -2593,11 +1981,6 @@ curl -X POST http://localhost:1081/api/v1/settings/save
 **Restore all saved settings:**
 ```bash
 curl -X POST http://localhost:1081/api/v1/settings/restore
-```
-
-**Save current default PipeWire volume:**
-```bash
-curl -X POST http://localhost:1082/api/v1/pipewire/save-default-volume
 ```
 
 ### Filesystem Management

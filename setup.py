@@ -35,9 +35,6 @@ setup(
             'systemd/config-server.service',
             'systemd/config-detect.service'
         ]),
-        ('/usr/lib/systemd/user', [
-            'systemd/config-server-user.service'
-        ]),
         ('/usr/share/man/man1', [
             'man/config-asoundconf.1',
             'man/config-avahi.1',
