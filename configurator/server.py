@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, PipewireHandler, VolumeHandler, BluetoothHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -31,13 +31,10 @@ from .settings_manager import SettingsManager
 # Set up logging
 logger = logging.getLogger(__name__)
 
-# PipeWire daemon URL for proxy communication
-PIPEWIRE_DAEMON_URL = "http://localhost:1082"
-
 class ConfigAPIServer:
     """REST API server for HiFiBerry configuration services"""
     
-    def __init__(self, host='0.0.0.0', port=1081, debug=False, user_mode=False, system_mode=False, no_waitress=False):
+    def __init__(self, host='0.0.0.0', port=1081, debug=False, no_waitress=False):
         """
         Initialize the API server
         
@@ -45,16 +42,12 @@ class ConfigAPIServer:
             host: Host to bind to (default: 0.0.0.0)
             port: Port to listen on (default: 1081)
             debug: Enable debug mode
-            user_mode: Run in user mode (PipeWire endpoints only)
-            system_mode: Run in system mode (exclude PipeWire endpoints)
             no_waitress: Disable Waitress, use Flask server instead
         """
         logger.info("ConfigAPIServer.__init__: Starting initialization")
         self.host = host
         self.port = port
         self.debug = debug
-        self.user_mode = user_mode
-        self.system_mode = system_mode
         self.no_waitress = no_waitress
         
         logger.info("ConfigAPIServer.__init__: Creating Flask app")
@@ -66,50 +59,22 @@ class ConfigAPIServer:
         logger.info("ConfigAPIServer.__init__: Creating SystemInfo")
         self.systeminfo = SystemInfo()
         
-        # Initialize handlers based on mode
-        if not user_mode:  # System mode or full mode
-            logger.info("ConfigAPIServer.__init__: Initializing system handlers")
-            self.systemd_handler = SystemdHandler()
-            self.smb_handler = SMBHandler()
-            self.hostname_handler = HostnameHandler()
-            self.soundcard_handler = SoundcardHandler()
-            self.system_handler = SystemHandler()
-            self.filesystem_handler = FilesystemHandler()
-            self.script_handler = ScriptHandler()
-            self.network_handler = NetworkHandler()
-            self.i2c_handler = I2CHandler()
-            self.volume_handler = VolumeHandler()
-            self.bluetooth_handler = BluetoothHandler()
-        else:
-            # User mode - minimal handlers
-            logger.info("ConfigAPIServer.__init__: User mode - skipping system handlers")
-            self.systemd_handler = None
-            self.smb_handler = None
-            self.hostname_handler = None
-            self.soundcard_handler = None
-            self.system_handler = None
-            self.filesystem_handler = None
-            self.script_handler = None
-            self.network_handler = None
-            self.i2c_handler = None
-            self.volume_handler = None
-            self.bluetooth_handler = None
-            
-        if not system_mode:  # User mode only
-            logger.info("ConfigAPIServer.__init__: Initializing PipeWire handler")
-            self.pipewire_handler = PipewireHandler()
-        else:
-            # System mode - no PipeWire handler, will proxy requests
-            logger.info("ConfigAPIServer.__init__: System mode - skipping PipeWire handler")
-            self.pipewire_handler = None
+        # Initialize all handlers
+        logger.info("ConfigAPIServer.__init__: Initializing handlers")
+        self.systemd_handler = SystemdHandler()
+        self.smb_handler = SMBHandler()
+        self.hostname_handler = HostnameHandler()
+        self.soundcard_handler = SoundcardHandler()
+        self.system_handler = SystemHandler()
+        self.filesystem_handler = FilesystemHandler()
+        self.script_handler = ScriptHandler()
+        self.network_handler = NetworkHandler()
+        self.i2c_handler = I2CHandler()
+        self.volume_handler = VolumeHandler()
+        self.bluetooth_handler = BluetoothHandler()
             
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
         self.settings_manager = SettingsManager(self.configdb)
-        
-        # Set settings manager on handlers that need it
-        if self.pipewire_handler:
-            logger.info("ConfigAPIServer.__init__: Setting settings manager on PipeWire handler")
-            self.pipewire_handler.set_settings_manager(self.settings_manager)
         
         # Configure Flask logging
         if not debug:
@@ -127,309 +92,7 @@ class ConfigAPIServer:
     
     def _register_module_settings(self):
         """Register settings that should be saved/restored by modules"""
-        # Register PipeWire default volume setting
-        self.settings_manager.register_setting(
-            "pipewire_default_volume",
-            self._save_pipewire_default_volume,
-            self._restore_pipewire_default_volume
-        )
-        # Register PipeWire mixer state (mode/balance) setting
-        self.settings_manager.register_setting(
-            "pipewire_mixer_state",
-            self._save_pipewire_mixer_state,
-            self._restore_pipewire_mixer_state
-        )
-    
-    def _save_pipewire_default_volume(self):
-        """Save current default PipeWire volume"""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/devices/default-sink", timeout=5)
-            if response.status_code == 200:
-                sink_data = response.json()
-                if sink_data.get('success'):
-                    default_sink = sink_data.get('data', {}).get('default_sink')
-                    if default_sink:
-                        # Get volume for the default sink
-                        volume_response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/volume/{default_sink}", timeout=5)
-                        if volume_response.status_code == 200:
-                            volume_data = volume_response.json()
-                            if volume_data.get('success'):
-                                volume = volume_data.get('data', {}).get('volume')
-                                if volume is not None:
-                                    logger.info(f"Saving PipeWire default volume: {volume}")
-                                    return volume
-            return None
-        except Exception as e:
-            logger.error(f"Error saving PipeWire default volume: {e}")
-            return None
-    
-    def _restore_pipewire_default_volume(self, value):
-        """Restore default PipeWire volume"""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            # Get default sink
-            response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/devices/default-sink", timeout=5)
-            if response.status_code == 200:
-                sink_data = response.json()
-                if sink_data.get('success'):
-                    default_sink = sink_data.get('data', {}).get('default_sink')
-                    if default_sink:
-                        volume = float(value)
-                        if 0.0 <= volume <= 1.0:
-                            # Set volume
-                            volume_response = requests.post(
-                                f"{PIPEWIRE_DAEMON_URL}/api/v1/volume/{default_sink}",
-                                json={'volume': volume},
-                                timeout=5
-                            )
-                            if volume_response.status_code == 200:
-                                logger.info(f"Restored PipeWire default volume to: {volume}")
-                                return True
-                            else:
-                                logger.error(f"Failed to restore PipeWire default volume to: {volume}")
-                                return False
-                        else:
-                            logger.error(f"Invalid volume value for restore: {volume}")
-                            return False
-                    else:
-                        logger.error("No default sink found for volume restore")
-                        return False
-            return False
-        except Exception as e:
-            logger.error(f"Error restoring PipeWire default volume: {e}")
-            return False
-
-    def _save_pipewire_mixer_state(self):
-        """Save current monostereo mode and balance state encoded as 'monostereo_mode,balance'."""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            # Get monostereo mode
-            mono_response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/mixer/monostereo", timeout=5)
-            balance_response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/mixer/balance", timeout=5)
-            
-            monostereo_mode = None
-            balance = None
-            
-            if mono_response.status_code == 200:
-                mono_data = mono_response.json()
-                if mono_data.get('success'):
-                    monostereo_mode = mono_data.get('data', {}).get('mode')
-            
-            if balance_response.status_code == 200:
-                balance_data = balance_response.json()
-                if balance_data.get('success'):
-                    balance = balance_data.get('data', {}).get('balance')
-            
-            if monostereo_mode is None or monostereo_mode == 'unknown':
-                return None
-            if balance is None:
-                balance = 0.0
-            
-            # Round balance for stability
-            balance = max(-1.0, min(1.0, balance))
-            encoded = f"{monostereo_mode},{balance:.6f}"
-            logger.info(f"Saving PipeWire mixer state: {encoded}")
-            return encoded
-        except Exception as e:
-            logger.error(f"Error saving PipeWire mixer state: {e}")
-            return None
-
-    def _restore_pipewire_mixer_state(self, value):
-        """Restore monostereo mode and balance from encoded 'monostereo_mode,balance' string."""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            if not value:
-                return False
-            parts = str(value).split(',')
-            if len(parts) != 2:
-                logger.warning(f"Invalid mixer state format: {value}")
-                return False
-            monostereo_mode = parts[0].strip()
-            try:
-                balance = float(parts[1])
-            except Exception:
-                balance = 0.0
-            
-            success = True
-            discrete_modes = {'mono','stereo','left','right'}
-            
-            # Set monostereo mode
-            if monostereo_mode in discrete_modes:
-                mono_response = requests.post(
-                    f"{PIPEWIRE_DAEMON_URL}/api/v1/mixer/monostereo",
-                    json={'mode': monostereo_mode},
-                    timeout=5
-                )
-                if mono_response.status_code == 200:
-                    logger.info(f"Restored PipeWire monostereo mode: {monostereo_mode}")
-                else:
-                    logger.error(f"Failed to restore PipeWire monostereo mode: {monostereo_mode}")
-                    success = False
-            else:
-                logger.warning(f"Unknown saved monostereo mode '{monostereo_mode}', skipping restore")
-                return False
-            
-            # Set balance (only if non-zero)
-            if abs(balance) > 0.001:
-                balance_response = requests.post(
-                    f"{PIPEWIRE_DAEMON_URL}/api/v1/mixer/balance",
-                    json={'balance': balance},
-                    timeout=5
-                )
-                if balance_response.status_code == 200:
-                    logger.info(f"Restored PipeWire balance: {balance}")
-                else:
-                    logger.error(f"Failed to restore PipeWire balance: {balance}")
-                    success = False
-            
-            if not success:
-                logger.error(f"Failed to restore PipeWire mixer state: mode={monostereo_mode} balance={balance}")
-            
-            return success
-        except Exception as e:
-            logger.error(f"Error restoring PipeWire mixer state: {e}")
-            return False
-    
-    def _restore_pipewire_default_volume(self, value):
-        """Restore default PipeWire volume"""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            # Get default sink
-            response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/default-sink", timeout=5)
-            if response.status_code == 200:
-                sink_data = response.json()
-                if sink_data.get('status') == 'success':
-                    default_sink = sink_data.get('data', {}).get('default_sink')
-                    if default_sink:
-                        volume = float(value)
-                        if 0.0 <= volume <= 1.0:
-                            # Set volume
-                            volume_response = requests.put(
-                                f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/volume/{default_sink}",
-                                json={'volume': volume},
-                                timeout=5
-                            )
-                            if volume_response.status_code == 200:
-                                logger.info(f"Restored PipeWire default volume to: {volume}")
-                                return True
-                            else:
-                                logger.error(f"Failed to restore PipeWire default volume to: {volume}")
-                                return False
-                        else:
-                            logger.error(f"Invalid volume value for restore: {volume}")
-                            return False
-                    else:
-                        logger.error("No default sink found for volume restore")
-                        return False
-            return False
-        except Exception as e:
-            logger.error(f"Error restoring PipeWire default volume: {e}")
-            return False
-
-    def _save_pipewire_mixer_state(self):
-        """Save current monostereo mode and balance state encoded as 'monostereo_mode,balance'."""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            # Get monostereo mode
-            mono_response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/monostereo", timeout=5)
-            balance_response = requests.get(f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/balance", timeout=5)
-            
-            monostereo_mode = None
-            balance = None
-            
-            if mono_response.status_code == 200:
-                mono_data = mono_response.json()
-                if mono_data.get('status') == 'success':
-                    monostereo_mode = mono_data.get('data', {}).get('monostereo_mode')
-            
-            if balance_response.status_code == 200:
-                balance_data = balance_response.json()
-                if balance_data.get('status') == 'success':
-                    balance = balance_data.get('data', {}).get('balance')
-            
-            if monostereo_mode is None or monostereo_mode == 'unknown':
-                return None
-            if balance is None:
-                balance = 0.0
-            
-            # Round balance for stability
-            balance = max(-1.0, min(1.0, balance))
-            encoded = f"{monostereo_mode},{balance:.6f}"
-            logger.info(f"Saving PipeWire mixer state: {encoded}")
-            return encoded
-        except Exception as e:
-            logger.error(f"Error saving PipeWire mixer state: {e}")
-            return None
-
-    def _restore_pipewire_mixer_state(self, value):
-        """Restore monostereo mode and balance from encoded 'monostereo_mode,balance' string."""
-        try:
-            # Use HTTP request to PipeWire daemon instead of direct access
-            import requests
-            
-            if not value:
-                return False
-            parts = str(value).split(',')
-            if len(parts) != 2:
-                logger.warning(f"Invalid mixer state format: {value}")
-                return False
-            monostereo_mode = parts[0].strip()
-            try:
-                balance = float(parts[1])
-            except Exception:
-                balance = 0.0
-            
-            success = True
-            discrete_modes = {'mono','stereo','left','right'}
-            
-            # Set monostereo mode
-            if monostereo_mode in discrete_modes:
-                mono_response = requests.post(
-                    f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/monostereo",
-                    json={'mode': monostereo_mode},
-                    timeout=5
-                )
-                if mono_response.status_code == 200:
-                    logger.info(f"Restored PipeWire monostereo mode: {monostereo_mode}")
-                else:
-                    logger.error(f"Failed to restore PipeWire monostereo mode: {monostereo_mode}")
-                    success = False
-            else:
-                logger.warning(f"Unknown saved monostereo mode '{monostereo_mode}', skipping restore")
-                return False
-            
-            # Set balance (only if non-zero)
-            if abs(balance) > 0.001:
-                balance_response = requests.post(
-                    f"{PIPEWIRE_DAEMON_URL}/api/v1/pipewire/balance",
-                    json={'balance': balance},
-                    timeout=5
-                )
-                if balance_response.status_code == 200:
-                    logger.info(f"Restored PipeWire balance: {balance}")
-                else:
-                    logger.error(f"Failed to restore PipeWire balance: {balance}")
-                    success = False
-            
-            if not success:
-                logger.error(f"Failed to restore PipeWire mixer state: mode={monostereo_mode} balance={balance}")
-            
-            return success
-        except Exception as e:
-            logger.error(f"Error restoring PipeWire mixer state: {e}")
-            return False
+        pass
     
     def restore_settings(self):
         """Restore all registered settings from configdb"""
@@ -486,19 +149,6 @@ class ConfigAPIServer:
                     'bluetooth_passkey': '/api/v1/bluetooth/passkey',
                     'bluetooth_modal': '/api/v1/bluetooth/modal',
                     'bluetooth_unpair': '/api/v1/bluetooth/unpair',
-                    'pipewire_devices': '/api/v1/pipewire/devices',
-                    'pipewire_default_sink': '/api/v1/pipewire/default-sink',
-                    'pipewire_default_source': '/api/v1/pipewire/default-source',
-                    'pipewire_volume': '/api/v1/pipewire/volume/<control>',
-                    'pipewire_volume_set': '/api/v1/pipewire/volume/<control>',
-                    'pipewire_filtergraph': '/api/v1/pipewire/filtergraph',
-                    'pipewire_mixer_analysis': '/api/v1/pipewire/mixer/analysis',
-                    'pipewire_monostereo_get': '/api/v1/pipewire/monostereo',
-                    'pipewire_monostereo_set': '/api/v1/pipewire/monostereo',
-                    'pipewire_balance_get': '/api/v1/pipewire/balance',
-                    'pipewire_balance_set': '/api/v1/pipewire/balance',
-                    'pipewire_debug': '/api/v1/pipewire/debug',
-                    'pipewire_save_default_volume': '/api/v1/pipewire/save-default-volume',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
                     'settings_restore': '/api/v1/settings/restore'
@@ -639,51 +289,26 @@ class ConfigAPIServer:
         @self.app.route('/api/v1/volume/headphone/controls', methods=['GET'])
         def list_headphone_controls():
             """List available headphone volume controls"""
-            if self.volume_handler is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Volume operations not available in user mode'
-                }), 503
             return self.volume_handler.handle_list_headphone_controls()
 
         @self.app.route('/api/v1/volume/headphone', methods=['GET'])
         def get_headphone_volume():
             """Get current headphone volume"""
-            if self.volume_handler is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Volume operations not available in user mode'
-                }), 503
             return self.volume_handler.handle_get_headphone_volume()
 
         @self.app.route('/api/v1/volume/headphone', methods=['POST'])
         def set_headphone_volume():
             """Set headphone volume"""
-            if self.volume_handler is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Volume operations not available in user mode'
-                }), 503
             return self.volume_handler.handle_set_headphone_volume()
 
         @self.app.route('/api/v1/volume/headphone/store', methods=['POST'])
         def store_headphone_volume():
             """Store current headphone volume"""
-            if self.volume_handler is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Volume operations not available in user mode'
-                }), 503
             return self.volume_handler.handle_store_headphone_volume()
 
         @self.app.route('/api/v1/volume/headphone/restore', methods=['POST'])
         def restore_headphone_volume():
             """Restore stored headphone volume"""
-            if self.volume_handler is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Volume operations not available in user mode'
-                }), 503
             return self.volume_handler.handle_restore_headphone_volume()
 
         # System endpoints
@@ -796,137 +421,6 @@ class ConfigAPIServer:
 
 
 
-        # PipeWire endpoints
-        @self.app.route('/api/v1/pipewire/devices', methods=['GET'])
-        def list_pipewire_devices():
-            """List all available PipeWire devices (sinks and sources)"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_list_controls()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/default-sink', methods=['GET'])
-        def get_default_sink():
-            """Get the default PipeWire sink"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_default_sink()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/default-source', methods=['GET'])
-        def get_default_source():
-            """Get the default PipeWire source"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_default_source()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/volume/<path:control>', methods=['GET'])
-        def get_pipewire_volume(control):
-            """Get volume for a PipeWire control, returns both linear and dB values"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_volume(control)
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/volume/<path:control>', methods=['PUT', 'POST'])
-        def set_pipewire_volume(control):
-            """Set volume for a PipeWire control, accepts both linear (volume) and dB (volume_db) values"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_set_volume(control)
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/save-default-volume', methods=['POST'])
-        def save_pipewire_default_volume():
-            """Save the current default PipeWire volume to settings"""
-            try:
-                success = self.settings_manager.save_setting('pipewire_default_volume')
-                
-                if success:
-                    return jsonify({
-                        'status': 'success',
-                        'message': 'Default PipeWire volume saved successfully',
-                        'data': {
-                            'setting': 'pipewire_default_volume',
-                            'saved': True
-                        }
-                    })
-                else:
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Failed to save default PipeWire volume'
-                    }), 500
-                    
-            except Exception as e:
-                logger.error(f"Error saving default volume: {e}")
-                return jsonify({
-                    'status': 'error',
-                    'message': str(e)
-                }), 500
-
-        @self.app.route('/api/v1/pipewire/filtergraph', methods=['GET'])
-        def get_pipewire_filtergraph():
-            """Get the PipeWire filter/connection graph in GraphViz DOT format (text/plain)."""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_filtergraph()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        # PipeWire mixer / balance endpoints
-        @self.app.route('/api/v1/pipewire/mixer/analysis', methods=['GET'])
-        def get_pipewire_mixer_analysis():
-            """Get inferred monostereo mode and balance plus gains"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_mixer_mode()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/monostereo', methods=['GET'])
-        def get_pipewire_monostereo():
-            """Get current monostereo mode"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_monostereo()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/monostereo', methods=['POST'])
-        def set_pipewire_monostereo():
-            """Set monostereo mode (stereo/mono/left/right)"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_set_monostereo()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/balance', methods=['GET'])
-        def get_pipewire_balance():
-            """Get current balance"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_get_balance()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/balance', methods=['POST'])
-        def set_pipewire_balance():
-            """Set balance (-1 to 1)"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_set_balance()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/debug', methods=['GET'])
-        def get_pipewire_debug():
-            """Get PipeWire debugging information"""
-            if self.pipewire_handler:
-                return self.pipewire_handler.handle_debug_info()
-            else:
-                return self._proxy_to_user_daemon(request.path)
-
-        @self.app.route('/api/v1/pipewire/mixer/set', methods=['POST'])
-        def set_pipewire_mixer():
-            """DEPRECATED: Set mixer mode and/or balance in one operation. Use separate monostereo and balance endpoints."""
-            return self.pipewire_handler.handle_set_mixer()
-
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])
         def save_settings():
@@ -1021,57 +515,6 @@ class ConfigAPIServer:
                 'message': 'Internal server error'
             }), 500
     
-    def _proxy_to_user_daemon(self, path: str):
-        """Proxy PipeWire requests to user daemon on port 1082"""
-        user_daemon_url = f"http://127.0.0.1:1082{path}"
-        
-        try:
-            # Forward the request with same method, headers, and data
-            if request.method == 'GET':
-                response = requests.get(user_daemon_url, params=request.args, timeout=10)
-            elif request.method == 'POST':
-                response = requests.post(
-                    user_daemon_url, 
-                    json=request.get_json() if request.is_json else None,
-                    data=request.get_data() if not request.is_json else None,
-                    params=request.args,
-                    timeout=10
-                )
-            elif request.method == 'PUT':
-                response = requests.put(
-                    user_daemon_url,
-                    json=request.get_json() if request.is_json else None, 
-                    data=request.get_data() if not request.is_json else None,
-                    params=request.args,
-                    timeout=10
-                )
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Method {request.method} not supported for proxy'
-                }), 405
-                
-            # Return the proxied response
-            return make_response(response.content, response.status_code, 
-                               {'Content-Type': response.headers.get('Content-Type', 'application/json')})
-                               
-        except requests.exceptions.ConnectionError:
-            return jsonify({
-                'status': 'error',
-                'message': 'User daemon (PipeWire service) not available'
-            }), 503
-        except requests.exceptions.Timeout:
-            return jsonify({
-                'status': 'error', 
-                'message': 'User daemon request timeout'
-            }), 504
-        except Exception as e:
-            logger.error(f"Error proxying to user daemon: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Proxy request failed'
-            }), 500
-    
     def run(self):
         """Start the API server"""
         logger.info(f"Starting HiFiBerry Configuration Server on {self.host}:{self.port}")
@@ -1080,8 +523,7 @@ class ConfigAPIServer:
                 # Use Waitress production server (prevents thread exhaustion)
                 logger.info("Using Waitress WSGI server (production mode)")
                 
-                # User mode only needs minimal threads (just PipeWire endpoints)
-                thread_count = 2 if self.user_mode else 6
+                thread_count = 6
                 logger.info(f"Waitress configuration: threads={thread_count}, host={self.host}, port={self.port}")
                 
                 serve(
@@ -1149,10 +591,6 @@ def parse_arguments():
                         help='Restore saved settings from configdb on startup')
     parser.add_argument('--auto-restore-settings', action='store_true',
                         help='Automatically restore saved settings during normal startup')
-    parser.add_argument('--user-mode', action='store_true',
-                        help='Run in user mode (PipeWire endpoints only)')
-    parser.add_argument('--system-mode', action='store_true',
-                        help='Run in system mode (exclude PipeWire endpoints)')
     parser.add_argument('--no-waitress', action='store_true',
                         help='Disable Waitress, use Flask development server instead')
     
@@ -1169,14 +607,13 @@ def main():
         
         args = parse_arguments()
         
-        print(f"config-server: Arguments parsed - mode={'user' if args.user_mode else 'system' if args.system_mode else 'full'}, port={args.port}", file=sys.stderr, flush=True)
+        print(f"config-server: Arguments parsed - port={args.port}", file=sys.stderr, flush=True)
         
         # Configure logging
         setup_logging(args.verbose)
         
         logger.info("Starting HiFiBerry Configuration Server")
         logger.info(f"Version: {__version__}")
-        logger.info(f"Mode: {'user' if args.user_mode else 'system' if args.system_mode else 'full'}")
         logger.info(f"Host: {args.host}, Port: {args.port}")
         
         # Create the server
@@ -1185,8 +622,6 @@ def main():
             host=args.host,
             port=args.port,
             debug=args.debug,
-            user_mode=args.user_mode,
-            system_mode=args.system_mode,
             no_waitress=args.no_waitress
         )
         logger.info("Server instance created successfully")
