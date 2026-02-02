@@ -4,7 +4,7 @@ Version information for HiFiBerry Configurator
 Single source of truth for version number
 """
 
-__version__ = "2.9.1"
+__version__ = "2.12.2"
 __version_info__ = tuple(map(int, __version__.split('.')))
 
 # For backward compatibility
