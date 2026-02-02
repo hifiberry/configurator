@@ -1,0 +1,13 @@
+[Unit]
+Description=Create system UUID file
+Documentation=man:uuid(1)
+Before=config-server.service
+ConditionPathExists=!/etc/uuid
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '/usr/bin/uuid > /etc/uuid'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

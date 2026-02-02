@@ -33,6 +33,7 @@ setup(
             'systemd/sambamount.service', 
             'systemd/volume-restore.service',
             'systemd/config-server.service',
+            'systemd/create-uuid.service',
             'systemd/config-detect.service'
         ]),
         ('/usr/share/man/man1', [
