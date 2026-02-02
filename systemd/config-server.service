@@ -8,7 +8,7 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose --auto-restore-settings --system-mode
+ExecStart=/usr/bin/config-server --host 0.0.0.0 --port 1081 --verbose --auto-restore-settings
 Restart=always
 RestartSec=5
 User=root
