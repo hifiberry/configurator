@@ -2,7 +2,7 @@
 Description=HiFiBerry Configuration Server
 Documentation=man:config-server(1)
 Wants=network-online.target config-detect.service
-After=network-online.target systemd-modules-load.service config-detect.service
+After=network-online.target systemd-modules-load.service config-detect.service create-uuid.service
 StartLimitIntervalSec=30
 StartLimitBurst=3
 
