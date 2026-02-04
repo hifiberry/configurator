@@ -48,7 +48,7 @@ def _validate_dsp_card():
         return False
 
 class SoundcardDetector:
-    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1, verbose=False):
+    def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1, verbose=False, include_pcm5102=False):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
         self.detected_card = None  # Card name (e.g., "DAC+ DSP")
@@ -58,6 +58,7 @@ class SoundcardDetector:
         self.hifiberry_logger = None
         self.hat_attempts = hat_attempts
         self.verbose = verbose
+        self.include_pcm5102 = include_pcm5102
         
         # Setup HiFiBerry logging if requested
         if self.hifiberry_log_file:
@@ -351,7 +352,11 @@ class SoundcardDetector:
         # Try aplay detection as fallback
         if self.verbose:
             logging.info("Step 3: Attempting aplay detection...")
-        found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
+        # Conditionally filter out pcm5102 cards unless include_pcm5102 is True
+        if self.include_pcm5102:
+            found = self._run_command("aplay -l | grep hifiberry")
+        else:
+            found = self._run_command("aplay -l | grep hifiberry | grep -v pcm5102")
         if found:
             logging.info(f"Found HiFiBerry card via aplay: {found}")
             detected_overlay = self._map_aplay_to_overlay(found)
@@ -405,7 +410,8 @@ class SoundcardDetector:
         
         # Common patterns in aplay output for HiFiBerry cards
         aplay_patterns = {
-            "snd_rpi_hifiberry_dac": "dacplus-std",
+            "snd_rpi_hifiberry_dac": "dac",
+            "pcm5102a-hifi": "dac",
             "snd_rpi_hifiberry_dacplus": "dacplus-std", 
             "snd_rpi_hifiberry_dacplusadc": "dacplusadc",
             "snd_rpi_hifiberry_dacplusadcpro": "dacplusadcpro",
