@@ -135,9 +135,12 @@ class ConfigTxt:
 
     def remove_hifiberry_overlays(self):
         original_length = len(self.lines)
-        self.lines = [line for line in self.lines if not line.strip().startswith("dtoverlay=hifiberry")]
+        # Remove HiFiBerry overlays and the detection disabled comment
+        self.lines = [line for line in self.lines 
+                      if not line.strip().startswith("dtoverlay=hifiberry") 
+                      and line.strip() != HIFIBERRY_DETECTION_DISABLED]
         if len(self.lines) < original_length:
-            logging.info("All HiFiBerry overlays removed.")
+            logging.info("All HiFiBerry overlays and detection comment removed.")
 
     def _update_interface(self, interface, enable):
         state = "on" if enable else "off"
