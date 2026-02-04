@@ -1,3 +1,12 @@
+hifiberry-configurator (2.12.3) stable; urgency=medium
+
+  * Added fixedInConfigTxt attribute to systeminfo API to indicate when sound card is loaded from config.txt
+  * Added include_pcm5102 parameter to SoundcardDetector to support DAC+ Zero/Light card detection
+  * Updated sound card detection to handle multiple card names (e.g., "DAC+ Light/DAC+ Zero/MiniAmp")
+  * Improved aplay-based detection to identify pcm5102-based cards
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 04 Feb 2026 10:00:47 +0000
+
 hifiberry-configurator (2.12.2) stable; urgency=medium
 
   * Added create-uuid.service to automatically create /etc/uuid on first boot

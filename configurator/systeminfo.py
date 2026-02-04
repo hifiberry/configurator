@@ -140,10 +140,46 @@ class SystemInfo:
             self.logger.error(f"Failed to get hostnames: {e}")
             return None, None
     
+    def _is_soundcard_fixed_in_config_txt(self, soundcard) -> bool:
+        """
+        Check if a soundcard is fixed/configured in config.txt and actually loaded correctly.
+        
+        Args:
+            soundcard: Soundcard object with detected card information
+            
+        Returns:
+            bool: True if aplay lists a HiFiBerry card (indicating config.txt has a working configuration), False otherwise
+        """
+        try:
+            import subprocess
+            
+            # Run aplay -l to get list of sound cards
+            result = subprocess.check_output("aplay -l", shell=True, text=True, stderr=subprocess.DEVNULL)
+            
+            # Check if any HiFiBerry card is listed
+            if 'hifiberry' not in result.lower():
+                return False
+            
+            # For more detailed checking, we could verify if the specific card type matches
+            # But for now, just confirming any HiFiBerry card is loaded is sufficient
+            # since the system typically only has one HiFiBerry card configured
+            return True
+            
+        except subprocess.CalledProcessError:
+            # aplay -l failed (no sound cards found)
+            return False
+        except Exception as e:
+            self.logger.error(f"Failed to check if soundcard is configured: {e}")
+            return False
+    
     def get_soundcard_info(self) -> dict:
         """Get sound card information as a dictionary"""
         try:
             soundcard = self._get_soundcard()
+            
+            # Check if the detected card is actually configured/loaded correctly
+            fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
+            
             return {
                 'name': soundcard.name,
                 'volume_control': soundcard.volume_control,
@@ -154,7 +190,8 @@ class SystemInfo:
                 'features': soundcard.features,
                 'hat_name': soundcard.hat_name,
                 'supports_dsp': soundcard.supports_dsp,
-                'card_type': soundcard.card_type
+                'card_type': soundcard.card_type,
+                'fixedInConfigTxt': fixed_in_config_txt
             }
         except Exception as e:
             self.logger.error(f"Failed to get sound card info: {e}")
@@ -180,7 +217,8 @@ class SystemInfo:
                                     'features': [],
                                     'hat_name': 'unknown',
                                     'supports_dsp': False,
-                                    'card_type': ['DAC']
+                                    'card_type': ['DAC'],
+                                    'fixedInConfigTxt': True
                                 }
             except:
                 pass
@@ -195,7 +233,8 @@ class SystemInfo:
                 'features': [],
                 'hat_name': None,
                 'supports_dsp': False,
-                'card_type': []
+                'card_type': [],
+                'fixedInConfigTxt': False
             }
     
     def get_system_info_dict(self) -> Dict[str, Any]:

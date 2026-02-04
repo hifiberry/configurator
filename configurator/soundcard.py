@@ -527,23 +527,31 @@ class Soundcard:
             from configurator.soundcard_detector import SoundcardDetector
             
             # Use SoundcardDetector for comprehensive detection
-            detector = SoundcardDetector()
+            # Enable pcm5102 detection to support DAC+ Zero/Light cards
+            detector = SoundcardDetector(include_pcm5102=True)
             detector.detect_card()
             
             # Check if a card was detected
             if detector.detected_card:
-                # First try exact name matching
-                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                    if card_name == detector.detected_card:
-                        logging.info(f"Detected sound card: {card_name}")
-                        return {"name": card_name, **attributes}
+                # Handle multiple card names separated by "/"
+                detected_cards = detector.detected_card.split("/")
                 
-                # Then try alias matching
-                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                    aliases = attributes.get("aliases", [])
-                    if detector.detected_card in aliases:
-                        logging.info(f"Detected sound card via alias: {detector.detected_card} -> {card_name}")
-                        return {"name": card_name, **attributes}
+                # First try exact name matching for each detected card
+                for detected_name in detected_cards:
+                    detected_name = detected_name.strip()
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        if card_name == detected_name:
+                            logging.info(f"Detected sound card: {card_name}")
+                            return {"name": card_name, **attributes}
+                
+                # Then try alias matching for each detected card
+                for detected_name in detected_cards:
+                    detected_name = detected_name.strip()
+                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        aliases = attributes.get("aliases", [])
+                        if detected_name in aliases:
+                            logging.info(f"Detected sound card via alias: {detected_name} -> {card_name}")
+                            return {"name": card_name, **attributes}
                 
                 # If not found in definitions or aliases, log warning and return None
                 logging.warning(f"Detected card '{detector.detected_card}' not found in SOUND_CARD_DEFINITIONS or aliases")
