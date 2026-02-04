@@ -55,10 +55,18 @@ class SystemInfo:
                 self._system_uuid = None
         return self._system_uuid
     
-    def _get_soundcard(self) -> Soundcard:
-        """Get sound card information (cached)"""
-        if self._soundcard is None:
-            self._soundcard = Soundcard()
+    def _get_soundcard(self, prioritize_aplay=False) -> Soundcard:
+        """Get sound card information (cached)
+        
+        Args:
+            prioritize_aplay: If True, use aplay -l as the highest priority detection source
+        """
+        if self._soundcard is None or prioritize_aplay:
+            # Don't cache when prioritize_aplay is True to ensure fresh detection
+            if prioritize_aplay:
+                return Soundcard(prioritize_aplay=True)
+            else:
+                self._soundcard = Soundcard()
         return self._soundcard
     
     def _get_hostname_info(self) -> Tuple[Optional[str], Optional[str]]:
@@ -142,29 +150,30 @@ class SystemInfo:
     
     def _is_soundcard_fixed_in_config_txt(self, soundcard) -> bool:
         """
-        Check if a soundcard is fixed/configured in config.txt and actually loaded correctly.
+        Check if soundcard detection is disabled via config.txt comment.
+        
+        Returns True only if the "# HiFiBerry sound detection disabled" comment is present,
+        indicating the user has explicitly configured a fixed sound card.
         
         Args:
             soundcard: Soundcard object with detected card information
             
         Returns:
-            bool: True if aplay lists a HiFiBerry card (indicating config.txt has a working configuration), False otherwise
+            bool: True if config.txt contains the detection disabled comment, False otherwise
         """
         try:
-            import subprocess
+            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
             
-            # Run aplay -l to get list of sound cards
-            result = subprocess.check_output("aplay -l", shell=True, text=True, stderr=subprocess.DEVNULL)
+            # Read config.txt
+            with open('/boot/firmware/config.txt', 'r') as f:
+                config_content = f.read()
             
-            # Check if any HiFiBerry card is listed
-            if 'hifiberry' not in result.lower():
-                return False
+            # Check if the detection disabled comment is present
+            return HIFIBERRY_DETECTION_DISABLED in config_content
             
-            # For more detailed checking, we could verify if the specific card type matches
-            # But for now, just confirming any HiFiBerry card is loaded is sufficient
-            # since the system typically only has one HiFiBerry card configured
-            return True
-            
+        except Exception as e:
+            self.logger.warning(f"Could not check config.txt for detection disabled comment: {e}")
+            return False
         except subprocess.CalledProcessError:
             # aplay -l failed (no sound cards found)
             return False
@@ -173,14 +182,24 @@ class SystemInfo:
             return False
     
     def get_soundcard_info(self) -> dict:
-        """Get sound card information as a dictionary"""
+        """Get sound card information as a dictionary
+        
+        Uses aplay -l as the highest priority source for detection,
+        ensuring we always show the actual loaded ALSA driver.
+        """
         try:
-            soundcard = self._get_soundcard()
+            # Use Soundcard with aplay priority to ensure we detect the actual loaded driver
+            soundcard = self._get_soundcard(prioritize_aplay=True)
             
             # Check if the detected card is actually configured/loaded correctly
             fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
             
-            return {
+            # Check for DSP program information if DSP is supported
+            dsp_info = None
+            if soundcard.supports_dsp:
+                dsp_info = self._get_dsp_program_info()
+            
+            result = {
                 'name': soundcard.name,
                 'volume_control': soundcard.volume_control,
                 'headphone_volume_control': soundcard.headphone_volume_control,
@@ -193,35 +212,17 @@ class SystemInfo:
                 'card_type': soundcard.card_type,
                 'fixedInConfigTxt': fixed_in_config_txt
             }
+            
+            # Add DSP information if available
+            if dsp_info is not None:
+                result['dsp_info'] = dsp_info
+            
+            return result
+            
         except Exception as e:
             self.logger.error(f"Failed to get sound card info: {e}")
-            # Try to get basic info from aplay if soundcard detection fails
-            try:
-                import subprocess
-                result = subprocess.check_output("aplay -l", shell=True, text=True)
-                if 'hifiberry' in result.lower():
-                    # Extract basic info from aplay output
-                    lines = result.strip().split('\n')
-                    for line in lines:
-                        if 'hifiberry' in line.lower():
-                            # Try to extract card name from the line
-                            if '[' in line and ']' in line:
-                                card_name = line.split('[')[1].split(']')[0]
-                                return {
-                                    'name': card_name,
-                                    'volume_control': 'unknown',
-                                    'headphone_volume_control': None,
-                                    'hardware_index': 0,
-                                    'output_channels': 2,
-                                    'input_channels': 0,
-                                    'features': [],
-                                    'hat_name': 'unknown',
-                                    'supports_dsp': False,
-                                    'card_type': ['DAC'],
-                                    'fixedInConfigTxt': True
-                                }
-            except:
-                pass
+            import traceback
+            traceback.print_exc()
             
             return {
                 'name': 'unknown',

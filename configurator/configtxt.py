@@ -52,14 +52,14 @@ class ConfigTxt:
             logging.info("HiFiBerry detection already enabled.")
 
     def disable_detection(self):
-        """Disable HiFiBerry detection by adding the disabled comment"""
+        """Disable HiFiBerry detection by adding the disabled comment at the end"""
         # Check if already disabled
         if self.is_detection_disabled():
             logging.info("HiFiBerry detection already disabled.")
             return
         
-        # Add the disabled comment at the beginning of the file
-        self.lines.insert(0, f"{HIFIBERRY_DETECTION_DISABLED}\n")
+        # Add the disabled comment at the end of the file
+        self.lines.append(f"{HIFIBERRY_DETECTION_DISABLED}\n")
         logging.info("HiFiBerry detection disabled.")
 
     def _compute_checksum(self, lines):
@@ -129,16 +129,20 @@ class ConfigTxt:
         self._update_line("force_eeprom_read=", "force_eeprom_read=1\n")
         logging.info("EEPROM read enabled.")
 
-    def enable_overlay(self, overlay):
+    def enable_overlay(self, overlay, card_name=None):
+        """Enable a device tree overlay, optionally with a card name comment"""
+        if card_name:
+            self.lines.append(f"# HiFiBerry card: {card_name}\n")
         self.lines.append(f"dtoverlay={overlay}\n")
         logging.info(f"Overlay '{overlay}' enabled.")
 
     def remove_hifiberry_overlays(self):
         original_length = len(self.lines)
-        # Remove HiFiBerry overlays and the detection disabled comment
+        # Remove HiFiBerry overlays, detection disabled comment, and card comments
         self.lines = [line for line in self.lines 
                       if not line.strip().startswith("dtoverlay=hifiberry") 
-                      and line.strip() != HIFIBERRY_DETECTION_DISABLED]
+                      and line.strip() != HIFIBERRY_DETECTION_DISABLED
+                      and not line.strip().startswith("# HiFiBerry card:")]
         if len(self.lines) < original_length:
             logging.info("All HiFiBerry overlays and detection comment removed.")
 

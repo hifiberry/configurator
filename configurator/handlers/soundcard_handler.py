@@ -235,6 +235,14 @@ class SoundcardHandler:
         """
         Handle POST /api/v1/soundcard/detection/disable - Disable sound card detection
         
+        Expected JSON payload (optional):
+        {
+            "card_name": "Beocreate 4-Channel Amplifier"  # Sets fixed sound card by name
+        }
+        
+        If card_name is provided, sets the appropriate dtoverlay and disables detection.
+        If card_name is not provided, only disables detection (keeps existing overlay).
+        
         Returns:
             JSON response with success/error status
         """
@@ -242,27 +250,67 @@ class SoundcardHandler:
             config = ConfigTxt()
             was_enabled = not config.is_detection_disabled()
             
-            config.disable_detection()
-            config.save()
+            # Check if a card name was provided in the request
+            data = request.get_json() if request.is_json else {}
+            card_name = data.get('card_name') if data else None
             
-            if was_enabled:
+            if card_name:
+                # Look up the card definition to get the dtoverlay
+                card_def = SOUND_CARD_DEFINITIONS.get(card_name)
+                if not card_def:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"Unknown sound card: '{card_name}'",
+                        "available_cards": list(SOUND_CARD_DEFINITIONS.keys())
+                    }), 400
+                
+                dtoverlay = card_def.get('dtoverlay')
+                if not dtoverlay:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"Sound card '{card_name}' does not have a dtoverlay defined"
+                    }), 400
+                
+                # Remove existing HiFiBerry overlays and set the new one
+                config.remove_hifiberry_overlays()
+                config.disable_detection()
+                config.enable_overlay(dtoverlay, card_name=card_name)
+                config.save()
+                
                 return jsonify({
                     "status": "success",
-                    "message": "Sound card detection disabled",
+                    "message": f"Fixed sound card set to '{card_name}' with overlay '{dtoverlay}'",
                     "data": {
+                        "card_name": card_name,
+                        "dtoverlay": dtoverlay,
                         "detection_enabled": False,
-                        "changes_made": config.changes_made
+                        "changes_made": config.changes_made,
+                        "reboot_required": True
                     }
                 })
             else:
-                return jsonify({
-                    "status": "success",
-                    "message": "Sound card detection was already disabled",
-                    "data": {
-                        "detection_enabled": False,
-                        "changes_made": False
-                    }
-                })
+                # No card name provided, just disable detection
+                config.disable_detection()
+                config.save()
+                
+                if was_enabled:
+                    return jsonify({
+                        "status": "success",
+                        "message": "Sound card detection disabled",
+                        "data": {
+                            "detection_enabled": False,
+                            "changes_made": config.changes_made
+                        }
+                    })
+                else:
+                    return jsonify({
+                        "status": "success",
+                        "message": "Sound card detection was already disabled",
+                        "data": {
+                            "detection_enabled": False,
+                            "changes_made": False
+                        }
+                    })
                 
         except Exception as e:
             logger.error(f"Error disabling detection: {e}")
