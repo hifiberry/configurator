@@ -575,14 +575,33 @@ class Soundcard:
         
         This method prioritizes the actual loaded ALSA driver from aplay -l output
         over other detection methods, as this represents the real running soundcard.
-        Additional detection methods (HAT EEPROM, I2C) are used only for disambiguation
-        and to get card-specific attributes.
+        First checks config.txt for fixed card comment, then uses additional detection
+        methods (HAT EEPROM, I2C) only for disambiguation.
         
         Returns:
             Dictionary with card attributes or None if not detected
         """
         try:
             from configurator.soundcard_detector import SoundcardDetector
+            
+            # Step 0: Check if there's a fixed card name in config.txt comment
+            try:
+                detector = SoundcardDetector()
+                config_card_name = detector.detect_from_config_txt_comment()
+                if config_card_name:
+                    # Verify this card exists in our definitions
+                    if config_card_name in SOUND_CARD_DEFINITIONS:
+                        # Verify that aplay shows a HiFiBerry card is loaded
+                        try:
+                            aplay_result = subprocess.check_output("aplay -l", shell=True, text=True)
+                            if 'hifiberry' in aplay_result.lower():
+                                logging.info(f"Using fixed card from config.txt comment: {config_card_name}")
+                                return {"name": config_card_name, **SOUND_CARD_DEFINITIONS[config_card_name]}
+                        except:
+                            pass
+                    logging.warning(f"Card '{config_card_name}' from config.txt not found in definitions")
+            except Exception as e:
+                logging.debug(f"Could not read config.txt comment: {e}")
             
             # Step 1: Get the actual loaded ALSA driver from aplay -l (highest priority)
             detected_overlay = None
