@@ -409,25 +409,27 @@ class SoundcardDetector:
         logging.info(f"Mapping aplay output: {aplay_output}")
         
         # Common patterns in aplay output for HiFiBerry cards
-        aplay_patterns = {
-            "snd_rpi_hifiberry_dac": "dac",
-            "pcm5102a-hifi": "dac",
-            "snd_rpi_hifiberry_dacplus": "dacplus-std", 
-            "snd_rpi_hifiberry_dacplusadc": "dacplusadc",
-            "snd_rpi_hifiberry_dacplusadcpro": "dacplusadcpro",
-            "snd_rpi_hifiberry_dacplushd": "dacplushd",
-            "snd_rpi_hifiberrydacplusdsp": "dacplusdsp",
-            "snd_rpi_hifiberry_digi": "digi",
-            "snd_rpi_hifiberry_amp": "amp",
-            "snd_rpi_hifiberry_amp100": "amp100",
-            "snd_rpi_hifiberry_amp3": "amp3",
-            "snd_rpi_hifiberry_amp4pro": "amp4pro",
-            "snd_rpi_hifiberry_dac8x": "dac8x",
-        }
+        # Order matters! Check more specific (longer) patterns first to avoid false matches
+        aplay_patterns = [
+            ("snd_rpi_hifiberry_dacplusadcpro", "dacplusadcpro"),
+            ("snd_rpi_hifiberrydacplusdsp", "dacplusdsp"),
+            ("snd_rpi_hifiberry_dacplusadc", "dacplusadc"),
+            ("snd_rpi_hifiberry_dacplushd", "dacplushd"),
+            ("snd_rpi_hifiberry_dacplus", "dacplus-std"),
+            ("snd_rpi_hifiberry_amp4pro", "amp4pro"),
+            ("snd_rpi_hifiberry_amp100", "amp100"),
+            ("snd_rpi_hifiberry_amp3", "amp3"),
+            ("snd_rpi_hifiberry_dac8x", "dac8x"),
+            ("snd_rpi_hifiberry_amp", "amp"),
+            ("snd_rpi_hifiberry_digi", "digi"),
+            ("snd_rpi_hifiberry_dac", "dac"),
+            ("pcm5102a-hifi", "dac"),
+        ]
         
         # Check each pattern against the aplay output (case insensitive)
+        # Patterns are ordered from most specific to least specific
         aplay_lower = aplay_output.lower()
-        for pattern, overlay in aplay_patterns.items():
+        for pattern, overlay in aplay_patterns:
             if pattern in aplay_lower:
                 logging.info(f"Matched pattern '{pattern}' -> overlay '{overlay}'")
                 return overlay

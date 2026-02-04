@@ -174,11 +174,11 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ DSP": {
         "aplay_contains": "DAC+DSP",
         "hat_name": "DAC+ DSP",
-        "volume_control": None,
+        "volume_control": "Master",
         "output_channels": 2,
         "input_channels": 0,
         "features": ["toslink"],
-        "supports_dsp": False,
+        "supports_dsp": True,
         "card_type": ["DAC", "Digi"],
         "dtoverlay": "hifiberry-dacplusdsp",
         "is_pro": True,
@@ -393,9 +393,14 @@ class Soundcard:
         supports_dsp=False,
         card_type=None,
         no_eeprom=False,
+        prioritize_aplay=False,
     ):
         if name is None:
-            detected_card = self._detect_card(no_eeprom=no_eeprom)
+            if prioritize_aplay:
+                detected_card = self._detect_card_aplay_priority(no_eeprom=no_eeprom)
+            else:
+                detected_card = self._detect_card(no_eeprom=no_eeprom)
+                
             if detected_card:
                 self.name = detected_card["name"]
                 self.volume_control = detected_card.get("volume_control")
@@ -563,6 +568,83 @@ class Soundcard:
         except Exception as e:
             logging.error(f"Error during sound card detection: {str(e)}")
             return None
+
+    def _detect_card_aplay_priority(self, no_eeprom=False):
+        """
+        Detect sound card with aplay -l as the highest priority source.
+        
+        This method prioritizes the actual loaded ALSA driver from aplay -l output
+        over other detection methods, as this represents the real running soundcard.
+        Additional detection methods (HAT EEPROM, I2C) are used only for disambiguation
+        and to get card-specific attributes.
+        
+        Returns:
+            Dictionary with card attributes or None if not detected
+        """
+        try:
+            from configurator.soundcard_detector import SoundcardDetector
+            
+            # Step 1: Get the actual loaded ALSA driver from aplay -l (highest priority)
+            detected_overlay = None
+            try:
+                aplay_result = subprocess.check_output("aplay -l", shell=True, text=True)
+                if 'hifiberry' in aplay_result.lower():
+                    # Use the SoundcardDetector's aplay mapping to get the overlay
+                    detector = SoundcardDetector()
+                    # Extract the relevant line with the driver name
+                    for line in aplay_result.strip().split('\n'):
+                        if 'hifiberry' in line.lower() and '[' in line and ']' in line:
+                            detected_overlay = detector._map_aplay_to_overlay(line)
+                            if detected_overlay:
+                                logging.info(f"Detected overlay from aplay: {detected_overlay}")
+                                break
+            except Exception as e:
+                logging.warning(f"Could not get aplay output: {e}")
+            
+            # Step 2: If we have an overlay from aplay, use it to get the card definition
+            if detected_overlay:
+                # Use SoundcardDetector to get additional info (HAT name, etc.) for disambiguation
+                detector = SoundcardDetector(include_pcm5102=True)
+                detector.detect_card()
+                hat_card = None
+                has_hat_info = False
+                
+                # Check if we have HAT info that can help with disambiguation
+                try:
+                    hat_info = get_hat_info()
+                    if hat_info.get('product'):
+                        hat_card = hat_info.get('product')
+                        has_hat_info = True
+                except:
+                    pass
+                
+                # Get the card name based on the overlay, using HAT info if available
+                card_name = detector._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+                
+                if card_name:
+                    # Try exact match first
+                    if card_name in SOUND_CARD_DEFINITIONS:
+                        logging.info(f"Detected sound card (aplay priority): {card_name}")
+                        return {"name": card_name, **SOUND_CARD_DEFINITIONS[card_name]}
+                    
+                    # Try alias matching if exact match failed
+                    for def_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                        aliases = attributes.get('aliases', [])
+                        if card_name in aliases:
+                            logging.info(f"Detected sound card via alias (aplay priority): {card_name} -> {def_name}")
+                            return {"name": def_name, **attributes}
+                    
+                    # If not found in definitions, log warning
+                    logging.warning(f"Card name '{card_name}' from aplay not found in SOUND_CARD_DEFINITIONS")
+            
+            # Step 3: Fallback to original detection method if aplay didn't work
+            logging.info("aplay detection did not yield results, falling back to standard detection")
+            return self._detect_card(no_eeprom=no_eeprom)
+                
+        except Exception as e:
+            logging.error(f"Error during aplay-priority sound card detection: {str(e)}")
+            # Final fallback to standard detection
+            return self._detect_card(no_eeprom=no_eeprom)
 
     def get_mixer_control_name(self, use_softvol_fallback=False):
         """

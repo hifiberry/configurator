@@ -1,3 +1,50 @@
+hifiberry-configurator (2.12.12) stable; urgency=medium
+
+  * Group HiFiBerry comments and overlay together at end of config.txt
+  * All HiFiBerry configuration lines now appear consecutively
+  
+ -- HiFiBerry <support@hifiberry.com>  Tue, 04 Feb 2026 16:25:00 +0000
+
+hifiberry-configurator (2.12.11) stable; urgency=medium
+
+  * Fixed sound card comment in config.txt to show correct card name
+  * Card comment now updated when setting fixed sound card via API
+  
+ -- HiFiBerry <support@hifiberry.com>  Tue, 04 Feb 2026 16:20:00 +0000
+
+hifiberry-configurator (2.12.10) stable; urgency=medium
+
+  * Fixed soundcard detection disable API to accept card_name parameter
+  * API now sets dtoverlay automatically when disabling detection with card name
+  
+ -- HiFiBerry <support@hifiberry.com>  Tue, 04 Feb 2026 13:30:00 +0000
+
+hifiberry-configurator (2.12.8) stable; urgency=medium
+
+  * Fixed DAC+ DSP volume control: use 'Master' instead of 'Digital'
+  
+ -- HiFiBerry <support@hifiberry.com>  Fri, 20 Dec 2025 12:30:00 +0000
+
+hifiberry-configurator (2.12.7) stable; urgency=medium
+
+  * Fixed DAC+ DSP: set supports_dsp=True and volume_control='Digital'
+  
+ -- HiFiBerry <support@hifiberry.com>  Fri, 20 Dec 2025 12:00:00 +0000
+
+hifiberry-configurator (2.12.6) stable; urgency=medium
+
+  * Fixed (config.txt) suffix to only show when detection disabled comment is present
+  
+ -- HiFiBerry <support@hifiberry.com>  Fri, 20 Dec 2025 11:00:00 +0000
+
+hifiberry-configurator (2.12.5) stable; urgency=medium
+
+  * Refactored soundcard detection to prioritize aplay -l output as primary source
+  * Detection now always shows the actual loaded ALSA driver
+  * Additional detection methods (EEPROM, I2C) used only for disambiguation
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 04 Feb 2026 11:05:00 +0000
+
 hifiberry-configurator (2.12.4) stable; urgency=medium
 
   * Modified soundcard detection enable endpoint to remove HiFiBerry overlays and detection comment when enabling auto-detection
