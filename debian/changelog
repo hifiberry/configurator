@@ -1,3 +1,11 @@
+hifiberry-configurator (2.12.13) stable; urgency=medium
+
+  * Fixed sound card detection to respect config.txt card comment
+  * Detection now checks for "# HiFiBerry card: XXX" comment first
+  * Prevents misdetection when fixed card is configured
+  
+ -- HiFiBerry <support@hifiberry.com>  Tue, 04 Feb 2026 16:30:00 +0000
+
 hifiberry-configurator (2.12.12) stable; urgency=medium
 
   * Group HiFiBerry comments and overlay together at end of config.txt

@@ -194,11 +194,6 @@ class SystemInfo:
             # Check if the detected card is actually configured/loaded correctly
             fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
             
-            # Check for DSP program information if DSP is supported
-            dsp_info = None
-            if soundcard.supports_dsp:
-                dsp_info = self._get_dsp_program_info()
-            
             result = {
                 'name': soundcard.name,
                 'volume_control': soundcard.volume_control,
@@ -212,10 +207,6 @@ class SystemInfo:
                 'card_type': soundcard.card_type,
                 'fixedInConfigTxt': fixed_in_config_txt
             }
-            
-            # Add DSP information if available
-            if dsp_info is not None:
-                result['dsp_info'] = dsp_info
             
             return result
             
