@@ -186,6 +186,8 @@ class SoundcardHandler:
         """
         Handle POST /api/v1/soundcard/detection/enable - Enable sound card detection
         
+        This will also remove any HiFiBerry overlays from config.txt to allow auto-detection
+        
         Returns:
             JSON response with success/error status
         """
@@ -193,16 +195,21 @@ class SoundcardHandler:
             config = ConfigTxt()
             was_disabled = config.is_detection_disabled()
             
+            # Remove HiFiBerry overlays to enable auto-detection
+            config.remove_hifiberry_overlays()
+            
+            # Enable detection
             config.enable_detection()
             config.save()
             
-            if was_disabled:
+            if was_disabled or config.changes_made:
                 return jsonify({
                     "status": "success",
-                    "message": "Sound card detection enabled",
+                    "message": "Sound card detection enabled and fixed overlays removed",
                     "data": {
                         "detection_enabled": True,
-                        "changes_made": config.changes_made
+                        "changes_made": config.changes_made,
+                        "reboot_required": True
                     }
                 })
             else:
@@ -211,7 +218,8 @@ class SoundcardHandler:
                     "message": "Sound card detection was already enabled",
                     "data": {
                         "detection_enabled": True,
-                        "changes_made": False
+                        "changes_made": False,
+                        "reboot_required": False
                     }
                 })
                 
