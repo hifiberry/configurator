@@ -160,17 +160,36 @@ class SoundcardHandler:
         Handle GET /api/v1/soundcard/detection - Get detection status
         
         Returns:
-            JSON response with detection enabled/disabled status
+            JSON response with detection enabled/disabled status and configured card
         """
         try:
             config = ConfigTxt()
             is_disabled = config.is_detection_disabled()
             
+            # Try to get the configured card name from config.txt comment
+            configured_card_name = None
+            configured_dtoverlay = None
+            
+            if is_disabled:
+                from ..soundcard_detector import SoundcardDetector
+                # Pass the config file path to the detector
+                detector = SoundcardDetector(config_file=config.file_path)
+                configured_card_name = detector.detect_from_config_txt_comment()
+                
+                # Also try to get the dtoverlay value
+                for line in config.lines:
+                    stripped = line.strip()
+                    if stripped.startswith("dtoverlay=hifiberry"):
+                        configured_dtoverlay = stripped.split("=")[1].strip()
+                        break
+            
             return jsonify({
                 "status": "success",
                 "data": {
                     "detection_enabled": not is_disabled,
-                    "detection_disabled": is_disabled
+                    "detection_disabled": is_disabled,
+                    "configured_card_name": configured_card_name,
+                    "configured_dtoverlay": configured_dtoverlay
                 }
             })
             
