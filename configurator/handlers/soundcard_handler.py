@@ -274,8 +274,7 @@ class SoundcardHandler:
                 # Remove existing HiFiBerry overlays and set the new one
                 config.remove_hifiberry_overlays()
                 config.disable_detection()
-                config.disable_eeprom()
-                config.enable_overlay(dtoverlay, card_name=card_name)
+                config.enable_overlay(dtoverlay, card_name=card_name, disable_eeprom=True)
                 config.save()
                 
                 return jsonify({
