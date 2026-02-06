@@ -174,7 +174,7 @@ SOUND_CARD_DEFINITIONS = {
     "DAC+ DSP": {
         "aplay_contains": "DAC+DSP",
         "hat_name": "DAC+ DSP",
-        "volume_control": "Master",
+        "volume_control": "DSPVolume",
         "output_channels": 2,
         "input_channels": 0,
         "features": ["toslink"],
@@ -259,7 +259,7 @@ SOUND_CARD_DEFINITIONS = {
         "aplay_contains": "beocreate",
         "hat_name": "Beocreate 4-Channel Amplifier",
         "aliases": ["Beocreate 4CA"],
-        "volume_control": None,
+        "volume_control": "DSPVolume",
         "output_channels": 2,
         "input_channels": 0,
         "features": ["dsp", "toslink"],

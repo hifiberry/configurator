@@ -1,23 +1,13 @@
-hifiberry-configurator (2.12.16) stable; urgency=medium
+hifiberry-configurator (2.12.20) stable; urgency=medium
 
+  * Detection status endpoint now returns configured card name and dtoverlay
+  * Allows WebUI to display currently configured fixed sound card
+  * Fixed detection status endpoint bugs (ConfigTxt parameter type and attribute name)
+  * Updated sound card definitions
   * Reorder HiFiBerry config block: comments first, then settings
-  * Config now shows detection and card comments, then force_eeprom_read and dtoverlay
+  * Group force_eeprom_read=0 with HiFiBerry config block
   
- -- HiFiBerry <support@hifiberry.com>  Thu, 06 Feb 2026 09:50:00 +0000
-
-hifiberry-configurator (2.12.15) stable; urgency=medium
-
-  * Group force_eeprom_read=0 with HiFiBerry config block at end of config.txt
-  * All HiFiBerry settings now appear together in proper sequence
-  
- -- HiFiBerry <support@hifiberry.com>  Thu, 02 Jan 2025 11:30:00 +0000
-
-hifiberry-configurator (2.12.14) stable; urgency=medium
-
-  * Set force_eeprom_read=0 when configuring fixed sound card
-  * Prevents EEPROM detection when fixed card is configured
-  
- -- HiFiBerry <support@hifiberry.com>  Thu, 06 Feb 2026 10:00:00 +0000
+ -- HiFiBerry <support@hifiberry.com>  Thu, 06 Feb 2026 14:45:00 +0000
 
 hifiberry-configurator (2.12.13) stable; urgency=medium
 
