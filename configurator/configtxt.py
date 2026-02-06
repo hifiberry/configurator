@@ -129,20 +129,23 @@ class ConfigTxt:
         self._update_line("force_eeprom_read=", "force_eeprom_read=1\n")
         logging.info("EEPROM read enabled.")
 
-    def enable_overlay(self, overlay, card_name=None):
-        """Enable a device tree overlay, optionally with a card name comment"""
+    def enable_overlay(self, overlay, card_name=None, disable_eeprom=False):
+        """Enable a device tree overlay, optionally with a card name comment and EEPROM disable"""
         if card_name:
             self.lines.append(f"# HiFiBerry card: {card_name}\n")
+        if disable_eeprom:
+            self.lines.append("force_eeprom_read=0\n")
         self.lines.append(f"dtoverlay={overlay}\n")
         logging.info(f"Overlay '{overlay}' enabled.")
 
     def remove_hifiberry_overlays(self):
         original_length = len(self.lines)
-        # Remove HiFiBerry overlays, detection disabled comment, and card comments
+        # Remove HiFiBerry overlays, detection disabled comment, card comments, and force_eeprom_read
         self.lines = [line for line in self.lines 
                       if not line.strip().startswith("dtoverlay=hifiberry") 
                       and line.strip() != HIFIBERRY_DETECTION_DISABLED
-                      and not line.strip().startswith("# HiFiBerry card:")]
+                      and not line.strip().startswith("# HiFiBerry card:")
+                      and not line.strip().startswith("force_eeprom_read=")]
         if len(self.lines) < original_length:
             logging.info("All HiFiBerry overlays and detection comment removed.")
 
