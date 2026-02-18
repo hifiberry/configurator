@@ -1,3 +1,13 @@
+hifiberry-configurator (2.12.21) stable; urgency=medium
+
+  * Fix race condition in service environment detection
+  * _get_service_environment() now falls back to checking unit file paths
+    on disk when a service is not in the startup cache
+  * Fixes player services showing as inactive when config-server starts
+    before all user services are loaded
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 18 Feb 2026 14:00:00 +0000
+
 hifiberry-configurator (2.12.20) stable; urgency=medium
 
   * Detection status endpoint now returns configured card name and dtoverlay
