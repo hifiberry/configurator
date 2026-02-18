@@ -183,7 +183,37 @@ class SystemdServiceManager:
         if normalized_name.endswith('.service'):
             normalized_name = normalized_name[:-8]
         
-        return self.service_environments.get(normalized_name)
+        env = self.service_environments.get(normalized_name)
+        if env:
+            return env
+
+        # Fallback: check unit file locations on disk (handles services
+        # installed after config-server started, or race at boot)
+        service_file = f'{normalized_name}.service'
+        user_paths = [
+            f'/usr/lib/systemd/user/{service_file}',
+            f'/etc/systemd/user/{service_file}',
+        ]
+        if self.user_runtime_dir:
+            user_paths.append(f'{self.user_runtime_dir}/systemd/user/{service_file}')
+        for p in user_paths:
+            if os.path.exists(p):
+                self.service_environments[normalized_name] = 'user'
+                logger.debug(f'Late-detected user service {normalized_name} from {p}')
+                return 'user'
+
+        system_paths = [
+            f'/usr/lib/systemd/system/{service_file}',
+            f'/etc/systemd/system/{service_file}',
+            f'/lib/systemd/system/{service_file}',
+        ]
+        for p in system_paths:
+            if os.path.exists(p):
+                self.service_environments[normalized_name] = 'system'
+                logger.debug(f'Late-detected system service {normalized_name} from {p}')
+                return 'system'
+
+        return None
     
     def _run_service_cmd(self, args: List[str], service_name: Optional[str] = None) -> Tuple[bool, str, str]:
         """Run a systemctl command in the correct environment for a service."""
