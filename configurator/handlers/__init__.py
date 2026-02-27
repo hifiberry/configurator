@@ -16,8 +16,9 @@ try:
     from .i2c_handler import I2CHandler
     from .volume_handler import VolumeHandler
     from .bluetooth_handler import BluetoothHandler
-    
-    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler']
+    from .player_registry_handler import PlayerRegistryHandler
+
+    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler', 'PlayerRegistryHandler']
 except ImportError:
     # Flask not available - likely during testing or installation
     __all__ = []

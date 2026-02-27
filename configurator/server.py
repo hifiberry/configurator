@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -72,6 +72,7 @@ class ConfigAPIServer:
         self.i2c_handler = I2CHandler()
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
+        self.player_registry_handler = PlayerRegistryHandler()
             
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
         self.settings_manager = SettingsManager(self.configdb)
@@ -151,7 +152,9 @@ class ConfigAPIServer:
                     'bluetooth_unpair': '/api/v1/bluetooth/unpair',
                     'settings_list': '/api/v1/settings',
                     'settings_save': '/api/v1/settings/save',
-                    'settings_restore': '/api/v1/settings/restore'
+                    'settings_restore': '/api/v1/settings/restore',
+                    'players': '/api/v1/players',
+                    'player_icon': '/api/v1/players/icon/<name>'
                 }
             })
         
@@ -418,7 +421,16 @@ class ConfigAPIServer:
                 return self.bluetooth_handler.handle_set_show_modal()
             return jsonify({'status': 'error', 'message': 'Bluetooth handler not available'}), 503
 
+        # External player registry endpoints
+        @self.app.route('/api/v1/players', methods=['GET'])
+        def list_external_players():
+            """List external players registered via drop-in descriptors"""
+            return self.player_registry_handler.handle_list_players()
 
+        @self.app.route('/api/v1/players/icon/<name>', methods=['GET'])
+        def get_player_icon(name):
+            """Serve an external player icon SVG"""
+            return self.player_registry_handler.handle_player_icon(name)
 
 
         # Settings management endpoints

@@ -438,6 +438,58 @@ class SMBHandler:
                 'details': f'No mount configuration exists for server {server} and share {share}'
             }), 404
 
+    def _trigger_mpd_reconcile(self) -> Dict[str, Any]:
+        """
+        Trigger MPD reconciliation service to refresh symlinks and library after SMB changes.
+        Returns status details but should not raise exceptions for caller convenience.
+        """
+        service_name = 'hifiberry-mpd-reconcile.service'
+
+        try:
+            logger.debug(f"Starting {service_name} after SMB mount changes")
+            result = subprocess.run(
+                ['systemctl', 'start', service_name],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                logger.info(f"{service_name} started successfully")
+                return {
+                    'service': service_name,
+                    'status': 'success',
+                    'message': 'MPD reconciliation triggered'
+                }
+
+            logger.warning(
+                f"{service_name} failed with return code {result.returncode}: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+            return {
+                'service': service_name,
+                'status': 'error',
+                'message': 'MPD reconciliation failed',
+                'details': result.stderr.strip() or result.stdout.strip() or f'systemctl returned {result.returncode}',
+                'return_code': result.returncode
+            }
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"{service_name} start timed out")
+            return {
+                'service': service_name,
+                'status': 'error',
+                'message': 'MPD reconciliation timed out'
+            }
+        except Exception as e:
+            logger.warning(f"Error triggering {service_name}: {e}")
+            return {
+                'service': service_name,
+                'status': 'error',
+                'message': 'Failed to trigger MPD reconciliation',
+                'details': str(e)
+            }
+
     def handle_mount_all_samba(self) -> Dict[str, Any]:
         """
         Handle POST /api/v1/smb/mount-all
@@ -532,6 +584,11 @@ class SMBHandler:
                         'count': len(mount_list),
                         'note': 'Check service logs with: journalctl -u sambamount.service -f'
                     }
+
+                    mpd_reconcile_result = self._trigger_mpd_reconcile()
+                    response_data['mpd_reconcile'] = mpd_reconcile_result
+                    if mpd_reconcile_result.get('status') != 'success':
+                        response_data['warning'] = 'SMB mounts were applied, but MPD reconciliation failed'
                     
                     # Add cleanup information if any shares were unmounted
                     if unmounted_shares:
@@ -553,6 +610,11 @@ class SMBHandler:
                         'action': 'restarted',
                         'note': 'Check service logs with: journalctl -u sambamount.service -f'
                     }
+
+                    mpd_reconcile_result = self._trigger_mpd_reconcile()
+                    response_data['mpd_reconcile'] = mpd_reconcile_result
+                    if mpd_reconcile_result.get('status') != 'success':
+                        response_data['warning'] = 'SMB mounts were applied, but MPD reconciliation failed'
                     
                     # Add cleanup information if any shares were unmounted
                     if unmounted_shares:

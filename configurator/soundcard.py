@@ -194,6 +194,7 @@ SOUND_CARD_DEFINITIONS = {
         "card_type": ["DAC"],
         "dtoverlay": "hifiberry-dacplus-std",
         "is_pro": False,
+        "aliases": ["DAC+", "Amp2"],
     },
     "DAC+ Pro": {
         "aplay_contains": "DAC+ Pro",
@@ -538,25 +539,40 @@ class Soundcard:
             
             # Check if a card was detected
             if detector.detected_card:
+                # Try the full detected name first (before splitting)
+                full_name = detector.detected_card.strip()
+                if full_name in SOUND_CARD_DEFINITIONS:
+                    logging.info(f"Detected sound card: {full_name}")
+                    return {"name": full_name, **SOUND_CARD_DEFINITIONS[full_name]}
+
+                # Check aliases with the full name
+                for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                    aliases = attributes.get("aliases", [])
+                    if full_name in aliases:
+                        logging.info(f"Detected sound card via alias: {full_name} -> {card_name}")
+                        return {"name": card_name, **attributes}
+
                 # Handle multiple card names separated by "/"
-                detected_cards = detector.detected_card.split("/")
-                
-                # First try exact name matching for each detected card
-                for detected_name in detected_cards:
-                    detected_name = detected_name.strip()
-                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                        if card_name == detected_name:
-                            logging.info(f"Detected sound card: {card_name}")
-                            return {"name": card_name, **attributes}
-                
-                # Then try alias matching for each detected card
-                for detected_name in detected_cards:
-                    detected_name = detected_name.strip()
-                    for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
-                        aliases = attributes.get("aliases", [])
-                        if detected_name in aliases:
-                            logging.info(f"Detected sound card via alias: {detected_name} -> {card_name}")
-                            return {"name": card_name, **attributes}
+                detected_cards = full_name.split("/")
+
+                # Only try split names if there are multiple parts
+                if len(detected_cards) > 1:
+                    # Try exact name matching for each split part
+                    for detected_name in detected_cards:
+                        detected_name = detected_name.strip()
+                        for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                            if card_name == detected_name:
+                                logging.info(f"Detected sound card: {card_name}")
+                                return {"name": card_name, **attributes}
+
+                    # Try alias matching for each split part
+                    for detected_name in detected_cards:
+                        detected_name = detected_name.strip()
+                        for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+                            aliases = attributes.get("aliases", [])
+                            if detected_name in aliases:
+                                logging.info(f"Detected sound card via alias: {detected_name} -> {card_name}")
+                                return {"name": card_name, **attributes}
                 
                 # If not found in definitions or aliases, log warning and return None
                 logging.warning(f"Detected card '{detector.detected_card}' not found in SOUND_CARD_DEFINITIONS or aliases")

@@ -7,6 +7,7 @@ Configuration Server.
 """
 
 import os
+import glob
 import json
 import logging
 from typing import Dict, Any, Optional
@@ -15,6 +16,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "/etc/configserver/configserver.json"
+CONFIG_DROP_IN_DIR = "/etc/configserver/conf.d"
 
 class ConfigParser:
     """Parser for the HiFiBerry Configuration Server config file"""
@@ -29,26 +31,64 @@ class ConfigParser:
         self.config_file = config_file or CONFIG_FILE
         self._config = None
     
+    @staticmethod
+    def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """Deep-merge override into base. Dict values are merged recursively,
+        other types are replaced by the override value."""
+        for key, value in override.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                ConfigParser._deep_merge(base[key], value)
+            else:
+                base[key] = value
+        return base
+
+    def _load_drop_ins(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Load and merge drop-in config files from conf.d/ directory."""
+        drop_in_dir = os.path.join(os.path.dirname(self.config_file), "conf.d")
+        if not os.path.isdir(drop_in_dir):
+            return config
+
+        for path in sorted(glob.glob(os.path.join(drop_in_dir, "*.json"))):
+            try:
+                with open(path, 'r') as f:
+                    snippet = json.load(f)
+                if isinstance(snippet, dict):
+                    self._deep_merge(config, snippet)
+                    logger.debug(f"Merged drop-in config: {path}")
+                else:
+                    logger.warning(f"Skipping drop-in {path}: top-level value must be an object")
+            except json.JSONDecodeError as e:
+                logger.warning(f"Skipping invalid JSON in drop-in {path}: {e}")
+            except Exception as e:
+                logger.warning(f"Error loading drop-in {path}: {e}")
+
+        return config
+
     def load_config(self) -> Dict[str, Any]:
         """
-        Load the configuration file
-        
+        Load the main configuration file and merge any drop-in files
+        from the conf.d/ directory next to it.
+
         Returns:
-            Dictionary containing the configuration data
+            Dictionary containing the merged configuration data
         """
         try:
             # Load the config file (should be created by debian postinstall)
             if not os.path.exists(self.config_file):
                 logger.error(f"Config file {self.config_file} not found. Please ensure package is properly installed.")
                 return {}
-            
+
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
-            
+
             logger.debug(f"Loaded config from {self.config_file}: {config}")
+
+            # Merge drop-in configs
+            config = self._load_drop_ins(config)
+
             self._config = config
             return config
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config file {self.config_file}: {e}")
             return {}
