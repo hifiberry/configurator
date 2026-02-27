@@ -1,3 +1,40 @@
+hifiberry-configurator (2.13.0) stable; urgency=medium
+
+  * Include feature for modular service and player configuration
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 27 Feb 2026 23:30:00 +0000
+
+hifiberry-configurator (2.12.25) stable; urgency=medium
+
+  * Add external player registry: /etc/hifiberry/players.d/ drop-in support
+  * Add configserver conf.d/ drop-in config merging
+  * Serve player icons via /api/v1/players/icon/<name>
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 27 Feb 2026 15:00:00 +0000
+
+hifiberry-configurator (2.12.24) stable; urgency=medium
+
+  * Add "DAC+" and "Amp2" as aliases for "DAC+/Amp2" sound card definition
+  * Fixes detection on boards where EEPROM reports "DAC+" without "/Amp2" suffix
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 27 Feb 2026 09:30:00 +0000
+
+hifiberry-configurator (2.12.23) stable; urgency=medium
+
+  * Trigger hifiberry-mpd-reconcile.service after successful smb mount-all
+  * Include MPD reconcile status details in /api/v1/smb/mount-all response
+  * Keep SMB mount apply successful even if MPD reconcile step fails
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 26 Feb 2026 19:20:00 +0000
+
+hifiberry-configurator (2.12.22) stable; urgency=medium
+
+  * Fix sound card detection for names containing "/" (e.g. "DAC+/Amp2")
+  * Try full card name match before splitting on "/" separator
+  * Fixes players failing to start with "No sound card detected"
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 26 Feb 2026 11:00:00 +0000
+
 hifiberry-configurator (2.12.21) stable; urgency=medium
 
   * Fix race condition in service environment detection
