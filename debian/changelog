@@ -1,3 +1,42 @@
+hifiberry-configurator (2.13.6) stable; urgency=medium
+
+  * Add /api/v1/config/reset endpoint to clear entire ConfigDB on system reset
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 02 Mar 2026 23:30:00 +0000
+
+hifiberry-configurator (2.13.5) stable; urgency=medium
+
+  * Fix: prevent config-detect.service from restarting on package upgrade
+    (debhelper was restarting it, which could trigger an unwanted reboot)
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 02 Mar 2026 21:00:00 +0000
+
+hifiberry-configurator (2.13.4) stable; urgency=medium
+
+  * Detect Compute Module 5 as Pi version "5" (same generation as Pi 5)
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 02 Mar 2026 20:00:00 +0000
+
+hifiberry-configurator (2.13.3) stable; urgency=medium
+
+  * Add setup wizard API endpoints: status, complete, and reset
+  * POST /api/v1/setup/reset deletes setup_completed flag from ConfigDB
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 02 Mar 2026 18:00:00 +0000
+
+hifiberry-configurator (2.13.2) stable; urgency=medium
+
+  * Fix user service detection: skip ghost "not-found" entries from system scan
+  * Add --collect to systemd-run calls to prevent transient unit pollution
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 02 Mar 2026 11:00:00 +0000
+
+hifiberry-configurator (2.13.1) stable; urgency=medium
+
+  * Add nginx include file for Configurator API proxy (/etc/nginx/hifiberry-api.d/)
+
+ -- HiFiBerry <support@hifiberry.com>  Sat, 28 Feb 2026 12:00:00 +0000
+
 hifiberry-configurator (2.13.0) stable; urgency=medium
 
   * Include feature for modular service and player configuration

@@ -154,10 +154,66 @@ class ConfigAPIServer:
                     'settings_save': '/api/v1/settings/save',
                     'settings_restore': '/api/v1/settings/restore',
                     'players': '/api/v1/players',
-                    'player_icon': '/api/v1/players/icon/<name>'
+                    'player_icon': '/api/v1/players/icon/<name>',
+                    'setup_status': '/api/v1/setup/status',
+                    'setup_complete': '/api/v1/setup/complete',
+                    'setup_reset': '/api/v1/setup/reset'
                 }
             })
         
+        # Setup status endpoints
+        @self.app.route('/api/v1/setup/status', methods=['GET'])
+        def get_setup_status():
+            """Check if initial setup has been completed"""
+            try:
+                value = self.configdb.get('system.setup_completed')
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'setup_completed': value == 'true'
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Error getting setup status: {e}")
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'setup_completed': False
+                    }
+                })
+
+        @self.app.route('/api/v1/setup/complete', methods=['POST'])
+        def complete_setup():
+            """Mark initial setup as completed"""
+            try:
+                self.configdb.set('system.setup_completed', 'true')
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Setup marked as completed'
+                })
+            except Exception as e:
+                logger.error(f"Error completing setup: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to complete setup: {e}'
+                }), 500
+
+        @self.app.route('/api/v1/setup/reset', methods=['POST'])
+        def reset_setup():
+            """Reset setup status to allow re-running the wizard"""
+            try:
+                self.configdb.delete('system.setup_completed')
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Setup status reset'
+                })
+            except Exception as e:
+                logger.error(f"Error resetting setup: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to reset setup: {e}'
+                }), 500
+
         # System information endpoint
         @self.app.route('/api/v1/systeminfo', methods=['GET'])
         def get_system_info():
@@ -193,7 +249,29 @@ class ConfigAPIServer:
         def delete_config_value(key):
             """Delete a configuration value"""
             return self.configdb.handle_delete_config_value(key)
-        
+
+        @self.app.route('/api/v1/config/reset', methods=['POST'])
+        def reset_config():
+            """Clear all keys from the configuration database"""
+            try:
+                success = self.configdb.clear_all()
+                if success:
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Configuration database cleared'
+                    })
+                else:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to clear configuration database'
+                    }), 500
+            except Exception as e:
+                logger.error(f"Error clearing config database: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to clear configuration database: {e}'
+                }), 500
+
         # Systemd endpoints
         @self.app.route('/api/v1/systemd/services', methods=['GET'])
         def list_systemd_services():

@@ -66,6 +66,8 @@ class PlayerRegistryHandler:
                 "systemd_service": descriptor["systemd_service"],
                 "icon_url": f"/api/v1/players/icon/{icon_name}",
                 "allow_change": descriptor.get("allow_change", True),
+                "maintainer_name": descriptor.get("maintainer_name", ""),
+                "maintainer_url": descriptor.get("maintainer_url", ""),
             })
 
         return jsonify({"status": "success", "data": {"players": players}})

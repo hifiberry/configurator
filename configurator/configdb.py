@@ -221,6 +221,26 @@ class ConfigDB:
             logging.error(f"Error listing keys: {str(e)}")
             return []
     
+    def clear_all(self):
+        """
+        Delete all keys from the database
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM config")
+            count = cursor.rowcount
+            conn.commit()
+            conn.close()
+            logging.info(f"Cleared all {count} keys from config database")
+            return True
+        except Exception as e:
+            logging.error(f"Error clearing config database: {str(e)}")
+            return False
+
     def get_all(self, prefix=None):
         """
         Get all key/value pairs, optionally filtered by prefix

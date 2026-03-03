@@ -126,6 +126,10 @@ class SystemdServiceManager:
                 for line in result.stdout.strip().split('\n'):
                     if line.strip():
                         parts = line.split()
+                        # columns: UNIT LOAD ACTIVE SUB [DESCRIPTION...]
+                        # Skip ghost entries where LOAD is "not-found"
+                        if len(parts) >= 2 and parts[1] == 'not-found':
+                            continue
                         if len(parts) >= 1:
                             service_name = parts[0]
                             # Remove .service suffix if present for consistency
@@ -134,7 +138,7 @@ class SystemdServiceManager:
                             self.service_environments[service_name] = 'system'
         except Exception as e:
             logger.warning(f"Failed to list system services: {e}")
-        
+
         # Get user services if user context is available
         if self.user_name and self.user_uid is not None:
             try:
@@ -142,7 +146,7 @@ class SystemdServiceManager:
                 user_cmd = [
                     "systemd-run", "--uid", str(self.user_uid), "--gid", str(self.user_uid),
                     "--setenv", f"XDG_RUNTIME_DIR={self.user_runtime_dir}",
-                    "--pipe", "--wait", "--quiet",
+                    "--pipe", "--wait", "--quiet", "--collect",
                     "systemctl", "--user", "list-units", "--type=service", "--no-pager", "--all", "--plain", "--no-legend"
                 ]
                 logger.debug("Listing user services with command: %s", ' '.join(user_cmd))
@@ -224,7 +228,7 @@ class SystemdServiceManager:
                 cmd = [
                     "systemd-run", "--uid", str(self.user_uid), "--gid", str(self.user_uid),
                     "--setenv", f"XDG_RUNTIME_DIR={self.user_runtime_dir}",
-                    "--pipe", "--wait", "--quiet",
+                    "--pipe", "--wait", "--quiet", "--collect",
                     "systemctl", "--user"
                 ] + args
                 return self._run_command(cmd)

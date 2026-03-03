@@ -39,6 +39,8 @@ class PiModel:
             self.version = "2"
         elif "Pi 5 Model" in self.model_name:
             self.version = "5"
+        elif "Compute Module 5" in self.model_name:
+            self.version = "5"
         else:
             logging.warning(f"Unknown Raspberry Pi model: {self.model_name}")
             self.version = "unknown"

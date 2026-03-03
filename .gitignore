@@ -7,3 +7,13 @@ __pycache__/
 build/*
 dist/*
 .vscode/settings.json
+
+# Debian build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.postinst.debhelper
+debian/*.postrm.debhelper
+debian/*.substvars
+debian/*.debhelper.log
+debian/hifiberry-*/
