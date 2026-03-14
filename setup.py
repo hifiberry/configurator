@@ -58,6 +58,9 @@ setup(
         ('/usr/share/man/man7', [
             'man/hifiberry-configurator.7',
         ]),
+        ('/etc/avahi/services', [
+            'avahi-services/hifiberry.service',
+        ]),
     ],
     entry_points={
         "console_scripts": [
