@@ -1,0 +1,14 @@
+[Unit]
+Description=HiFiBerry BLE WiFi Provisioning
+After=bluetooth.target NetworkManager.service
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/config-ble-provision --check-network
+ExecStart=/usr/bin/config-ble-provision --serve
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

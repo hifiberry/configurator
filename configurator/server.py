@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -73,6 +73,7 @@ class ConfigAPIServer:
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
         self.player_registry_handler = PlayerRegistryHandler()
+        self.ble_handler = BLEProvisioningHandler()
             
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
         self.settings_manager = SettingsManager(self.configdb)
@@ -157,7 +158,10 @@ class ConfigAPIServer:
                     'player_icon': '/api/v1/players/icon/<name>',
                     'setup_status': '/api/v1/setup/status',
                     'setup_complete': '/api/v1/setup/complete',
-                    'setup_reset': '/api/v1/setup/reset'
+                    'setup_reset': '/api/v1/setup/reset',
+                    'ble_provisioning_status': '/api/v1/ble/provisioning/status',
+                    'ble_provisioning_start': '/api/v1/ble/provisioning/start',
+                    'ble_provisioning_stop': '/api/v1/ble/provisioning/stop'
                 }
             })
         
@@ -510,6 +514,21 @@ class ConfigAPIServer:
             """Serve an external player icon SVG"""
             return self.player_registry_handler.handle_player_icon(name)
 
+        # BLE provisioning endpoints
+        @self.app.route('/api/v1/ble/provisioning/status', methods=['GET'])
+        def get_ble_provisioning_status():
+            """Get BLE provisioning service status"""
+            return self.ble_handler.handle_get_status()
+
+        @self.app.route('/api/v1/ble/provisioning/start', methods=['POST'])
+        def start_ble_provisioning():
+            """Start BLE provisioning service"""
+            return self.ble_handler.handle_start()
+
+        @self.app.route('/api/v1/ble/provisioning/stop', methods=['POST'])
+        def stop_ble_provisioning():
+            """Stop BLE provisioning service"""
+            return self.ble_handler.handle_stop()
 
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])

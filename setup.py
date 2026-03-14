@@ -28,13 +28,14 @@ setup(
     install_requires=requirements,
     data_files=[
         ('/usr/lib/systemd/system', [
-            'systemd/volume-store.service', 
-            'systemd/volume-store.timer', 
-            'systemd/sambamount.service', 
+            'systemd/volume-store.service',
+            'systemd/volume-store.timer',
+            'systemd/sambamount.service',
             'systemd/volume-restore.service',
             'systemd/config-server.service',
             'systemd/create-uuid.service',
-            'systemd/config-detect.service'
+            'systemd/config-detect.service',
+            'systemd/ble-provisioning.service'
         ]),
         ('/usr/share/man/man1', [
             'man/config-asoundconf.1',
@@ -76,6 +77,7 @@ setup(
             "config-avahi=configurator.avahi:main",
             "config-server=configurator.server:main",
             "config-pipewire=configurator.pipewire:main",
+            "config-ble-provision=configurator.ble_provisioning:main",
         ],
     },
     classifiers=[

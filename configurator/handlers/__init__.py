@@ -17,8 +17,9 @@ try:
     from .volume_handler import VolumeHandler
     from .bluetooth_handler import BluetoothHandler
     from .player_registry_handler import PlayerRegistryHandler
+    from .ble_handler import BLEProvisioningHandler
 
-    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler', 'PlayerRegistryHandler']
+    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler', 'PlayerRegistryHandler', 'BLEProvisioningHandler']
 except ImportError:
     # Flask not available - likely during testing or installation
     __all__ = []
