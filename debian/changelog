@@ -1,3 +1,10 @@
+hifiberry-configurator (2.13.7) stable; urgency=medium
+
+  * Permit start/stop/enable/disable on create-uuid.service in the systemd API allowlist
+  * postinst: enable+start create-uuid.service so /etc/uuid is created on install (required by raat / Roon)
+
+ -- HiFiBerry <info@hifiberry.com>  Fri, 08 May 2026 16:00:00 +0200
+
 hifiberry-configurator (2.13.6) stable; urgency=medium
 
   * Add /api/v1/config/reset endpoint to clear entire ConfigDB on system reset

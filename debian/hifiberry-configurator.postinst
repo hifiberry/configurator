@@ -20,7 +20,16 @@ case "$1" in
             
             # Enable the config-detect service for automatic startup
             systemctl enable config-detect.service
-            
+
+            # Enable create-uuid.service so /etc/uuid is created on every boot
+            # (no-op when the file already exists). Required by services that
+            # depend on /etc/uuid (e.g. raat for Roon).
+            if systemctl list-unit-files create-uuid.service >/dev/null 2>&1; then
+                systemctl enable create-uuid.service
+                # Trigger it now too so /etc/uuid exists immediately after install.
+                systemctl start create-uuid.service || true
+            fi
+
             # Start the config-server service if not already running
             if ! systemctl is-active --quiet config-server.service; then
                 systemctl start config-server.service
