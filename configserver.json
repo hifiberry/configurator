@@ -4,7 +4,8 @@
         "raat": "all",
         "mpd": "all",
         "squeezelite": "all",
-        "librespot": "all"
+        "librespot": "all",
+        "create-uuid": "all"
     },
     "filesystem": {
         "allowed_symlink_destinations": [
