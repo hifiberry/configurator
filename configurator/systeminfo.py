@@ -151,26 +151,26 @@ class SystemInfo:
     def _is_soundcard_fixed_in_config_txt(self, soundcard) -> bool:
         """
         Check if soundcard detection is disabled via config.txt comment.
-        
+
         Returns True only if the "# HiFiBerry sound detection disabled" comment is present,
         indicating the user has explicitly configured a fixed sound card.
-        
+
         Args:
             soundcard: Soundcard object with detected card information
-            
+
         Returns:
             bool: True if config.txt contains the detection disabled comment, False otherwise
         """
         try:
             from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
-            
+
             # Read config.txt
             with open('/boot/firmware/config.txt', 'r') as f:
                 config_content = f.read()
-            
+
             # Check if the detection disabled comment is present
             return HIFIBERRY_DETECTION_DISABLED in config_content
-            
+
         except Exception as e:
             self.logger.warning(f"Could not check config.txt for detection disabled comment: {e}")
             return False
@@ -180,6 +180,35 @@ class SystemInfo:
         except Exception as e:
             self.logger.error(f"Failed to check if soundcard is configured: {e}")
             return False
+
+    def _get_soundcard_pin_source(self) -> Optional[str]:
+        """
+        Determine which override source actually pinned the active sound card.
+
+        The detection ladder checks ConfigDB first, then the config.txt comment,
+        before any hardware probing. Whichever source has a value is the one
+        that drove the current identification.
+
+        Returns:
+            "configdb" if ConfigDB has soundcard.name set, else
+            "config.txt" if config.txt has a "# HiFiBerry card: <name>" comment, else
+            None (auto-detected, no pin in effect).
+        """
+        try:
+            from configurator.configdb import ConfigDB
+            if ConfigDB().get("soundcard.name"):
+                return "configdb"
+        except Exception as e:
+            self.logger.debug(f"Could not check ConfigDB for soundcard.name: {e}")
+
+        try:
+            from configurator.soundcard_detector import SoundcardDetector
+            if SoundcardDetector().detect_from_config_txt_comment():
+                return "config.txt"
+        except Exception as e:
+            self.logger.debug(f"Could not read soundcard pin from config.txt: {e}")
+
+        return None
     
     def get_soundcard_info(self) -> dict:
         """Get sound card information as a dictionary
@@ -193,7 +222,8 @@ class SystemInfo:
             
             # Check if the detected card is actually configured/loaded correctly
             fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
-            
+            pin_source = self._get_soundcard_pin_source()
+
             result = {
                 'name': soundcard.name,
                 'volume_control': soundcard.volume_control,
@@ -205,7 +235,8 @@ class SystemInfo:
                 'hat_name': soundcard.hat_name,
                 'supports_dsp': soundcard.supports_dsp,
                 'card_type': soundcard.card_type,
-                'fixedInConfigTxt': fixed_in_config_txt
+                'fixedInConfigTxt': fixed_in_config_txt,
+                'pinSource': pin_source
             }
             
             return result
