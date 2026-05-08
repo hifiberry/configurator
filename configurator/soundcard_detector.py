@@ -263,6 +263,21 @@ class SoundcardDetector:
                 return
         except Exception as e:
             logging.debug(f"Could not read from config database: {str(e)}")
+
+        # Step 0b: Fallback to the "# HiFiBerry card: <name>" comment in config.txt.
+        # The wizard / disable-detection flow writes this comment when a card is pinned.
+        # Honoring it here means a pinned card is respected even when ConfigDB is empty
+        # (e.g. on systems pinned before the ConfigDB write was added).
+        try:
+            comment_card = self.detect_from_config_txt_comment()
+            if comment_card:
+                logging.info(f"Using soundcard from config.txt comment (bypassing detection): {comment_card}")
+                self._log_hifiberry_event(f"Using soundcard from config.txt comment: {comment_card}")
+                self.detected_card = comment_card
+                self.detected_overlay = None
+                return
+        except Exception as e:
+            logging.debug(f"Could not read soundcard from config.txt comment: {str(e)}")
         
         # Check if HAT EEPROM has valid info with retry
         hat_info = None

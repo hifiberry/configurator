@@ -9,6 +9,7 @@ import logging
 from flask import request, jsonify
 from ..soundcard import SOUND_CARD_DEFINITIONS
 from ..configtxt import ConfigTxt
+from ..configdb import ConfigDB
 
 logger = logging.getLogger(__name__)
 
@@ -216,10 +217,17 @@ class SoundcardHandler:
             
             # Remove HiFiBerry overlays to enable auto-detection
             config.remove_hifiberry_overlays()
-            
+
             # Enable detection
             config.enable_detection()
             config.save()
+
+            # Clear any pinned card from ConfigDB so SoundcardDetector's Step 0
+            # no longer short-circuits to a stale value.
+            try:
+                ConfigDB().delete("soundcard.name")
+            except Exception as e:
+                logger.warning(f"Failed to clear soundcard.name from ConfigDB: {e}")
             
             if was_disabled or config.changes_made:
                 return jsonify({
@@ -295,7 +303,14 @@ class SoundcardHandler:
                 config.disable_detection()
                 config.enable_overlay(dtoverlay, card_name=card_name, disable_eeprom=True)
                 config.save()
-                
+
+                # Persist the pinned card name so SoundcardDetector's Step 0 override
+                # returns it (and config-soundcard reports the right volume_control etc.).
+                try:
+                    ConfigDB().set("soundcard.name", card_name)
+                except Exception as e:
+                    logger.warning(f"Failed to write soundcard.name to ConfigDB: {e}")
+
                 return jsonify({
                     "status": "success",
                     "message": f"Fixed sound card set to '{card_name}' with overlay '{dtoverlay}'",

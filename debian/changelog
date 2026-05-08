@@ -1,3 +1,18 @@
+hifiberry-configurator (2.13.8) stable; urgency=medium
+
+  * Pin sound card properly: handle_disable_detection now writes soundcard.name
+    to ConfigDB (and handle_enable_detection clears it) so SoundcardDetector's
+    Step 0 override returns the pinned card. Previously the pin only lived in
+    a config.txt comment and was ignored by config-soundcard.
+  * SoundcardDetector: also honor the "# HiFiBerry card: <name>" comment in
+    config.txt as a Step 0b fallback when ConfigDB is empty (back-compat for
+    systems pinned before the ConfigDB write existed).
+  * Net effect: config-soundcard --volume-control returns the pinned card's
+    actual mixer (e.g. "DSPVolume" for Beocreate) instead of falling through
+    to "Softvol" via misdetection, fixing librespot/raat ALSA mixer init.
+
+ -- HiFiBerry <info@hifiberry.com>  Fri, 08 May 2026 17:00:00 +0200
+
 hifiberry-configurator (2.13.7) stable; urgency=medium
 
   * Permit start/stop/enable/disable on create-uuid.service in the systemd API allowlist
