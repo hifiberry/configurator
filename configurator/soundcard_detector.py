@@ -6,6 +6,7 @@ import logging
 import argparse
 import time
 from datetime import datetime
+from xml.etree import ElementTree
 try:
     import argcomplete
     ARGCOMPLETE_AVAILABLE = True
@@ -19,6 +20,16 @@ from configurator.configdb import ConfigDB
 
 # Constants
 HIFIBERRY_CARD_COMMENT_PREFIX = "# HiFiBerry card:"
+
+# Known DSP firmware checksums that uniquely identify a specific
+# sound card, beyond what's covered by the bundled dspprofile XMLs.
+# Length-mode SHA-1, uppercase. Used by _refine_card_by_dsp_program
+# in addition to scanning /usr/share/hifiberry/dspprofiles/*.xml.
+KNOWN_DSP_CHECKSUM_TO_CARD = {
+    # Small factory-default firmware observed on multiple Beocreate
+    # 4-Channel Amplifier boards (program_length=218 words).
+    "87F98DB5B1023FF6A5104F0A4ACF4C991D8EDE80": "Beocreate 4-Channel Amplifier",
+}
 
 # Additional validation tests for sound cards
 # These functions provide extra verification beyond basic detection
@@ -260,6 +271,7 @@ class SoundcardDetector:
                 # Set the detected card directly and return
                 self.detected_card = config_soundcard_name
                 self.detected_overlay = None  # No overlay needed when using config database
+                self._refine_card_by_dsp_program()
                 return
         except Exception as e:
             logging.debug(f"Could not read from config database: {str(e)}")
@@ -275,6 +287,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"Using soundcard from config.txt comment: {comment_card}")
                 self.detected_card = comment_card
                 self.detected_overlay = None
+                self._refine_card_by_dsp_program()
                 return
         except Exception as e:
             logging.debug(f"Could not read soundcard from config.txt comment: {str(e)}")
@@ -332,6 +345,7 @@ class SoundcardDetector:
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via HAT EEPROM)")
             if self.verbose:
                 logging.info(f"HAT EEPROM detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+            self._refine_card_by_dsp_program()
             return  # Successfully detected and validated
         elif self.verbose and detected_overlay:
             logging.info(f"HAT EEPROM found overlay '{detected_overlay}' but validation failed")
@@ -360,6 +374,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
                 if self.verbose:
                     logging.info(f"I2C probing: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+                self._refine_card_by_dsp_program()
                 return  # Successfully detected and validated
         elif self.verbose:
             logging.info("I2C probing: FAILED - proceeding to next method")
@@ -382,6 +397,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via aplay)")
                 if self.verbose:
                     logging.info(f"aplay detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+                self._refine_card_by_dsp_program()
                 return  # Successfully detected and validated
             else:
                 logging.warning(f"Detected overlay {detected_overlay} failed validation, trying other methods")
@@ -400,6 +416,7 @@ class SoundcardDetector:
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via DSP detection)")
             if self.verbose:
                 logging.info(f"DSP detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+            self._refine_card_by_dsp_program()
             return  # Successfully detected and validated
         elif self.verbose:
             logging.info("DSP detection: FAILED")
@@ -410,6 +427,124 @@ class SoundcardDetector:
         self.detected_overlay = None
         self.detected_card = None
         self._log_hifiberry_event("No sound card detected (all detection methods failed)")
+
+    def _refine_card_by_dsp_program(self):
+        """If the identified card is generic-looking but the DSP is running
+        a program that uniquely identifies a specific board, upgrade
+        ``self.detected_card`` accordingly.
+
+        Background: Beocreate 4-Channel Amplifier shares the
+        ``hifiberry-dacplusdsp`` overlay and the same DSP as the plain
+        DAC+ DSP card, so I2C / HAT / aplay detection all land on
+        "DAC+ DSP". The two boards are distinguishable only by the
+        firmware loaded into the DSP: Beocreate ships with the
+        "Beocreate Universal" profile, while DAC+ DSP ships with
+        "dacdsp-15" (or similar).
+
+        We ask the sigmatcpserver REST API for the live DSP's
+        length-mode SHA-1 (no direct chip access — keeps the
+        configurator decoupled from hifiberry-dsp internals) and
+        compare it to the ``<metadata type="checksum_sha1">`` field of
+        each bundled profile XML. If a matching profile's
+        ``modelName`` is a known sound card in SOUND_CARD_DEFINITIONS,
+        switch to it.
+
+        The function is intentionally tolerant: REST endpoint
+        unreachable, missing profiles dir, empty-input checksum (DSP
+        not initialised), or any I/O error falls through silently and
+        leaves detection unchanged.
+        """
+        if not self.detected_card:
+            return
+
+        # SHA-1 of the empty input — what sigmatcpserver returns when
+        # the DSP has no program loaded. Treat as "no useful info".
+        EMPTY_SHA1 = "DA39A3EE5E6B4B0D3255BFEF95601890AFD80709"
+
+        try:
+            import urllib.request
+            import json
+            with urllib.request.urlopen(
+                "http://localhost:13141/checksum", timeout=3
+            ) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            logging.debug(f"sigmatcpserver /checksum unreachable: {e}; skipping refinement")
+            return
+
+        live_sha1 = (
+            (payload.get("length") or {}).get("sha1") or ""
+        ).upper()
+        if not live_sha1 or live_sha1 == EMPTY_SHA1:
+            logging.debug(
+                "DSP checksum is empty-input hash or missing; skipping refinement"
+            )
+            return
+
+        # Lazy import: keep the configurator's import chain unchanged for
+        # callers that never hit this branch.
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
+
+        # Check hard-coded factory-firmware checksums first (firmwares we
+        # recognise but don't ship as a bundled profile XML).
+        static_match = KNOWN_DSP_CHECKSUM_TO_CARD.get(live_sha1)
+        if static_match and static_match != self.detected_card \
+                and static_match in SOUND_CARD_DEFINITIONS:
+            logging.info(
+                f"DSP program checksum ({live_sha1}) matches known firmware: "
+                f"refining detected card '{self.detected_card}' -> '{static_match}'"
+            )
+            self._log_hifiberry_event(
+                f"Detected sound card refined via DSP program checksum: "
+                f"{self.detected_card} -> {static_match}"
+            )
+            self.detected_card = static_match
+            return
+
+        profile_dir = "/usr/share/hifiberry/dspprofiles"
+        if not os.path.isdir(profile_dir):
+            return
+
+        for filename in sorted(os.listdir(profile_dir)):
+            if not filename.endswith(".xml"):
+                continue
+            path = os.path.join(profile_dir, filename)
+            try:
+                tree = ElementTree.parse(path)
+            except Exception as e:
+                logging.debug(f"Could not parse {filename}: {e}")
+                continue
+
+            profile_sha1 = None
+            model_name = None
+            for meta in tree.getroot().iter("metadata"):
+                t = meta.get("type")
+                if t == "checksum_sha1":
+                    profile_sha1 = (meta.text or "").strip().upper()
+                elif t == "modelName":
+                    model_name = (meta.text or "").strip()
+
+            if not profile_sha1 or profile_sha1 != live_sha1:
+                continue
+            if not model_name or model_name == self.detected_card:
+                return  # already aligned, nothing to do
+            if model_name not in SOUND_CARD_DEFINITIONS:
+                logging.debug(
+                    f"DSP program matches {filename} ({model_name}), but the "
+                    f"name isn't in SOUND_CARD_DEFINITIONS — keeping {self.detected_card!r}"
+                )
+                return
+
+            logging.info(
+                f"DSP program checksum ({live_sha1}) matches {filename}: "
+                f"refining detected card '{self.detected_card}' -> '{model_name}'"
+            )
+            self._log_hifiberry_event(
+                f"Detected sound card refined via DSP program checksum: "
+                f"{self.detected_card} -> {model_name}"
+            )
+            self.detected_card = model_name
+            return
 
     def _map_aplay_to_overlay(self, aplay_output):
         """

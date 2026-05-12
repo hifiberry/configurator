@@ -1,3 +1,34 @@
+hifiberry-configurator (2.13.11) stable; urgency=medium
+
+  * SoundcardDetector: recognise Beocreate factory-default firmware by
+    its length-mode SHA-1 (87F98DB5…) in addition to scanning bundled
+    profile XMLs. Observed on multiple new Beocreate 4-Channel
+    Amplifier boards as the small (program_length=218) firmware
+    shipped from the factory before any HiFiBerry OS install touches
+    the DSP. With this entry the configurator upgrades a generic
+    "DAC+ DSP" autodetect to "Beocreate 4-Channel Amplifier" on those
+    boards too, not only when the Beocreate Universal profile has
+    already been loaded.
+
+ -- HiFiBerry <info@hifiberry.com>  Tue, 12 May 2026 12:00:00 +0000
+
+hifiberry-configurator (2.13.10) stable; urgency=medium
+
+  * SoundcardDetector: refine the detected card by inspecting the live
+    DSP program checksum via sigmatcpserver's REST API. Beocreate
+    4-Channel Amplifier shares the `hifiberry-dacplusdsp` overlay and
+    the same DSP as the plain DAC+ DSP, so HAT/I2C/aplay all land on
+    "DAC+ DSP". After detection we now ask
+    `GET http://localhost:13141/checksum` for the DSP's length-mode
+    SHA-1 and match it against the `<metadata type="checksum_sha1">`
+    field of each bundled profile XML; a hit on the Beocreate
+    Universal profile reclassifies the card as "Beocreate 4-Channel
+    Amplifier". The check is tolerant — REST endpoint unreachable,
+    missing profiles dir, empty-input checksum (DSP not initialised),
+    or any I/O error leaves the original detection unchanged.
+
+ -- HiFiBerry <info@hifiberry.com>  Tue, 12 May 2026 11:00:00 +0000
+
 hifiberry-configurator (2.13.9) stable; urgency=medium
 
   * systeminfo: expose soundcard.pinSource ("configdb" | "config.txt" | null)
