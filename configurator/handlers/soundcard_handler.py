@@ -354,6 +354,47 @@ class SoundcardHandler:
                 "error": str(e)
             }), 500
 
+    def handle_detect_live_soundcard(self):
+        """
+        Handle GET /api/v1/soundcard/detect-live - Run a fresh hardware
+        detection pass, ignoring any pin written to ConfigDB or the
+        config.txt `# HiFiBerry card:` comment. DSP-checksum refinement
+        is still applied. Used by the setup wizard so it shows what is
+        actually plugged in, not a stale pin from a previous run.
+
+        Returns:
+            JSON response with the freshly detected card and overlay.
+        """
+        try:
+            from ..soundcard_detector import SoundcardDetector
+
+            detector = SoundcardDetector()
+            detector.detect_card(ignore_pin=True)
+
+            card_name = detector.detected_card
+            overlay = detector.detected_overlay
+
+            card_def = SOUND_CARD_DEFINITIONS.get(card_name) if card_name else None
+            dtoverlay = card_def.get("dtoverlay") if card_def else None
+
+            return jsonify({
+                "status": "success",
+                "data": {
+                    "card_name": card_name,
+                    "overlay": overlay,
+                    "dtoverlay": dtoverlay,
+                    "card_detected": bool(card_name),
+                    "definition_found": card_def is not None,
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error running live soundcard detection: {e}")
+            return jsonify({
+                "status": "error",
+                "message": "Failed to run live sound card detection",
+                "error": str(e),
+            }), 500
+
     def handle_detect_soundcard(self):
         """
         Handle GET /api/v1/soundcard/detect - Detect current sound card

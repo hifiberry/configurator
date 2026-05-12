@@ -256,41 +256,55 @@ class SoundcardDetector:
             logging.warning(f"No card name found for overlay '{overlay}', using overlay name")
             return overlay
 
-    def detect_card(self):
+    def detect_card(self, ignore_pin=False):
+        """Detect the connected HiFiBerry sound card.
+
+        Args:
+            ignore_pin: If True, skip the ConfigDB / config.txt-comment
+                bypass paths and always run live hardware detection
+                (HAT EEPROM -> I2C -> aplay -> DSP). Used by the setup
+                wizard, which needs a fresh detection result regardless
+                of any pin a previous session may have written.
+        """
         logging.info("Detecting HiFiBerry sound card...")
         if self.verbose:
             logging.info("Detection method order: 1) Config database override, 2) HAT EEPROM, 3) I2C probing, 4) aplay output, 5) DSP detection")
-        
+
+        if ignore_pin:
+            logging.info("ignore_pin=True; skipping ConfigDB and config.txt-comment bypass paths")
+
         # Step 0: Check if soundcard.name is set in config database to bypass detection
-        try:
-            db = ConfigDB()
-            config_soundcard_name = db.get("soundcard.name")
-            if config_soundcard_name:
-                logging.info(f"Using soundcard from config database (bypassing detection): {config_soundcard_name}")
-                self._log_hifiberry_event(f"Using soundcard from config database: {config_soundcard_name}")
-                # Set the detected card directly and return
-                self.detected_card = config_soundcard_name
-                self.detected_overlay = None  # No overlay needed when using config database
-                self._refine_card_by_dsp_program()
-                return
-        except Exception as e:
-            logging.debug(f"Could not read from config database: {str(e)}")
+        if not ignore_pin:
+            try:
+                db = ConfigDB()
+                config_soundcard_name = db.get("soundcard.name")
+                if config_soundcard_name:
+                    logging.info(f"Using soundcard from config database (bypassing detection): {config_soundcard_name}")
+                    self._log_hifiberry_event(f"Using soundcard from config database: {config_soundcard_name}")
+                    # Set the detected card directly and return
+                    self.detected_card = config_soundcard_name
+                    self.detected_overlay = None  # No overlay needed when using config database
+                    self._refine_card_by_dsp_program()
+                    return
+            except Exception as e:
+                logging.debug(f"Could not read from config database: {str(e)}")
 
         # Step 0b: Fallback to the "# HiFiBerry card: <name>" comment in config.txt.
         # The wizard / disable-detection flow writes this comment when a card is pinned.
         # Honoring it here means a pinned card is respected even when ConfigDB is empty
         # (e.g. on systems pinned before the ConfigDB write was added).
-        try:
-            comment_card = self.detect_from_config_txt_comment()
-            if comment_card:
-                logging.info(f"Using soundcard from config.txt comment (bypassing detection): {comment_card}")
-                self._log_hifiberry_event(f"Using soundcard from config.txt comment: {comment_card}")
-                self.detected_card = comment_card
-                self.detected_overlay = None
-                self._refine_card_by_dsp_program()
-                return
-        except Exception as e:
-            logging.debug(f"Could not read soundcard from config.txt comment: {str(e)}")
+        if not ignore_pin:
+            try:
+                comment_card = self.detect_from_config_txt_comment()
+                if comment_card:
+                    logging.info(f"Using soundcard from config.txt comment (bypassing detection): {comment_card}")
+                    self._log_hifiberry_event(f"Using soundcard from config.txt comment: {comment_card}")
+                    self.detected_card = comment_card
+                    self.detected_overlay = None
+                    self._refine_card_by_dsp_program()
+                    return
+            except Exception as e:
+                logging.debug(f"Could not read soundcard from config.txt comment: {str(e)}")
         
         # Check if HAT EEPROM has valid info with retry
         hat_info = None

@@ -1,3 +1,17 @@
+hifiberry-configurator (2.13.12) stable; urgency=medium
+
+  * Add GET /api/v1/soundcard/detect-live endpoint that runs a fresh
+    hardware detection pass, skipping the ConfigDB / config.txt-comment
+    bypass paths. DSP-checksum refinement is still applied. Intended
+    for the setup wizard so it shows what's actually plugged in, not a
+    stale pin from a previous run.
+  * SoundcardDetector.detect_card() now accepts ignore_pin=False; when
+    True the two bypass branches (ConfigDB lookup, config.txt comment
+    fallback) are skipped. Default behaviour is unchanged for all
+    existing callers (config-detect.service, config-soundcard CLI).
+
+ -- HiFiBerry <info@hifiberry.com>  Tue, 12 May 2026 13:00:00 +0000
+
 hifiberry-configurator (2.13.11) stable; urgency=medium
 
   * SoundcardDetector: recognise Beocreate factory-default firmware by

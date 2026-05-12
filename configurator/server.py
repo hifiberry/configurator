@@ -134,6 +134,7 @@ class ConfigAPIServer:
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'soundcard_detect': '/api/v1/soundcard/detect',
+                    'soundcard_detect_live': '/api/v1/soundcard/detect-live',
                     'soundcard_detection': '/api/v1/soundcard/detection',
                     'soundcard_detection_enable': '/api/v1/soundcard/detection/enable',
                     'soundcard_detection_disable': '/api/v1/soundcard/detection/disable',
@@ -354,6 +355,11 @@ class ConfigAPIServer:
         def detect_soundcard():
             """Detect current sound card and return name and dtoverlay"""
             return self.soundcard_handler.handle_detect_soundcard()
+
+        @self.app.route('/api/v1/soundcard/detect-live', methods=['GET'])
+        def detect_soundcard_live():
+            """Run a fresh hardware detection pass, ignoring any pin (used by setup wizard)."""
+            return self.soundcard_handler.handle_detect_live_soundcard()
 
         @self.app.route('/api/v1/soundcard/detection', methods=['GET'])
         def get_detection_status():
