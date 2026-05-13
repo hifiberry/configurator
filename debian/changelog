@@ -1,3 +1,18 @@
+hifiberry-configurator (2.13.14) stable; urgency=medium
+
+  * SoundcardDetector: canonicalisation of card names through
+    SOUND_CARD_DEFINITIONS aliases now runs centrally for ALL
+    detection paths (HAT EEPROM, I2C probing, aplay, DSP detection),
+    not just the HAT path that 2.13.13 covered. On a Beocreate Mk1
+    HAT detection often returns nothing and I2C probing reports the
+    short marketing name "Beocreate 4CA" — that's now canonicalised
+    to "Beocreate 4-Channel Amplifier" before the result is returned,
+    so the setup wizard's definition_found is True and the friendly
+    "Detected sound card" panel shows up instead of the manual-browse
+    fallback.
+
+ -- HiFiBerry <info@hifiberry.com>  Wed, 13 May 2026 13:00:00 +0000
+
 hifiberry-configurator (2.13.13) stable; urgency=medium
 
   * SoundcardDetector._get_card_name canonicalises HAT EEPROM product

@@ -174,6 +174,32 @@ class SoundcardDetector:
         except subprocess.CalledProcessError:
             return ""
 
+    def _canonicalize_card_name(self):
+        """If self.detected_card matches an `aliases` entry of any
+        SOUND_CARD_DEFINITIONS card, replace it with the canonical key.
+
+        HAT EEPROM (e.g. "Beocreate 4CA") and I2C probing can return short
+        marketing names; the canonical key in SOUND_CARD_DEFINITIONS is
+        the long form ("Beocreate 4-Channel Amplifier"). Without this
+        normalisation the setup wizard's `definition_found` is False and
+        it falls back to the manual-browse list. Called once per
+        successful detection path, before refinement.
+        """
+        if not self.detected_card:
+            return
+        from .soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
+        if self.detected_card in SOUND_CARD_DEFINITIONS:
+            return
+        for canonical, attrs in SOUND_CARD_DEFINITIONS.items():
+            aliases = attrs.get("aliases") or []
+            if self.detected_card in aliases:
+                logging.info(
+                    f"Canonicalising detected card name '{self.detected_card}' "
+                    f"-> '{canonical}' (matched alias)"
+                )
+                self.detected_card = canonical
+                return
+
     def _get_card_name(self, overlay, hat_product=None, no_hat_only=False):
         """
         Get the appropriate card name, prioritizing HAT info over overlay mapping
@@ -186,32 +212,11 @@ class SoundcardDetector:
         Returns:
             Card name - HAT product name if available, otherwise overlay mapping result
         """
-        # If we have valid HAT product info, use it — but canonicalise it
-        # through SOUND_CARD_DEFINITIONS first. The HAT EEPROM may carry a
-        # short marketing name (e.g. "Beocreate 4CA") while the canonical
-        # dictionary key is the long form ("Beocreate 4-Channel Amplifier").
-        # Returning the alias here makes definition_found=False and forces
-        # the setup wizard into manual-browse mode.
+        # If we have valid HAT product info, use it — canonicalisation
+        # through SOUND_CARD_DEFINITIONS aliases happens centrally in
+        # _canonicalize_card_name() after detection.
         if hat_product and hat_product.strip():
-            from .soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
-            hat_product = hat_product.strip()
-            if hat_product in SOUND_CARD_DEFINITIONS:
-                logging.info(f"Using HAT product name directly: {hat_product}")
-                return hat_product
-            for canonical, attrs in SOUND_CARD_DEFINITIONS.items():
-                aliases = attrs.get("aliases") or []
-                if hat_product in aliases:
-                    logging.info(
-                        f"HAT product '{hat_product}' is an alias for '{canonical}'; "
-                        f"returning canonical name"
-                    )
-                    return canonical
-            # Not in dictionary at all — return as-is and let downstream
-            # detection methods (overlay, I2C, aplay) try to refine.
-            logging.info(
-                f"HAT product '{hat_product}' not in SOUND_CARD_DEFINITIONS "
-                f"(no alias match either); returning verbatim"
-            )
+            logging.info(f"Using HAT product name directly: {hat_product}")
             return hat_product
         
         # Fall back to overlay mapping if no HAT info
@@ -307,6 +312,7 @@ class SoundcardDetector:
                     # Set the detected card directly and return
                     self.detected_card = config_soundcard_name
                     self.detected_overlay = None  # No overlay needed when using config database
+                    self._canonicalize_card_name()
                     self._refine_card_by_dsp_program()
                     return
             except Exception as e:
@@ -324,6 +330,7 @@ class SoundcardDetector:
                     self._log_hifiberry_event(f"Using soundcard from config.txt comment: {comment_card}")
                     self.detected_card = comment_card
                     self.detected_overlay = None
+                    self._canonicalize_card_name()
                     self._refine_card_by_dsp_program()
                     return
             except Exception as e:
@@ -382,6 +389,7 @@ class SoundcardDetector:
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via HAT EEPROM)")
             if self.verbose:
                 logging.info(f"HAT EEPROM detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+            self._canonicalize_card_name()
             self._refine_card_by_dsp_program()
             return  # Successfully detected and validated
         elif self.verbose and detected_overlay:
@@ -411,6 +419,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via I2C probing)")
                 if self.verbose:
                     logging.info(f"I2C probing: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+                self._canonicalize_card_name()
                 self._refine_card_by_dsp_program()
                 return  # Successfully detected and validated
         elif self.verbose:
@@ -434,6 +443,7 @@ class SoundcardDetector:
                 self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via aplay)")
                 if self.verbose:
                     logging.info(f"aplay detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+                self._canonicalize_card_name()
                 self._refine_card_by_dsp_program()
                 return  # Successfully detected and validated
             else:
@@ -453,6 +463,7 @@ class SoundcardDetector:
             self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via DSP detection)")
             if self.verbose:
                 logging.info(f"DSP detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+            self._canonicalize_card_name()
             self._refine_card_by_dsp_program()
             return  # Successfully detected and validated
         elif self.verbose:
