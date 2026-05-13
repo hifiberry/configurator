@@ -1,3 +1,16 @@
+hifiberry-configurator (2.13.13) stable; urgency=medium
+
+  * SoundcardDetector._get_card_name canonicalises HAT EEPROM product
+    names through SOUND_CARD_DEFINITIONS aliases. A Beocreate
+    4-Channel Amplifier reports "Beocreate 4CA" in its HAT EEPROM —
+    that's listed as an alias for the canonical "Beocreate 4-Channel
+    Amplifier" entry but the detector was returning the alias verbatim.
+    The setup wizard then saw definition_found=false and fell into the
+    manual-browse fallback instead of showing the friendly
+    "Detected sound card" panel.
+
+ -- HiFiBerry <info@hifiberry.com>  Wed, 13 May 2026 12:00:00 +0000
+
 hifiberry-configurator (2.13.12) stable; urgency=medium
 
   * Add GET /api/v1/soundcard/detect-live endpoint that runs a fresh
