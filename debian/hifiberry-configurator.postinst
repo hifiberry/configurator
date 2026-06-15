@@ -10,8 +10,9 @@ case "$1" in
         chown root:root /etc/configserver/configserver.json 2>/dev/null || true
         chmod 644 /etc/configserver/configserver.json 2>/dev/null || true
         
-        # Enable and start the config-server service
-        if command -v systemctl >/dev/null 2>&1; then
+        # Only touch systemd when it's actually running (PID 1), not just when
+        # the systemctl binary exists — otherwise this aborts in build chroots.
+        if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
             # Reload systemd daemon to recognize new service
             systemctl daemon-reload
             
