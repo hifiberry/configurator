@@ -1,3 +1,21 @@
+hifiberry-configurator (2.13.15) stable; urgency=medium
+
+  * postinst: only touch systemd when it's actually running. The systemd
+    block in debian/hifiberry-configurator.postinst now guards on
+    [ -d /run/systemd/system ] in addition to the systemctl binary being
+    present. In build chroots (rpi-image-gen, debootstrap, docker, pi-gen)
+    systemctl exists but systemd is not PID 1, so `systemctl daemon-reload`
+    failed with "System has not been booted with systemd as init system"
+    and, under set -e, aborted the whole postinst — leaving the package
+    unconfigured and cascading to dependents (hbos-minimal,
+    hifiberry-shairport, hifiberry-mpd, hifiberry-librespot). This aligns
+    hifiberry-configurator with the sibling packages (shairport, mpd,
+    audiocontrol) that already guard the same way; behaviour on a real boot
+    is unchanged. Fixes HBOS image builds with rpi-image-gen on Trixie.
+    (PR #4, mattias-arrelid)
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 15 Jun 2026 10:15:00 +0000
+
 hifiberry-configurator (2.13.14) stable; urgency=medium
 
   * SoundcardDetector: canonicalisation of card names through
