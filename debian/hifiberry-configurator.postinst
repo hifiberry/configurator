@@ -5,46 +5,15 @@ case "$1" in
     configure)
         # Create config directory (should already exist from package installation)
         mkdir -p /etc/configserver
-        
+
         # Set proper permissions on config files
         chown root:root /etc/configserver/configserver.json 2>/dev/null || true
         chmod 644 /etc/configserver/configserver.json 2>/dev/null || true
-        
-        # Only touch systemd when it's actually running (PID 1), not just when
-        # the systemctl binary exists — otherwise this aborts in build chroots.
-        if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
-            # Reload systemd daemon to recognize new service
-            systemctl daemon-reload
-            
-            # Enable the config-server service for automatic startup
-            systemctl enable config-server.service
-            
-            # Enable the config-detect service for automatic startup
-            systemctl enable config-detect.service
-
-            # Enable create-uuid.service so /etc/uuid is created on every boot
-            # (no-op when the file already exists). Required by services that
-            # depend on /etc/uuid (e.g. raat for Roon).
-            if systemctl list-unit-files create-uuid.service >/dev/null 2>&1; then
-                systemctl enable create-uuid.service
-                # Trigger it now too so /etc/uuid exists immediately after install.
-                systemctl start create-uuid.service || true
-            fi
-
-            # Start the config-server service if not already running
-            if ! systemctl is-active --quiet config-server.service; then
-                systemctl start config-server.service
-            fi
-            
-            echo "HiFiBerry Configuration Server has been enabled and started."
-            echo "HiFiBerry Sound Card Detection service has been enabled."
-            echo "The API is available at http://localhost:1081"
-        fi
         ;;
-    
+
     abort-upgrade|abort-remove|abort-deconfigure)
         ;;
-    
+
     *)
         echo "postinst called with unknown argument \`$1'" >&2
         exit 1

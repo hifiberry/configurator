@@ -4,5 +4,4 @@
 	dh $@ --buildsystem=pybuild
 
 override_dh_installsystemd:
-	dh_installsystemd --no-restart-after-upgrade --no-stop-on-upgrade --name=config-detect
-	dh_installsystemd --remaining-packages
+	dh_installsystemd --no-restart-after-upgrade --no-stop-on-upgrade
