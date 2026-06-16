@@ -1,3 +1,28 @@
+hifiberry-configurator (2.13.16) stable; urgency=medium
+
+  * debian: unify systemd unit handling under dh_installsystemd. The
+    previous debian/rules used two dh_installsystemd calls, the second
+    with --remaining-packages, which skips packages already processed in
+    the same debhelper run (not units within a package) — so it was a
+    no-op and only config-detect.service received dh-generated maintscript
+    snippets. config-server.service (and the other units) therefore
+    shipped without their multi-user.target.wants symlink on offline /
+    chroot installs. Collapsed to a single dh_installsystemd call so the
+    flags apply to every unit, and dropped the now-redundant hand-rolled
+    systemctl enable/start (postinst) and stop/disable (prerm) blocks.
+    Verified in an mmdebstrap arm64 Trixie chroot: all unit symlinks
+    present, including config-server.service. (PR #6, mattias-arrelid)
+
+  * debian/control: add missing runtime dependency on uuid. create-uuid
+    .service runs /usr/bin/uuid > /etc/uuid, but /usr/bin/uuid is shipped
+    by the uuid package (ossp-uuid), which was not declared as a
+    dependency — only uuid-dev was pulled in transitively as a build-dep.
+    On images where uuid was not otherwise installed, create-uuid.service
+    failed at boot (status=127, /usr/bin/uuid: not found), leaving /etc/uuid
+    absent. (PR #7, mattias-arrelid)
+
+ -- HiFiBerry <info@hifiberry.com>  Tue, 16 Jun 2026 12:29:00 +0200
+
 hifiberry-configurator (2.13.15) stable; urgency=medium
 
   * postinst: only touch systemd when it's actually running. The systemd
