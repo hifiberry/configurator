@@ -1,3 +1,12 @@
+hifiberry-configurator (2.13.18) stable; urgency=medium
+
+  * soundcard: add `config-soundcard --has-input`, which exits 0 when the
+    detected card has input channels (an ADC) and 1 otherwise, printing
+    nothing. Intended for scripts and systemd ExecCondition so callers no
+    longer need to parse the `--input-channels` count.
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 06 Jul 2026 15:00:00 +0000
+
 hifiberry-configurator (2.13.17) stable; urgency=medium
 
   * players: generic plugin-settings capability for external players — the

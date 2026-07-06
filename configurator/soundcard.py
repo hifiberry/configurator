@@ -979,6 +979,13 @@ def main():
         help="Print only the features of the detected sound card.",
     )
     parser.add_argument(
+        "--has-input",
+        action="store_true",
+        help="Exit 0 if the detected card has input channels (an ADC), "
+             "exit 1 otherwise. Prints nothing; intended for scripts and "
+             "systemd ExecCondition.",
+    )
+    parser.add_argument(
         "--no-eeprom",
         action="store_true",
         help="Disable EEPROM check and use only aplay -l for detection.",
@@ -1033,6 +1040,12 @@ def main():
         else:
             # No sound card detected, exit with code 1
             sys.exit(1)
+
+    # Handle --has-input option (exit 0 if the card exposes input channels,
+    # i.e. has an ADC; exit 1 for output-only or digital-only cards).
+    if args.has_input:
+        card = Soundcard(no_eeprom=args.no_eeprom)
+        sys.exit(0 if card.input_channels > 0 else 1)
 
     # Handle dummy control creation (requires sound card detection)
     if args.create_volume_control:
