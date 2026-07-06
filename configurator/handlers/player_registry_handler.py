@@ -49,7 +49,11 @@ def coerce_setting_value(setting_type, raw):
 
 
 def serialize_setting_value(setting_type, value):
-    """Serialize a typed value to the TEXT form stored in ConfigDB."""
+    """Serialize a typed value to the TEXT form stored in ConfigDB.
+
+    For type == "toggle", expects value to already be a Python bool;
+    callers should coerce with coerce_setting_value first if needed.
+    """
     if setting_type == "toggle":
         return "true" if value else "false"
     return str(value)
@@ -68,6 +72,11 @@ def sanitize_settings(descriptor):
             continue
         if entry["type"] not in SETTING_TYPES:
             continue
+        # Drop select entries without a non-empty options list
+        if entry["type"] == "select":
+            options = entry.get("options")
+            if not isinstance(options, list) or len(options) == 0:
+                continue
         clean.append(entry)
     return clean
 

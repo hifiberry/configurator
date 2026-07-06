@@ -48,3 +48,51 @@ def test_sanitize_settings_drops_invalid_and_keeps_valid():
 
 def test_sanitize_settings_absent_is_empty():
     assert sanitize_settings({"name": "x"}) == []
+
+
+def test_sanitize_settings_drops_select_without_options():
+    """A select setting with no options key is dropped."""
+    descriptor = {
+        "settings": [
+            {"key": "mode", "type": "select", "label": "Mode", "default": "a"},
+        ]
+    }
+    out = sanitize_settings(descriptor)
+    assert out == []
+
+
+def test_sanitize_settings_keeps_select_with_options():
+    """A select setting with non-empty options list is kept."""
+    descriptor = {
+        "settings": [
+            {"key": "mode", "type": "select", "label": "Mode", "default": "a",
+             "options": [{"value": "a", "label": "A"}]},
+        ]
+    }
+    out = sanitize_settings(descriptor)
+    assert len(out) == 1
+    assert out[0]["key"] == "mode"
+
+
+def test_sanitize_settings_drops_select_with_empty_options():
+    """A select setting with empty options list is dropped."""
+    descriptor = {
+        "settings": [
+            {"key": "mode", "type": "select", "label": "Mode", "default": "a",
+             "options": []},
+        ]
+    }
+    out = sanitize_settings(descriptor)
+    assert out == []
+
+
+def test_sanitize_settings_toggle_ignores_options():
+    """Toggle settings are not affected by presence/absence of options."""
+    descriptor = {
+        "settings": [
+            {"key": "enabled", "type": "toggle", "label": "Enable", "default": True},
+        ]
+    }
+    out = sanitize_settings(descriptor)
+    assert len(out) == 1
+    assert out[0]["key"] == "enabled"
