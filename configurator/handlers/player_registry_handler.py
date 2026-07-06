@@ -28,6 +28,49 @@ SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 REQUIRED_FIELDS = ("name", "provided_by", "systemd_service", "icon")
 
+SETTING_TYPES = ("toggle", "select")
+_SETTING_REQUIRED = ("key", "type", "label", "default")
+
+
+def setting_value_key(systemd_service, key):
+    """ConfigDB key for a plugin setting value."""
+    return f"player.{systemd_service}.{key}"
+
+
+def coerce_setting_value(setting_type, raw):
+    """Coerce a stored TEXT value (or native value / None) to its typed form."""
+    if raw is None:
+        return None
+    if setting_type == "toggle":
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).strip().lower() in ("true", "1", "yes", "on")
+    return str(raw)
+
+
+def serialize_setting_value(setting_type, value):
+    """Serialize a typed value to the TEXT form stored in ConfigDB."""
+    if setting_type == "toggle":
+        return "true" if value else "false"
+    return str(value)
+
+
+def sanitize_settings(descriptor):
+    """Return the descriptor's declared settings, dropping malformed entries."""
+    raw = descriptor.get("settings")
+    if not isinstance(raw, list):
+        return []
+    clean = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        if any(f not in entry for f in _SETTING_REQUIRED):
+            continue
+        if entry["type"] not in SETTING_TYPES:
+            continue
+        clean.append(entry)
+    return clean
+
 
 class PlayerRegistryHandler:
     """Handler for external player discovery and icon serving"""
