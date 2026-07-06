@@ -453,6 +453,25 @@ class SoundcardDetector:
         elif self.verbose:
             logging.info("aplay detection: FAILED - proceeding to next method")
 
+        # Try arecord detection for input-only cards (e.g. the ADC). These
+        # have no playback device, so they never appear in `aplay -l` and the
+        # step above cannot see them; match them against the capture-device
+        # list instead.
+        if self.verbose:
+            logging.info("Step 3b: Attempting arecord detection (input-only cards)...")
+        detected_overlay = self._detect_from_arecord()
+        if detected_overlay and self._validate_detected_card(detected_overlay):
+            self.detected_overlay = detected_overlay
+            self.detected_card = self._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
+            self._log_hifiberry_event(f"Detected sound card: {self.detected_card} (via arecord)")
+            if self.verbose:
+                logging.info(f"arecord detection: SUCCESS - {self.detected_card} (overlay: {self.detected_overlay})")
+            self._canonicalize_card_name()
+            self._refine_card_by_dsp_program()
+            return  # Successfully detected and validated
+        elif self.verbose:
+            logging.info("arecord detection: FAILED - proceeding to next method")
+
         # If aplay detection failed, try DSP detection as final fallback
         if self.verbose:
             logging.info("Step 4: Attempting DSP detection...")
@@ -593,6 +612,35 @@ class SoundcardDetector:
             )
             self.detected_card = model_name
             return
+
+    def _detect_from_arecord(self):
+        """Detect an input-only HiFiBerry card (e.g. the ADC) from `arecord -l`.
+
+        Input-only cards have no playback device, so they never appear in
+        `aplay -l` and the aplay step cannot see them. Match each card's
+        ``arecord_contains`` marker against the capture-device list instead.
+
+        Returns the base overlay name (e.g. "adc", the same form
+        ``_map_aplay_to_overlay`` returns) or None if no input card matches.
+        """
+        from configurator.soundcard import SOUND_CARD_DEFINITIONS
+
+        output = self._run_command("arecord -l")
+        if not output:
+            return None
+        output_lower = output.lower()
+
+        for card_name, attributes in SOUND_CARD_DEFINITIONS.items():
+            marker = attributes.get("arecord_contains")
+            if not marker or marker.lower() not in output_lower:
+                continue
+            dtoverlay = attributes.get("dtoverlay", "")
+            if not dtoverlay:
+                continue
+            overlay = dtoverlay.replace("hifiberry-", "", 1).split(",")[0]
+            logging.info(f"Found HiFiBerry input card via arecord: {card_name} (marker '{marker}')")
+            return overlay
+        return None
 
     def _map_aplay_to_overlay(self, aplay_output):
         """
