@@ -13,10 +13,11 @@ import logging
 from typing import Dict, Any, List
 
 try:
-    from flask import jsonify, make_response
+    from flask import jsonify, make_response, request
 except ImportError:
     jsonify = None
     make_response = None
+    request = None
 
 logger = logging.getLogger(__name__)
 
@@ -166,3 +167,37 @@ class PlayerRegistryHandler:
         except OSError as e:
             logger.error(f"Error reading icon {icon_path}: {e}")
             return jsonify({"status": "error", "message": "Failed to read icon"}), 500
+
+    def set_player_settings(self, systemd_service, values):
+        """Validate and persist setting values for one plugin.
+
+        Returns (applied_keys, errors)."""
+        descriptor = next(
+            (d for d in self._load_descriptors() if d["systemd_service"] == systemd_service),
+            None,
+        )
+        if descriptor is None:
+            return [], [f"unknown player service: {systemd_service}"]
+
+        allowed = {s["key"]: s for s in sanitize_settings(descriptor)}
+        applied, errors = [], []
+        for key, value in (values or {}).items():
+            setting = allowed.get(key)
+            if setting is None:
+                errors.append(f"unknown setting: {key}")
+                continue
+            self.configdb.set(
+                setting_value_key(systemd_service, key),
+                serialize_setting_value(setting["type"], value),
+            )
+            applied.append(key)
+        return applied, errors
+
+    def handle_set_player_settings(self, systemd_service):
+        """Flask handler: persist submitted player settings."""
+        values = request.get_json(silent=True) or {}
+        applied, errors = self.set_player_settings(systemd_service, values)
+        if not applied and errors:
+            return jsonify({"status": "error", "message": "; ".join(errors)}), 400
+        return jsonify({"status": "success",
+                        "data": {"applied": applied, "errors": errors}})

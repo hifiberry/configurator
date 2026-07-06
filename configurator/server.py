@@ -520,6 +520,11 @@ class ConfigAPIServer:
             """Serve an external player icon SVG"""
             return self.player_registry_handler.handle_player_icon(name)
 
+        @self.app.route('/api/v1/players/<systemd_service>/settings', methods=['PUT', 'POST'])
+        def set_player_settings(systemd_service):
+            """Persist settings for an external player plugin"""
+            return self.player_registry_handler.handle_set_player_settings(systemd_service)
+
         # BLE provisioning endpoints
         @self.app.route('/api/v1/ble/provisioning/status', methods=['GET'])
         def get_ble_provisioning_status():
