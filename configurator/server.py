@@ -72,7 +72,7 @@ class ConfigAPIServer:
         self.i2c_handler = I2CHandler()
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
-        self.player_registry_handler = PlayerRegistryHandler()
+        self.player_registry_handler = PlayerRegistryHandler(self.configdb)
         self.ble_handler = BLEProvisioningHandler()
             
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
@@ -519,6 +519,11 @@ class ConfigAPIServer:
         def get_player_icon(name):
             """Serve an external player icon SVG"""
             return self.player_registry_handler.handle_player_icon(name)
+
+        @self.app.route('/api/v1/players/<systemd_service>/settings', methods=['PUT', 'POST'])
+        def set_player_settings(systemd_service):
+            """Persist settings for an external player plugin"""
+            return self.player_registry_handler.handle_set_player_settings(systemd_service)
 
         # BLE provisioning endpoints
         @self.app.route('/api/v1/ble/provisioning/status', methods=['GET'])

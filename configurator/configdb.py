@@ -12,7 +12,12 @@ import logging
 import argparse
 import base64
 from cryptography.fernet import Fernet
-from flask import request, jsonify
+
+try:
+    from flask import request, jsonify
+except ImportError:
+    request = None
+    jsonify = None
 
 CONFIG_DB = "/var/hifiberry/config.sqlite"
 KEY_FILE = "/etc/configdb.key"
