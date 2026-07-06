@@ -43,3 +43,22 @@ def test_set_player_settings_unknown_service(tmp_path):
     applied, errors = handler.set_player_settings("does-not-exist", {"x": 1})
     assert applied == []
     assert errors
+
+
+def test_set_player_settings_non_dict_body_does_not_crash(tmp_path):
+    """Non-dict body (list, string, number) should return error without crashing."""
+    handler, _ = _setup(tmp_path)
+    applied, errors = handler.set_player_settings("analog-recognition", ["not", "a", "dict"])
+    assert applied == []
+    assert errors  # Should have at least one error
+    assert not any("Traceback" in e for e in errors)  # No exception message
+
+
+def test_set_player_settings_coerces_toggle_string_false(tmp_path):
+    """String 'false' for toggle setting should be coerced and stored as 'false'."""
+    handler, configdb = _setup(tmp_path)
+    applied, errors = handler.set_player_settings("analog-recognition", {"songrec_enabled": "false"})
+    assert applied == ["songrec_enabled"]
+    assert errors == []
+    # The string "false" should be coerced to bool False, then serialized back to "false"
+    assert configdb.get("player.analog-recognition.songrec_enabled") == "false"

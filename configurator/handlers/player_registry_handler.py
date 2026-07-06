@@ -179,16 +179,20 @@ class PlayerRegistryHandler:
         if descriptor is None:
             return [], [f"unknown player service: {systemd_service}"]
 
+        # Guard against non-dict bodies (list, string, number, etc.)
+        if not isinstance(values, dict):
+            return [], ["invalid request body"]
+
         allowed = {s["key"]: s for s in sanitize_settings(descriptor)}
         applied, errors = [], []
-        for key, value in (values or {}).items():
+        for key, value in values.items():
             setting = allowed.get(key)
             if setting is None:
                 errors.append(f"unknown setting: {key}")
                 continue
             self.configdb.set(
                 setting_value_key(systemd_service, key),
-                serialize_setting_value(setting["type"], value),
+                serialize_setting_value(setting["type"], coerce_setting_value(setting["type"], value)),
             )
             applied.append(key)
         return applied, errors
