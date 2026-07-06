@@ -1,3 +1,16 @@
+hifiberry-configurator (2.13.19) stable; urgency=medium
+
+  * soundcard: detect input-only cards (the HiFiBerry ADC) from `arecord -l`.
+    The ADC has no playback device, so it never appears in `aplay -l` and,
+    without a HAT EEPROM or a `# HiFiBerry card:` pin, detection fell through
+    to "Unknown" with 0 input channels — so `config-soundcard --has-input`
+    wrongly reported no input on ADC boards configured via a raw
+    `dtoverlay=hifiberry-adc`. Added an `arecord_contains` marker to the ADC
+    card definition and an arecord detection step (after aplay, before DSP)
+    that matches it, so the ADC is identified from its actual capture device.
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 06 Jul 2026 16:00:00 +0000
+
 hifiberry-configurator (2.13.18) stable; urgency=medium
 
   * soundcard: add `config-soundcard --has-input`, which exits 0 when the

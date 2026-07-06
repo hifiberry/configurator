@@ -307,6 +307,7 @@ SOUND_CARD_DEFINITIONS = {
     },
     "ADC": {
         "aplay_contains": None,
+        "arecord_contains": "snd_rpi_hifiberry_adc",
         "hat_name": "ADC",
         "volume_control": None,
         "output_channels": 0,
