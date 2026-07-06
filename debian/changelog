@@ -1,3 +1,14 @@
+hifiberry-configurator (2.13.17) stable; urgency=medium
+
+  * players: generic plugin-settings capability for external players — the
+    /api/v1/players registry now serves each descriptor's settings schema with
+    current values, and a new PUT /api/v1/players/<service>/settings persists
+    them (namespaced in ConfigDB as player.<service>.<key>).
+  * debian: disable build-time test execution (PYBUILD_DISABLE=test); the new
+    pytest-style tests run in CI/dev, not in the minimal packaging chroot.
+
+ -- HiFiBerry <info@hifiberry.com>  Mon, 06 Jul 2026 12:00:00 +0000
+
 hifiberry-configurator (2.13.16) stable; urgency=medium
 
   * debian: unify systemd unit handling under dh_installsystemd. The
