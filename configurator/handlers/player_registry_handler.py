@@ -84,52 +84,75 @@ def sanitize_settings(descriptor):
 class PlayerRegistryHandler:
     """Handler for external player discovery and icon serving"""
 
-    def handle_list_players(self):
-        """List all external players registered via drop-in descriptors."""
-        players: List[Dict[str, Any]] = []
+    def __init__(self, configdb=None, players_d_dir=PLAYERS_D_DIR):
+        self.configdb = configdb
+        self.players_d_dir = players_d_dir
+        self.icons_dir = os.path.join(players_d_dir, "icons")
 
-        if not os.path.isdir(PLAYERS_D_DIR):
-            return jsonify({"status": "success", "data": {"players": []}})
-
-        for filename in sorted(os.listdir(PLAYERS_D_DIR)):
+    def _load_descriptors(self):
+        """Load valid descriptor dicts from the players.d directory."""
+        descriptors = []
+        if not os.path.isdir(self.players_d_dir):
+            return descriptors
+        for filename in sorted(os.listdir(self.players_d_dir)):
             if not filename.endswith(".json"):
                 continue
-            path = os.path.join(PLAYERS_D_DIR, filename)
+            path = os.path.join(self.players_d_dir, filename)
             try:
                 with open(path, "r") as f:
                     descriptor = json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Skipping invalid player descriptor {path}: {e}")
                 continue
-
             if not isinstance(descriptor, dict):
                 logger.warning(f"Skipping {path}: not a JSON object")
                 continue
-
             missing = [f for f in REQUIRED_FIELDS if f not in descriptor]
             if missing:
                 logger.warning(f"Skipping {path}: missing fields {missing}")
                 continue
+            descriptors.append(descriptor)
+        return descriptors
 
-            icon_name = descriptor["icon"]
+    def _settings_with_values(self, descriptor):
+        """Descriptor settings enriched with the current stored value."""
+        service = descriptor["systemd_service"]
+        out = []
+        for setting in sanitize_settings(descriptor):
+            value = None
+            if self.configdb is not None:
+                raw = self.configdb.get(setting_value_key(service, setting["key"]), default=None)
+                value = coerce_setting_value(setting["type"], raw)
+            if value is None:
+                value = setting["default"]
+            out.append({**setting, "value": value})
+        return out
+
+    def _build_players(self):
+        players = []
+        for descriptor in self._load_descriptors():
             players.append({
                 "name": descriptor["name"],
                 "provided_by": descriptor["provided_by"],
                 "systemd_service": descriptor["systemd_service"],
-                "icon_url": f"/api/v1/players/icon/{icon_name}",
+                "icon_url": f"/api/v1/players/icon/{descriptor['icon']}",
                 "allow_change": descriptor.get("allow_change", True),
                 "maintainer_name": descriptor.get("maintainer_name", ""),
                 "maintainer_url": descriptor.get("maintainer_url", ""),
+                "settings": self._settings_with_values(descriptor),
             })
+        return players
 
-        return jsonify({"status": "success", "data": {"players": players}})
+    def handle_list_players(self):
+        """List all external players registered via drop-in descriptors."""
+        return jsonify({"status": "success", "data": {"players": self._build_players()}})
 
     def handle_player_icon(self, name: str):
         """Serve an external player icon SVG."""
         if not SAFE_NAME_RE.match(name):
             return jsonify({"status": "error", "message": "Invalid icon name"}), 400
 
-        icon_path = os.path.join(ICONS_DIR, f"{name}.svg")
+        icon_path = os.path.join(self.icons_dir, f"{name}.svg")
         if not os.path.isfile(icon_path):
             return jsonify({"status": "error", "message": "Icon not found"}), 404
 

@@ -72,7 +72,7 @@ class ConfigAPIServer:
         self.i2c_handler = I2CHandler()
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
-        self.player_registry_handler = PlayerRegistryHandler()
+        self.player_registry_handler = PlayerRegistryHandler(self.configdb)
         self.ble_handler = BLEProvisioningHandler()
             
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
