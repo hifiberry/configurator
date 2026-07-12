@@ -11,6 +11,7 @@ import sqlite3
 import logging
 import argparse
 import base64
+from typing import Any, Dict, List, Optional
 from cryptography.fernet import Fernet
 
 try:
@@ -27,7 +28,7 @@ class ConfigDB:
     A class to manage key/value pairs in a SQLite database
     """
 
-    def __init__(self, db_path=CONFIG_DB):
+    def __init__(self, db_path: str = CONFIG_DB) -> None:
         """
         Initialize the database connection
         
@@ -37,7 +38,7 @@ class ConfigDB:
         self.db_path = db_path
         self._ensure_db_exists()
         
-    def _ensure_db_exists(self):
+    def _ensure_db_exists(self) -> bool:
         """Create the database and table if they don't exist"""
         db_dir = os.path.dirname(self.db_path)
         if not os.path.exists(db_dir):
@@ -65,7 +66,7 @@ class ConfigDB:
             logging.error(f"Couldn't initialize database: {str(e)}")
             return False
 
-    def _get_encryption_key(self):
+    def _get_encryption_key(self) -> bytes:
         """
         Retrieve the encryption key from the key file. If the file does not exist, create it.
         """
@@ -79,7 +80,7 @@ class ConfigDB:
                 key = key_file.read()
         return key
 
-    def encrypt_value(self, value):
+    def encrypt_value(self, value: str) -> str:
         """
         Encrypt a value using the encryption key.
 
@@ -94,7 +95,7 @@ class ConfigDB:
         encrypted_value = fernet.encrypt(value.encode())
         return encrypted_value.decode()
 
-    def decrypt_value(self, encrypted_value):
+    def decrypt_value(self, encrypted_value: str) -> str:
         """
         Decrypt an encrypted value using the encryption key.
 
@@ -109,7 +110,7 @@ class ConfigDB:
         decrypted_value = fernet.decrypt(encrypted_value.encode())
         return decrypted_value.decode()
 
-    def get(self, key, default=None, secure=False):
+    def get(self, key: str, default: Any = None, secure: bool = False) -> Any:
         """
         Get a value from the database, optionally decrypting it if secure is True.
 
@@ -138,7 +139,7 @@ class ConfigDB:
             logging.error(f"Error getting key {key}: {str(e)}")
             return default
 
-    def set(self, key, value, secure=False):
+    def set(self, key: str, value: str, secure: bool = False) -> bool:
         """
         Store a key/value pair in the database, optionally encrypting it if secure is True.
 
@@ -179,7 +180,7 @@ class ConfigDB:
             logging.error(f"Error setting key {key}: {str(e)}")
             return False
 
-    def delete(self, key):
+    def delete(self, key: str) -> bool:
         """
         Delete a key from the database
         
@@ -200,7 +201,7 @@ class ConfigDB:
             logging.error(f"Error deleting key {key}: {str(e)}")
             return False
     
-    def list_keys(self, prefix=None):
+    def list_keys(self, prefix: Optional[str] = None) -> List[str]:
         """
         List all keys in the database, optionally filtered by prefix
         
@@ -226,7 +227,7 @@ class ConfigDB:
             logging.error(f"Error listing keys: {str(e)}")
             return []
     
-    def clear_all(self):
+    def clear_all(self) -> bool:
         """
         Delete all keys from the database
 
@@ -246,7 +247,7 @@ class ConfigDB:
             logging.error(f"Error clearing config database: {str(e)}")
             return False
 
-    def get_all(self, prefix=None):
+    def get_all(self, prefix: Optional[str] = None) -> Dict[str, Any]:
         """
         Get all key/value pairs, optionally filtered by prefix
         

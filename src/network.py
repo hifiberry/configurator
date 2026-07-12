@@ -13,7 +13,7 @@ from .cmdline import CmdlineTxt
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def setup_logging(verbose=False, quiet=False):
+def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     """Configure logging based on verbosity level."""
     if quiet:
         log_level = logging.WARNING

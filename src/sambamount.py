@@ -9,12 +9,12 @@ import shutil
 import subprocess
 from tempfile import NamedTemporaryFile
 from typing import List, Dict, Optional, Tuple, Any
-from configurator.configdb import ConfigDB
+from src.configdb import ConfigDB
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def setup_logging(verbose=False, quiet=False):
+def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     """Configure logging based on verbosity level."""
     if quiet:
         log_level = logging.WARNING

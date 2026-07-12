@@ -14,7 +14,7 @@ import shutil
 import subprocess
 
 
-def setup_logging(verbose=False):
+def setup_logging(verbose: bool = False) -> None:
     """Setup logging configuration"""
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(

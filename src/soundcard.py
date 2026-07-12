@@ -11,7 +11,7 @@ except ImportError:
     ARGCOMPLETE_AVAILABLE = False
 
 # Import the get_hat_info function from hattools
-from configurator.hattools import get_hat_info
+from src.hattools import get_hat_info
 
 # Constants
 UNKNOWN_CARD_NAME = "Unknown"
@@ -531,7 +531,7 @@ class Soundcard:
             Dictionary with card attributes or None if not detected
         """
         try:
-            from configurator.soundcard_detector import SoundcardDetector
+            from src.soundcard_detector import SoundcardDetector
             
             # Use SoundcardDetector for comprehensive detection
             # Enable pcm5102 detection to support DAC+ Zero/Light cards
@@ -599,7 +599,7 @@ class Soundcard:
             Dictionary with card attributes or None if not detected
         """
         try:
-            from configurator.soundcard_detector import SoundcardDetector
+            from src.soundcard_detector import SoundcardDetector
             
             # Step 0: Check if there's a fixed card name in config.txt comment
             try:

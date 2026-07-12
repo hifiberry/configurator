@@ -15,7 +15,7 @@ def get_version():
                 return line.split('=')[1].strip().strip('"\'')
     raise RuntimeError('Unable to find version string.')
 
-def update_api_docs_version(version):
+def update_api_docs_version(version: str) -> None:
     """Update API documentation version"""
     docs_path = os.path.join(os.path.dirname(__file__), 'docs', 'api-documentation.md')
     

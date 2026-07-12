@@ -20,7 +20,7 @@ ctl.!default {{
 """
 
 class ALSAConfig:
-    def __init__(self, filename='/etc/asound.conf'):
+    def __init__(self, filename: str = '/etc/asound.conf') -> None:
         self.filename = filename
         self.config = ""
         self.original_checksum = ""

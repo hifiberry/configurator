@@ -2,7 +2,7 @@
 
 import logging
 import subprocess
-from flask import jsonify
+from flask import jsonify, Response
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ SERVICE_NAME = "ble-provisioning"
 class BLEProvisioningHandler:
     """Handler for BLE provisioning API endpoints"""
 
-    def handle_get_status(self):
+    def handle_get_status(self) -> Response:
         """GET /api/v1/ble/provisioning/status"""
         try:
             result = subprocess.run(
@@ -23,10 +23,12 @@ class BLEProvisioningHandler:
             )
             active = result.returncode == 0
             state = result.stdout.strip() if result.stdout else "unknown"
-            return jsonify({
-                "status": "success",
-                "data": {"active": active, "state": state},
-            })
+            return jsonify(
+                {
+                    "status": "success",
+                    "data": {"active": active, "state": state},
+                }
+            )
         except Exception as e:
             logger.error(f"Error checking BLE provisioning status: {e}")
             return jsonify({

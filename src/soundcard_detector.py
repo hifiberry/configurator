@@ -12,11 +12,11 @@ try:
     ARGCOMPLETE_AVAILABLE = True
 except ImportError:
     ARGCOMPLETE_AVAILABLE = False
-from configurator.configtxt import ConfigTxt
-from configurator.hattools import get_hat_info  # Import the get_hat_info module
-from configurator.dsptoolkit import detect_dsp
-from configurator.soundcard import Soundcard
-from configurator.configdb import ConfigDB
+from src.configtxt import ConfigTxt
+from src.hattools import get_hat_info  # Import the get_hat_info module
+from src.dsptoolkit import detect_dsp
+from src.soundcard import Soundcard
+from src.configdb import ConfigDB
 
 # Constants
 HIFIBERRY_CARD_COMMENT_PREFIX = "# HiFiBerry card:"
@@ -236,7 +236,7 @@ class SoundcardDetector:
             or single card name if only one match, or overlay name if not found
         """
         # Import here to avoid circular imports
-        from configurator.soundcard import SOUND_CARD_DEFINITIONS
+        from src.soundcard import SOUND_CARD_DEFINITIONS
         
         # Handle overlay names with parameters (e.g., "amp100,automute")
         base_overlay = overlay.split(',')[0] if ',' in overlay else overlay
@@ -550,7 +550,7 @@ class SoundcardDetector:
 
         # Lazy import: keep the configurator's import chain unchanged for
         # callers that never hit this branch.
-        from configurator.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
+        from src.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore
 
         # Check hard-coded factory-firmware checksums first (firmwares we
         # recognise but don't ship as a bundled profile XML).
@@ -623,7 +623,7 @@ class SoundcardDetector:
         Returns the base overlay name (e.g. "adc", the same form
         ``_map_aplay_to_overlay`` returns) or None if no input card matches.
         """
-        from configurator.soundcard import SOUND_CARD_DEFINITIONS
+        from src.soundcard import SOUND_CARD_DEFINITIONS
 
         output = self._run_command("arecord -l")
         if not output:
@@ -827,7 +827,7 @@ class SoundcardDetector:
 
         # Check if detection is disabled in config.txt (unless --force is used)
         if not force and self.config.is_detection_disabled():
-            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
+            from src.configtxt import HIFIBERRY_DETECTION_DISABLED
             logging.info(f"Detection is disabled in config.txt ({HIFIBERRY_DETECTION_DISABLED}). Use --force to override.")
             return
 

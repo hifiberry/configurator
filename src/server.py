@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class ConfigAPIServer:
     """REST API server for HiFiBerry configuration services"""
     
-    def __init__(self, host='0.0.0.0', port=1081, debug=False, no_waitress=False):
+    def __init__(self, host: str = '0.0.0.0', port: int = 1081, debug: bool = False, no_waitress: bool = False) -> None:
         """
         Initialize the API server
         
@@ -672,7 +672,7 @@ class ConfigAPIServer:
             logger.error(f"Traceback: {traceback.format_exc()}")
             sys.exit(1)
 
-def setup_logging(verbose=False):
+def setup_logging(verbose: bool = False) -> None:
     """Configure logging"""
     log_level = logging.DEBUG if verbose else logging.INFO
     

@@ -10,6 +10,7 @@ import os
 import logging
 import argparse
 import subprocess
+from typing import Optional, List
 
 try:
     import alsaaudio
@@ -18,8 +19,8 @@ except ImportError:
     ALSA_AVAILABLE = False
     logging.warning("alsaaudio module not available, falling back to subprocess calls")
 
-from configurator.configdb import ConfigDB
-from configurator.soundcard import Soundcard
+from src.configdb import ConfigDB
+from src.soundcard import Soundcard
 
 # Configuration keys for volume storage
 VOLUME_DB_KEY = "system.volume"
@@ -638,7 +639,7 @@ def restore_headphone_volume():
         logging.error(f"Error restoring headphone volume: {str(e)}")
         return False
 
-def list_available_controls(card_index=None):
+def list_available_controls(card_index: Optional[int] = None) -> List[str]:
     """
     List available ALSA mixer controls for debugging
     

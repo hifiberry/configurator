@@ -1,7 +1,9 @@
 from unittest.mock import patch
+from pathlib import Path
+from typing import Any
 
-from configurator.soundcard import SOUND_CARD_DEFINITIONS
-from configurator.soundcard_detector import SoundcardDetector
+from src.soundcard import SOUND_CARD_DEFINITIONS
+from src.soundcard_detector import SoundcardDetector
 
 
 ARECORD_ADC = """**** List of CAPTURE Hardware Devices ****
@@ -16,7 +18,7 @@ card 0: Generic [HD-Audio Generic], device 0: ALC generic [ALC generic]
 """
 
 
-def _detector(tmp_path):
+def _detector(tmp_path: Path) -> Any:
     cfg = tmp_path / "config.txt"
     cfg.write_text("dtoverlay=hifiberry-adc\n")
     return SoundcardDetector(config_file=str(cfg))
@@ -26,19 +28,19 @@ def test_adc_entry_has_arecord_marker():
     assert SOUND_CARD_DEFINITIONS["ADC"]["arecord_contains"] == "snd_rpi_hifiberry_adc"
 
 
-def test_detect_from_arecord_finds_adc(tmp_path):
+def test_detect_from_arecord_finds_adc(tmp_path: Path) -> None:
     det = _detector(tmp_path)
     with patch.object(det, "_run_command", return_value=ARECORD_ADC):
         assert det._detect_from_arecord() == "adc"
 
 
-def test_detect_from_arecord_none_when_no_hifiberry_input(tmp_path):
+def test_detect_from_arecord_none_when_no_hifiberry_input(tmp_path: Path) -> None:
     det = _detector(tmp_path)
     with patch.object(det, "_run_command", return_value=ARECORD_NO_HIFIBERRY):
         assert det._detect_from_arecord() is None
 
 
-def test_detect_from_arecord_none_when_no_capture_devices(tmp_path):
+def test_detect_from_arecord_none_when_no_capture_devices(tmp_path: Path) -> None:
     det = _detector(tmp_path)
     with patch.object(det, "_run_command", return_value=""):
         assert det._detect_from_arecord() is None

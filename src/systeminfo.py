@@ -162,7 +162,7 @@ class SystemInfo:
             bool: True if config.txt contains the detection disabled comment, False otherwise
         """
         try:
-            from configurator.configtxt import HIFIBERRY_DETECTION_DISABLED
+            from src.configtxt import HIFIBERRY_DETECTION_DISABLED
 
             # Read config.txt
             with open('/boot/firmware/config.txt', 'r') as f:
@@ -195,14 +195,14 @@ class SystemInfo:
             None (auto-detected, no pin in effect).
         """
         try:
-            from configurator.configdb import ConfigDB
+            from src.configdb import ConfigDB
             if ConfigDB().get("soundcard.name"):
                 return "configdb"
         except Exception as e:
             self.logger.debug(f"Could not check ConfigDB for soundcard.name: {e}")
 
         try:
-            from configurator.soundcard_detector import SoundcardDetector
+            from src.soundcard_detector import SoundcardDetector
             if SoundcardDetector().detect_from_config_txt_comment():
                 return "config.txt"
         except Exception as e:
@@ -399,7 +399,7 @@ class SystemInfo:
         print(self.get_simple_output())
 
 
-def setup_logging(verbose=False):
+def setup_logging(verbose: bool = False) -> None:
     """Configure logging"""
     log_level = logging.DEBUG if verbose else logging.WARNING
     

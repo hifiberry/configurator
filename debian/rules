@@ -5,8 +5,20 @@
 # it in CI/dev via pytest instead of at packaging time.
 export PYBUILD_DISABLE=test
 
+# Inject the virtualenv sequence into dh
 %:
-	dh $@ --buildsystem=pybuild
+	dh $@ --with virtualenv
 
-override_dh_installsystemd:
-	dh_installsystemd --no-restart-after-upgrade --no-stop-on-upgrade
+# Override the default installation to use dh_virtualenv
+override_dh_virtualenv:
+	dh_virtualenv --builtin-venv --pypi-url https://pypi.org
+
+# Prevent standard python build tools from running globally
+override_dh_auto_install:
+	@echo "Skipping standard auto install, dh_virtualenv handles this."
+
+#%:
+#	dh $@ --buildsystem=pybuild
+#
+#override_dh_installsystemd:
+#	dh_installsystemd --no-restart-after-upgrade --no-stop-on-upgrade

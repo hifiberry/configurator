@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ScriptHandler:
     """Handler for script execution API endpoints"""
     
-    def __init__(self, config_file="/etc/configserver/configserver.json"):
+    def __init__(self, config_file: str = "/etc/configserver/configserver.json") -> None:
         """Initialize the script handler"""
         logger.debug("Initializing ScriptHandler")
         self.config_file = config_file

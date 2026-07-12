@@ -2,7 +2,7 @@
 
 import os
 import logging
-from typing import Dict, List
+from typing import Dict, List, Any
 
 try:
     import smbus2
@@ -13,7 +13,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def scan_i2c_bus(bus_number=1):
+def scan_i2c_bus(bus_number: int = 1) -> Dict[str, Any]:
     """
     Scan I2C bus for devices and detect which addresses are in use.
     
@@ -73,7 +73,7 @@ def scan_i2c_bus(bus_number=1):
     }
 
 
-def get_i2c_info(bus_number=1):
+def get_i2c_info(bus_number: int = 1) -> Dict[str, Any]:
     """
     Get I2C bus information including device scan results.
     

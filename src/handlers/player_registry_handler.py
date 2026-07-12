@@ -10,7 +10,7 @@ import os
 import re
 import json
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Union, Tuple
 
 try:
     from flask import jsonify, make_response, request
@@ -33,12 +33,12 @@ SETTING_TYPES = ("toggle", "select")
 _SETTING_REQUIRED = ("key", "type", "label", "default")
 
 
-def setting_value_key(systemd_service, key):
+def setting_value_key(systemd_service: str, key: str) -> str:
     """ConfigDB key for a plugin setting value."""
     return f"player.{systemd_service}.{key}"
 
 
-def coerce_setting_value(setting_type, raw):
+def coerce_setting_value(setting_type: str, raw: Any) -> Optional[Union[bool, str]]:
     """Coerce a stored TEXT value (or native value / None) to its typed form."""
     if raw is None:
         return None
@@ -49,7 +49,7 @@ def coerce_setting_value(setting_type, raw):
     return str(raw)
 
 
-def serialize_setting_value(setting_type, value):
+def serialize_setting_value(setting_type: str, value: Any) -> str:
     """Serialize a typed value to the TEXT form stored in ConfigDB.
 
     For type == "toggle", expects value to already be a Python bool;
@@ -60,7 +60,7 @@ def serialize_setting_value(setting_type, value):
     return str(value)
 
 
-def sanitize_settings(descriptor):
+def sanitize_settings(descriptor: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Return the descriptor's declared settings, dropping malformed entries."""
     raw = descriptor.get("settings")
     if not isinstance(raw, list):
@@ -85,7 +85,7 @@ def sanitize_settings(descriptor):
 class PlayerRegistryHandler:
     """Handler for external player discovery and icon serving"""
 
-    def __init__(self, configdb=None, players_d_dir=PLAYERS_D_DIR):
+    def __init__(self, configdb: Optional[Any] = None, players_d_dir: str = PLAYERS_D_DIR) -> None:
         self.configdb = configdb
         self.players_d_dir = players_d_dir
         self.icons_dir = os.path.join(players_d_dir, "icons")

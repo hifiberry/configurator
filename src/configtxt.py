@@ -13,7 +13,7 @@ HIFIBERRY_DETECTION_DISABLED = "# HiFiBerry sound detection disabled"
 
 
 class ConfigTxt:
-    def __init__(self, file_path = "/boot/firmware/config.txt"):
+    def __init__(self, file_path: str = "/boot/firmware/config.txt") -> None:
         self.file_path = file_path
         self.lines = []
         self.changes_made = False
@@ -129,7 +129,7 @@ class ConfigTxt:
         self._update_line("force_eeprom_read=", "force_eeprom_read=1\n")
         logging.info("EEPROM read enabled.")
 
-    def enable_overlay(self, overlay, card_name=None, disable_eeprom=False):
+    def enable_overlay(self, overlay: str, card_name: Optional[str] = None, disable_eeprom: bool = False) -> None:
         """Enable a device tree overlay, optionally with a card name comment and EEPROM disable"""
         if card_name:
             self.lines.append(f"# HiFiBerry card: {card_name}\n")
