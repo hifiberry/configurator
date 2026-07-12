@@ -4,16 +4,9 @@ import logging
 import subprocess
 import json
 import os
-import tempfile
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Union, cast
 import traceback
-
-try:
-    from flask import jsonify, request
-except ImportError:
-    # Flask not available - likely during testing or installation
-    jsonify = None
-    request = None
+from flask import jsonify, request, Response
 
 from ..sambaclient import (
     list_all_servers, 
@@ -21,7 +14,6 @@ from ..sambaclient import (
     list_smb_shares
 )
 from ..sambamount import (
-    read_mount_config,
     add_mount_config,
     remove_mount_config,
     list_configured_mounts
@@ -97,7 +89,7 @@ class SMBHandler:
         """Initialize the SMB handler"""
         logger.debug("Initializing SMBHandler")
     
-    def handle_list_servers(self) -> Dict[str, Any]:
+    def handle_list_servers(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle GET /api/v1/smb/servers
         List all SMB servers on the network
@@ -123,21 +115,21 @@ class SMBHandler:
                 'error': str(e)
             }), 500
     
-    def handle_test_connection(self, server: str) -> Dict[str, Any]:
+    def handle_test_connection(self, server: str) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/smb/test/<server>
         Test connection to an SMB server
         """
         try:
             # Get authentication from POST body
-            data = request.get_json() or {}
-            username = data.get('username')
-            password = data.get('password')
+            data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
+            username: Optional[str] = data.get('username')
+            password: Optional[str] = data.get('password')
             
             # Server can be provided in request body or URL path
             # Request body takes precedence over URL path
-            server_from_body = data.get('server')
-            test_server = server_from_body if server_from_body else server
+            server_from_body: Optional[str] = data.get('server')
+            test_server: str = server_from_body if server_from_body else server
             
             logger.debug(f"Testing connection to SMB server: {test_server}")
             
@@ -170,7 +162,7 @@ class SMBHandler:
                 
         except Exception as e:
             # Use the server from body if available, otherwise fall back to URL path
-            data = request.get_json() or {}
+            data = cast(Dict[str, Any], request.get_json() or {})
             test_server = data.get('server', server)
             
             logger.error(f"Error testing connection to {test_server}: {e}")
@@ -185,18 +177,18 @@ class SMBHandler:
                 }
             })
     
-    def handle_list_shares(self) -> Dict[str, Any]:
+    def handle_list_shares(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/smb/shares
         List shares on an SMB server
         """
         try:
             # Get all parameters from POST body
-            data = request.get_json() or {}
-            server = data.get('server')
-            username = data.get('username')
-            password = data.get('password')
-            detailed = data.get('detailed', False)
+            data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
+            server: Optional[str] = data.get('server')
+            username: Optional[str] = data.get('username')
+            password: Optional[str] = data.get('password')
+            detailed: bool = data.get('detailed', False)
             
             # Validate required parameters
             if not server:
@@ -215,20 +207,20 @@ class SMBHandler:
             )
             
             # Convert shares to the expected format
-            share_list = []
+            share_list: List[Dict[str, Any]] = []
             for share in shares:
-                share_info = {
+                share_info: Dict[str, Any] = {
                     'name': share.get('name', ''),
                     'type': share.get('type', 'Disk'),
                     'comment': share.get('comment', '')
                 }
                 if detailed:
-                    share_info['size'] = share.get('size')
-                    share_info['available'] = share.get('available')
+                    share_info['size'] = share.get('size') or ''
+                    share_info['available'] = share.get('available') or ''
                 
                 share_list.append(share_info)
             
-            response_data = {
+            response_data: Dict[str, Any] = {
                 'server': server,
                 'shares': share_list,
                 'count': len(share_list)
@@ -244,7 +236,7 @@ class SMBHandler:
             
         except Exception as e:
             # Get server from request body
-            data = request.get_json() or {}
+            data = cast(Dict[str, Any], request.get_json() or {})
             target_server = data.get('server', 'unknown')
             
             logger.error(f"Error listing shares on {target_server}: {e}")
@@ -255,7 +247,7 @@ class SMBHandler:
                 'error': str(e)
             }), 500
     
-    def handle_list_mounts(self) -> Dict[str, Any]:
+    def handle_list_mounts(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle GET /api/v1/smb/mounts
         List all configured SMB mounts with mount status
@@ -298,20 +290,20 @@ class SMBHandler:
                 'error': str(e)
             }), 500
     
-    def handle_manage_mount(self) -> Dict[str, Any]:
+    def handle_manage_mount(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/smb/mount
         Create or remove SMB share configuration based on action parameter
         """
         try:
             # Get JSON data from request
-            if not request.is_json:
+            if not request.is_json:  # type: ignore[union-attr]
                 return jsonify({
                     'status': 'error',
                     'message': 'Content-Type must be application/json'
                 }), 400
             
-            data = request.get_json()
+            data: Dict[str, Any] = cast(Dict[str, Any], request.get_json())  # type: ignore[union-attr]
             if not data:
                 return jsonify({
                     'status': 'error',
@@ -319,7 +311,7 @@ class SMBHandler:
                 }), 400
             
             # Validate action field
-            action = data.get('action')
+            action: Optional[str] = data.get('action')
             if not action:
                 return jsonify({
                     'status': 'error',
@@ -333,8 +325,8 @@ class SMBHandler:
                 }), 400
             
             # Validate required fields
-            server = data.get('server')
-            share = data.get('share')
+            server: Optional[str] = data.get('server')
+            share: Optional[str] = data.get('share')
             
             if not server or not share:
                 return jsonify({
@@ -357,14 +349,14 @@ class SMBHandler:
                 'details': 'An internal server error occurred while processing the mount configuration'
             }), 500
     
-    def _handle_add_mount(self, data: Dict[str, Any], server: str, share: str) -> Dict[str, Any]:
+    def _handle_add_mount(self, data: Dict[str, Any], server: str, share: str) -> 'Union[Response, tuple[Response, int]]':
         """Helper method to handle adding a mount configuration"""
         # Get optional fields
-        mountpoint = data.get('mountpoint')
-        user = data.get('user')
-        password = data.get('password')
-        version = data.get('version')
-        options = data.get('options')
+        mountpoint: Optional[str] = data.get('mountpoint')
+        user: Optional[str] = data.get('user')
+        password: Optional[str] = data.get('password')
+        version: Optional[str] = data.get('version')
+        options: Optional[str] = data.get('options')
         
         logger.debug(f"Creating SMB mount configuration for {server}/{share}")
         
@@ -396,22 +388,23 @@ class SMBHandler:
             })
         else:
             # Distinguish between different types of errors
-            if "already exists" in error_msg:
+            error_msg_str: str = error_msg or ''
+            if "already exists" in error_msg_str:
                 return jsonify({
                     'status': 'error',
                     'message': 'Mount configuration already exists',
                     'error': 'configuration_exists',
-                    'details': error_msg
+                    'details': error_msg_str
                 }), 400
             else:
                 return jsonify({
                     'status': 'error',
                     'message': 'Failed to save mount configuration',
                     'error': 'configuration_save_failed',
-                    'details': error_msg
+                    'details': error_msg_str
                 }), 500
     
-    def _handle_remove_mount(self, data: Dict[str, Any], server: str, share: str) -> Dict[str, Any]:
+    def _handle_remove_mount(self, data: Dict[str, Any], server: str, share: str) -> 'Union[Response, tuple[Response, int]]':
         """Helper method to handle removing a mount configuration"""
         logger.debug(f"Removing SMB mount configuration for {server}/{share}")
         
@@ -490,7 +483,7 @@ class SMBHandler:
                 'details': str(e)
             }
 
-    def handle_mount_all_samba(self) -> Dict[str, Any]:
+    def handle_mount_all_samba(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/smb/mount-all
         Mount all configured Samba shares by triggering the sambamount systemd service.
@@ -504,7 +497,7 @@ class SMBHandler:
             
             # Get current mount configurations
             current_mounts = list_configured_mounts()
-            current_state = {}
+            current_state: Dict[str, str] = {}
             
             # Build current state mapping
             for mount in current_mounts:
@@ -512,13 +505,13 @@ class SMBHandler:
                 current_state[mount_key] = mount['mountpoint']
             
             # Find mounts that need to be removed (in previous state but not in current)
-            mounts_to_remove = []
+            mounts_to_remove: List[tuple[str, str]] = []
             for mount_key, mountpoint in previous_state.items():
                 if mount_key not in current_state:
                     mounts_to_remove.append((mount_key, mountpoint))
             
             # Unmount shares that are no longer configured
-            unmounted_shares = []
+            unmounted_shares: List[Dict[str, Any]] = []
             for mount_key, mountpoint in mounts_to_remove:
                 server_share = mount_key  # mount_key is already "server/share"
                 logger.info(f"Unmounting removed share: {server_share} at {mountpoint}")
@@ -555,7 +548,7 @@ class SMBHandler:
                 
                 # Save the new state: current configurations + any failed unmounts
                 # Start with current configurations
-                final_state = current_state.copy()
+                final_state: Dict[str, str] = current_state.copy()
                 
                 # Add back any shares that failed to unmount (they're still mounted)
                 for mount_key, mountpoint in previous_state.items():
@@ -568,7 +561,7 @@ class SMBHandler:
                 
                 # Get the current mount configurations to show what should be mounted
                 try:
-                    mount_list = []
+                    mount_list: List[Dict[str, Any]] = []
                     for mount in current_mounts:
                         mount_list.append({
                             'server': mount['server'],
@@ -577,7 +570,7 @@ class SMBHandler:
                             'id': mount.get('id', '?')
                         })
                     
-                    response_data = {
+                    response_data: Dict[str, Any] = {
                         'service': 'sambamount.service',
                         'action': 'restarted',
                         'configurations': mount_list,

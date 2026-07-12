@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
 import logging
-from flask import jsonify
-from typing import Dict, Any
+from flask import jsonify, Response
+from typing import Dict, Any, Union, Tuple
 from ..network import get_network_config
+
+# Type alias for network config
+NetworkConfig = Dict[str, Any]
+
+def get_network_config() -> NetworkConfig:
+    """Stub for type hints - actual implementation in network module"""
+    ...
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +22,7 @@ class NetworkHandler:
         """Initialize the network handler"""
         pass
     
-    def handle_get_network_config(self) -> Dict[str, Any]:
+    def handle_get_network_config(self) -> Union[Response, Tuple[Response, int]]:
         """
         Handle GET request for network configuration.
         
@@ -23,7 +30,7 @@ class NetworkHandler:
             Flask response with network configuration data
         """
         try:
-            config = get_network_config()
+            config: NetworkConfig = get_network_config()
             return jsonify({
                 'status': 'success',
                 'data': config

@@ -31,10 +31,12 @@ class BLEProvisioningHandler:
             )
         except Exception as e:
             logger.error(f"Error checking BLE provisioning status: {e}")
-            return jsonify({
+            response = jsonify({
                 "status": "error",
                 "message": str(e),
-            }), 500
+            })
+            response.status_code = 500
+            return response
 
     def handle_start(self):
         """POST /api/v1/ble/provisioning/start

@@ -2,7 +2,6 @@
 
 import logging
 from flask import jsonify, request
-from typing import Dict, Any
 from ..i2c import get_i2c_info
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ class I2CHandler:
         """Initialize the I2C handler"""
         pass
     
-    def handle_get_i2c_devices(self) -> Dict[str, Any]:
+    def handle_get_i2c_devices(self):
         """
         Handle GET request for I2C device scan.
         

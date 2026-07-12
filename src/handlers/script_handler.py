@@ -6,8 +6,8 @@ import json
 import subprocess
 import threading
 import time
-from flask import jsonify, request
-from typing import Dict, List, Any, Optional
+from flask import jsonify, request, Response
+from typing import Dict, List, Any, Union, cast
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,8 @@ class ScriptHandler:
     def __init__(self, config_file: str = "/etc/configserver/configserver.json") -> None:
         """Initialize the script handler"""
         logger.debug("Initializing ScriptHandler")
-        self.config_file = config_file
+        self.config_file: str = config_file
+        self.scripts: Dict[str, Any] = {}
         self._load_config()
     
     def _load_config(self) -> None:
@@ -36,15 +37,15 @@ class ScriptHandler:
             logger.error(f"Error loading script config: {e}")
             self.scripts = {}
     
-    def handle_list_scripts(self) -> Dict[str, Any]:
+    def handle_list_scripts(self) -> Union[Response, tuple[Response, int]]:
         """
         Handle GET /api/v1/scripts
         List all configured scripts
         """
         try:
-            script_list = []
+            script_list: List[Dict[str, Any]] = []
             for script_id, script_config in self.scripts.items():
-                script_info = {
+                script_info: Dict[str, Any] = {
                     'id': script_id,
                     'name': script_config.get('name', script_id),
                     'description': script_config.get('description', ''),
@@ -71,7 +72,7 @@ class ScriptHandler:
                 'error': str(e)
             }), 500
     
-    def handle_execute_script(self, script_id: str) -> Dict[str, Any]:
+    def handle_execute_script(self, script_id: str) -> Union[Response, tuple[Response, int]]:
         """
         Handle POST /api/v1/scripts/{script_id}/execute
         Execute a configured script
@@ -126,15 +127,15 @@ class ScriptHandler:
             
             # Get optional parameters from request body
             try:
-                data = request.get_json() or {}
+                data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
             except Exception:
                 # Handle cases where JSON parsing fails (empty body, invalid JSON, etc.)
-                data = {}
-            background = data.get('background', False)
-            timeout = data.get('timeout', 300)  # Default 5 minutes
+                data: Dict[str, Any] = {}
+            background: bool = data.get('background', False)
+            timeout: float = data.get('timeout', 300)  # Default 5 minutes
             
             # Validate timeout
-            if not isinstance(timeout, (int, float)) or timeout <= 0:
+            if timeout <= 0:
                 timeout = 300
             elif timeout > 3600:  # Max 1 hour
                 timeout = 3600
@@ -160,7 +161,7 @@ class ScriptHandler:
                 'error': str(e)
             }), 500
     
-    def _execute_script_sync(self, script_id: str, script_name: str, command: List[str], timeout: float) -> Dict[str, Any]:
+    def _execute_script_sync(self, script_id: str, script_name: str, command: List[str], timeout: float) -> Union[Response, tuple[Response, int]]:
         """Execute script synchronously and wait for completion"""
         try:
             start_time = time.time()
@@ -219,7 +220,7 @@ class ScriptHandler:
                 }
             }), 500
     
-    def _execute_script_background(self, script_id: str, script_name: str, command: List[str]) -> Dict[str, Any]:
+    def _execute_script_background(self, script_id: str, script_name: str, command: List[str]) -> Union[Response, tuple[Response, int]]:
         """Execute script in background and return immediately"""
         def run_script():
             try:
@@ -250,7 +251,7 @@ class ScriptHandler:
             }
         })
     
-    def handle_get_script_info(self, script_id: str) -> Dict[str, Any]:
+    def handle_get_script_info(self, script_id: str) -> Union[Response, tuple[Response, int]]:
         """
         Handle GET /api/v1/scripts/{script_id}
         Get information about a specific script
@@ -274,7 +275,7 @@ class ScriptHandler:
             path_exists = os.path.exists(script_path) if script_path else False
             path_executable = os.access(script_path, os.X_OK) if path_exists else False
             
-            script_info = {
+            script_info: Dict[str, Any] = {
                 'id': script_id,
                 'name': script_config.get('name', script_id),
                 'description': script_config.get('description', ''),

@@ -4,26 +4,20 @@ import logging
 import subprocess
 import threading
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Union, cast
 import traceback
-
-try:
-    from flask import jsonify, request
-except ImportError:
-    # Flask not available - likely during testing or installation
-    jsonify = None
-    request = None
+from flask import jsonify, request, Response
 
 logger = logging.getLogger(__name__)
 
 class SystemHandler:
     """Handler for system operation API endpoints"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the system handler"""
         logger.debug("Initializing SystemHandler")
     
-    def handle_reboot(self) -> Dict[str, Any]:
+    def handle_reboot(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/system/reboot
         Reboot the system after a short delay
@@ -32,10 +26,10 @@ class SystemHandler:
             logger.info("System reboot requested via API")
             
             # Parse optional delay parameter
-            delay = 5  # Default 5 second delay
+            delay: int = 5  # Default 5 second delay
             
-            if request and request.is_json:
-                data = request.get_json()
+            if request.is_json:
+                data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
                 if data and 'delay' in data:
                     try:
                         delay = int(data['delay'])
@@ -51,7 +45,7 @@ class SystemHandler:
                         }), 400
             
             # Schedule reboot in background thread
-            def delayed_reboot():
+            def delayed_reboot() -> None:
                 try:
                     logger.info(f"Waiting {delay} seconds before reboot...")
                     time.sleep(delay)
@@ -61,10 +55,10 @@ class SystemHandler:
                     logger.error(f"Failed to execute reboot: {e}")
             
             # Start background thread for delayed reboot
-            reboot_thread = threading.Thread(target=delayed_reboot, daemon=True)
+            reboot_thread: threading.Thread = threading.Thread(target=delayed_reboot, daemon=True)
             reboot_thread.start()
             
-            return jsonify({
+            return jsonify({  # type: ignore[return-value]
                 'status': 'success',
                 'message': f'System reboot scheduled in {delay} seconds',
                 'data': {
@@ -76,13 +70,13 @@ class SystemHandler:
         except Exception as e:
             logger.error(f"Error handling reboot request: {e}")
             logger.error(traceback.format_exc())
-            return jsonify({
+            return jsonify({  # type: ignore[return-value]
                 'status': 'error',
                 'message': 'Failed to schedule system reboot',
                 'error': str(e)
             }), 500
     
-    def handle_shutdown(self) -> Dict[str, Any]:
+    def handle_shutdown(self) -> 'Union[Response, tuple[Response, int]]':
         """
         Handle POST /api/v1/system/shutdown
         Shutdown the system after a short delay
@@ -91,10 +85,10 @@ class SystemHandler:
             logger.info("System shutdown requested via API")
             
             # Parse optional delay parameter
-            delay = 5  # Default 5 second delay
+            delay: int = 5  # Default 5 second delay
             
-            if request and request.is_json:
-                data = request.get_json()
+            if request.is_json:
+                data: Dict[str, Any] = cast(Dict[str, Any], request.get_json() or {})
                 if data and 'delay' in data:
                     try:
                         delay = int(data['delay'])
@@ -110,7 +104,7 @@ class SystemHandler:
                         }), 400
             
             # Schedule shutdown in background thread
-            def delayed_shutdown():
+            def delayed_shutdown() -> None:
                 try:
                     logger.info(f"Waiting {delay} seconds before shutdown...")
                     time.sleep(delay)
@@ -120,10 +114,10 @@ class SystemHandler:
                     logger.error(f"Failed to execute shutdown: {e}")
             
             # Start background thread for delayed shutdown
-            shutdown_thread = threading.Thread(target=delayed_shutdown, daemon=True)
+            shutdown_thread: threading.Thread = threading.Thread(target=delayed_shutdown, daemon=True)
             shutdown_thread.start()
             
-            return jsonify({
+            return jsonify({  # type: ignore[return-value]
                 'status': 'success',
                 'message': f'System shutdown scheduled in {delay} seconds',
                 'data': {
@@ -135,7 +129,7 @@ class SystemHandler:
         except Exception as e:
             logger.error(f"Error handling shutdown request: {e}")
             logger.error(traceback.format_exc())
-            return jsonify({
+            return jsonify({  # type: ignore[return-value]
                 'status': 'error',
                 'message': 'Failed to schedule system shutdown',
                 'error': str(e)

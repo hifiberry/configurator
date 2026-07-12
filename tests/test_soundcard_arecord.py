@@ -2,7 +2,7 @@ from unittest.mock import patch
 from pathlib import Path
 from typing import Any
 
-from src.soundcard import SOUND_CARD_DEFINITIONS
+from src.soundcard import SOUND_CARD_DEFINITIONS  # type: ignore[import-untyped]
 from src.soundcard_detector import SoundcardDetector
 
 

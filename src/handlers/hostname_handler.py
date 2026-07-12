@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Dict, Any
+from typing import Any, Union, Tuple
 import traceback
 
 try:
@@ -29,7 +29,7 @@ class HostnameHandler:
         """Initialize the hostname handler"""
         logger.debug("Initializing HostnameHandler")
     
-    def handle_get_hostname(self) -> Dict[str, Any]:
+    def handle_get_hostname(self) -> Union[Tuple[Any, int], Any]:
         """
         Handle GET /api/v1/hostname
         Get current system and pretty hostnames
@@ -40,65 +40,101 @@ class HostnameHandler:
             hostname, pretty_hostname = get_hostnames_with_fallback()
             
             if hostname is None:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to retrieve hostname information'
-                }), 500
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to retrieve hostname information'
+                    }), 500
+                return {'status': 'error', 'message': 'Failed to retrieve hostname information'}
             
-            return jsonify({
+            if jsonify:
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'hostname': hostname,
+                        'pretty_hostname': pretty_hostname
+                    }
+                })
+            return {
                 'status': 'success',
                 'data': {
                     'hostname': hostname,
                     'pretty_hostname': pretty_hostname
                 }
-            })
+            }
             
         except Exception as e:
             logger.error(f"Error getting hostname: {e}")
             logger.debug(traceback.format_exc())
-            return jsonify({
+            if jsonify:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to get hostname',
+                    'error': str(e)
+                }), 500
+            return {
                 'status': 'error',
                 'message': 'Failed to get hostname',
                 'error': str(e)
-            }), 500
+            }
     
-    def handle_set_hostname(self) -> Dict[str, Any]:
+    def handle_set_hostname(self) -> Union[Tuple[Any, int], Any]:
         """
         Handle POST /api/v1/hostname
         Set system hostname (and optionally pretty hostname)
         """
         try:
             # Get JSON data from request
-            if not request.is_json:
-                return jsonify({
+            if not request or not request.is_json:
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Content-Type must be application/json'
+                    }), 400
+                return {
                     'status': 'error',
                     'message': 'Content-Type must be application/json'
-                }), 400
+                }
             
             data = request.get_json()
             if not data:
-                return jsonify({
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Missing request body'
+                    }), 400
+                return {
                     'status': 'error',
                     'message': 'Missing request body'
-                }), 400
+                }
             
             hostname = data.get('hostname')
             pretty_hostname = data.get('pretty_hostname')
             
             # Must provide at least one
             if not hostname and not pretty_hostname:
-                return jsonify({
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Must provide either hostname or pretty_hostname'
+                    }), 400
+                return {
                     'status': 'error',
                     'message': 'Must provide either hostname or pretty_hostname'
-                }), 400
+                }
             
             # If pretty hostname provided, derive regular hostname from it
             if pretty_hostname:
                 if not validate_pretty_hostname(pretty_hostname):
-                    return jsonify({
+                    if jsonify:
+                        return jsonify({
+                            'status': 'error',
+                            'message': 'Invalid pretty hostname format'
+                        }), 400
+                    return {
                         'status': 'error',
                         'message': 'Invalid pretty hostname format'
-                    }), 400
+                    }
                 
                 # Derive hostname from pretty hostname if not explicitly provided
                 if not hostname:
@@ -106,10 +142,15 @@ class HostnameHandler:
             
             # Validate hostname
             if hostname and not validate_hostname(hostname):
-                return jsonify({
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Invalid hostname format (max 64 chars, ASCII letters/numbers/hyphens, no leading/trailing hyphens)'
+                    }), 400
+                return {
                     'status': 'error',
                     'message': 'Invalid hostname format (max 64 chars, ASCII letters/numbers/hyphens, no leading/trailing hyphens)'
-                }), 400
+                }
             
             logger.debug(f"Setting hostnames - hostname: {hostname}, pretty: {pretty_hostname}")
             
@@ -128,25 +169,45 @@ class HostnameHandler:
                 # Get updated hostnames to return
                 new_hostname, new_pretty = get_hostnames_with_fallback()
                 
-                return jsonify({
+                if jsonify:
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Hostname updated successfully',
+                        'data': {
+                            'hostname': new_hostname,
+                            'pretty_hostname': new_pretty
+                        }
+                    })
+                return {
                     'status': 'success',
                     'message': 'Hostname updated successfully',
                     'data': {
                         'hostname': new_hostname,
                         'pretty_hostname': new_pretty
                     }
-                })
+                }
             else:
-                return jsonify({
+                if jsonify:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Failed to update hostname'
+                    }), 500
+                return {
                     'status': 'error',
                     'message': 'Failed to update hostname'
-                }), 500
+                }
                 
         except Exception as e:
             logger.error(f"Error setting hostname: {e}")
             logger.debug(traceback.format_exc())
-            return jsonify({
+            if jsonify:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to set hostname',
+                    'error': str(e)
+                }), 500
+            return {
                 'status': 'error',
                 'message': 'Failed to set hostname',
                 'error': str(e)
-            }), 500
+            }
