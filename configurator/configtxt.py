@@ -293,8 +293,18 @@ class ConfigTxt:
             raise UnsupportedModelError(
                 f"{pi_model.get_model_name()} has no USB device-mode port"
             )
-        # otg_mode=1 forces the XHCI host controller and defeats dwc2 device mode.
-        self._remove_line_in_section("cm4", "otg_mode=")
+        # otg_mode=1 forces the XHCI host controller and defeats dwc2 device
+        # mode. [cm4] is only read by a CM4, so only a CM4 may write to it --
+        # writing it unconditionally silently downgrades a Pi 5/CM5 later
+        # moved back into a CM4 to dwc2's slower built-in host mode.
+        if pi_model.get_version() == "CM4":
+            self._remove_line_in_section("cm4", "otg_mode=")
+        # [all], by contrast, is read by *every* model that boots this
+        # config.txt (that's the whole point of the section), so removing
+        # otg_mode= there is always in-bounds regardless of which model is
+        # currently enabling gadget mode: if this card is later moved into a
+        # CM4/Pi4, a stray otg_mode=1 left in [all] would force host mode on
+        # that board too and defeat its dwc2 peripheral setting.
         self._remove_line_in_section("all", "otg_mode=")
         section = self._dwc2_owner_section(pi_model.get_version()) or "all"
         self._update_line_in_section(section, DWC2_PREFIX, DWC2_PERIPHERAL)

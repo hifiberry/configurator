@@ -1,3 +1,26 @@
+hifiberry-configurator (2.13.19) stable; urgency=medium
+
+  * config-txt: add USB gadget (OTG device) mode support -- new
+    `config-txt --enable-usb-gadget` / `--disable-usb-gadget` CLI flags
+    switch the dwc2 controller between peripheral and host mode, with
+    model-aware config.txt section handling (CM5/Pi5 share a dwc2 node,
+    CM4/Pi4 gate host mode via `otg_mode=`) so a change only ever touches
+    a section the detected board actually reads.
+  * config-txt: on Pi5/CM5, enabling USB gadget mode now also applies the
+    PSU_MAX_CURRENT=3000 bootloader EEPROM workaround required for the
+    gadget to enumerate on Apple hosts (new `booteeprom` module); a
+    failed or unreadable EEPROM read is never treated as a value to
+    apply, and the failure is logged as a warning rather than aborting
+    the config.txt change.
+  * config-txt: fix `otg_mode=` handling in `enable_usb_gadget` /
+    `disable_usb_gadget` so it only touches the `[cm4]` section on an
+    actual CM4 -- previously it was stripped unconditionally on every
+    model, silently downgrading a Pi5/CM5 image later moved to a CM4
+    from the stock XHCI host controller to dwc2's slower built-in host
+    mode, with no restore path on disable.
+
+ -- HiFiBerry <info@hifiberry.com>  Wed, 15 Jul 2026 09:00:00 +0000
+
 hifiberry-configurator (2.13.18) stable; urgency=medium
 
   * soundcard: add `config-soundcard --has-input`, which exits 0 when the

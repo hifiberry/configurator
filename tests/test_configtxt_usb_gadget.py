@@ -199,6 +199,19 @@ def test_cm4_disable_restores_otg_mode_true_round_trip(tmp_path):
     assert "otg_mode=1" in text
 
 
+def test_pi5_enable_does_not_remove_cm4_otg_mode(tmp_path):
+    """A real config.txt carries every model's section at once. Enabling
+    gadget mode on a Pi 5 must not touch [cm4] otg_mode=1: a Pi 5 never
+    reads [cm4], and if this card is later moved into a CM4, otg_mode=1
+    must still be there to select the stock XHCI host controller instead
+    of silently falling back to dwc2's slower built-in host mode."""
+    cfg = _cfg(tmp_path, REALISTIC_SAMPLE)
+    cfg.enable_usb_gadget(pi_model=FakeModel("5"))
+    text = "".join(cfg.lines)
+    cm4_block = text.split("[cm4]")[1].split("[cm5]")[0]
+    assert "otg_mode=1" in cm4_block
+
+
 def test_pi5_disable_removes_added_all_section_line(tmp_path):
     """On Pi 5, disable must remove the dwc2 line enable added to [all]
     rather than leaving a host-mode line that was never there before."""
