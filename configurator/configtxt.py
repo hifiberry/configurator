@@ -94,6 +94,61 @@ class ConfigTxt:
         if not updated:
             self.lines.append(new_line)
 
+    def _section_bounds(self, section):
+        """Return (start, end) line indices of a [section] body, or None if absent.
+
+        start is the first line after the [section] header; end is the index of
+        the next section header (or len(lines) at EOF).
+        """
+        header = f"[{section}]"
+        start = None
+        for i, line in enumerate(self.lines):
+            stripped = line.strip()
+            if start is None:
+                if stripped == header:
+                    start = i + 1
+                continue
+            if stripped.startswith("[") and stripped.endswith("]"):
+                return (start, i)
+        if start is None:
+            return None
+        return (start, len(self.lines))
+
+    def _ensure_section(self, section):
+        """Return (start, end) for a section, creating it at EOF if needed."""
+        bounds = self._section_bounds(section)
+        if bounds is not None:
+            return bounds
+        if self.lines and not self.lines[-1].endswith("\n"):
+            self.lines[-1] += "\n"
+        self.lines.append(f"\n[{section}]\n")
+        return (len(self.lines), len(self.lines))
+
+    def _update_line_in_section(self, section, prefix, new_line):
+        """Update or insert a line with the given prefix inside [section]."""
+        start, end = self._ensure_section(section)
+        for i in range(start, end):
+            if self.lines[i].strip().startswith(prefix):
+                self.lines[i] = new_line
+                logging.info(f"Updated '{prefix}' in [{section}].")
+                return
+        self.lines.insert(end, new_line)
+        logging.info(f"Added '{new_line.strip()}' to [{section}].")
+
+    def _remove_line_in_section(self, section, prefix):
+        """Remove any line with the given prefix inside [section]."""
+        bounds = self._section_bounds(section)
+        if bounds is None:
+            return
+        start, end = bounds
+        kept = [
+            line for i, line in enumerate(self.lines)
+            if not (start <= i < end and line.strip().startswith(prefix))
+        ]
+        if len(kept) != len(self.lines):
+            self.lines = kept
+            logging.info(f"Removed '{prefix}' from [{section}].")
+
     def disable_onboard_sound(self):
         self._update_line("dtparam=audio=", "dtparam=audio=off\n")
         logging.info("Onboard sound disabled.")
