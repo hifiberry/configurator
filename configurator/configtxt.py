@@ -15,6 +15,15 @@ DWC2_PREFIX = "dtoverlay=dwc2"
 DWC2_PERIPHERAL = "dtoverlay=dwc2,dr_mode=peripheral\n"
 DWC2_HOST = "dtoverlay=dwc2,dr_mode=host\n"
 
+# Pi model version -> the config.txt model section it boots from, for models
+# that have one. Models not listed here have no dedicated model section.
+DWC2_MODEL_SECTION = {
+    "CM5": "cm5",
+    "5": "pi5",
+    "CM4": "cm4",
+    "4": "pi4",
+}
+
 
 class UnsupportedModelError(Exception):
     """Raised when the detected Pi model cannot act as a USB peripheral."""
@@ -251,21 +260,31 @@ class ConfigTxt:
         self._update_line("dtoverlay=disable-bt", "dtoverlay=disable-bt\n")
         logging.info("UPDI settings applied. Reboot may be required.")
 
-    def _dwc2_section(self, version):
-        """dwc2 lives in the model section when one already exists, else [all].
+    def _dwc2_owner_section(self, version):
+        """Return the version's own config.txt section name if it already
+        contains a dtoverlay=dwc2 line, else None.
 
-        Stock RPi OS ships the dwc2 line under [cm5]; Raspberry Pi's own guidance
-        for other models places it in [all].
+        A real config.txt carries every model's section at once (that's the
+        whole point of conditional sections -- one image boots many boards).
+        A model section that exists but has no dwc2 line in it (e.g. [cm4],
+        which only ever carries otg_mode=1) -- or a model with no section of
+        its own at all -- must NOT be treated as owning the dwc2 line: only
+        the section the *current* model actually reads, and that already has
+        a dwc2 line in stock config.txt, counts. Everything else falls back
+        to [all], per Raspberry Pi's own guidance for models that don't ship
+        their own dwc2 line.
         """
-        for section in ("cm5", "cm4", "pi5", "pi4"):
-            bounds = self._section_bounds(section)
-            if bounds is None:
-                continue
-            start, end = bounds
-            for i in range(start, end):
-                if self.lines[i].strip().startswith(DWC2_PREFIX):
-                    return section
-        return "all"
+        model_section = DWC2_MODEL_SECTION.get(version)
+        if model_section is None:
+            return None
+        bounds = self._section_bounds(model_section)
+        if bounds is None:
+            return None
+        start, end = bounds
+        for i in range(start, end):
+            if self.lines[i].strip().startswith(DWC2_PREFIX):
+                return model_section
+        return None
 
     def enable_usb_gadget(self, pi_model=None):
         """Switch the dwc2 controller to peripheral mode so the Pi can be a gadget."""
@@ -277,15 +296,27 @@ class ConfigTxt:
         # otg_mode=1 forces the XHCI host controller and defeats dwc2 device mode.
         self._remove_line_in_section("cm4", "otg_mode=")
         self._remove_line_in_section("all", "otg_mode=")
-        section = self._dwc2_section(pi_model.get_version())
+        section = self._dwc2_owner_section(pi_model.get_version()) or "all"
         self._update_line_in_section(section, DWC2_PREFIX, DWC2_PERIPHERAL)
         logging.info("USB gadget mode enabled. Reboot required.")
 
     def disable_usb_gadget(self, pi_model=None):
-        """Restore dwc2 host mode."""
+        """Restore dwc2 host mode, undoing exactly what enable_usb_gadget did."""
         pi_model = pi_model or PiModel()
-        section = self._dwc2_section(pi_model.get_version())
-        self._update_line_in_section(section, DWC2_PREFIX, DWC2_HOST)
+        owner = self._dwc2_owner_section(pi_model.get_version())
+        if owner:
+            # Stock model section already had a dwc2 line (e.g. CM5) -- flip
+            # it back to host mode in place.
+            self._update_line_in_section(owner, DWC2_PREFIX, DWC2_HOST)
+        else:
+            # enable_usb_gadget added this line to [all] itself; remove it
+            # rather than leaving behind a line that was never there before.
+            self._remove_line_in_section("all", DWC2_PREFIX)
+        if pi_model.get_version() == "CM4":
+            # Restore the stock XHCI host controller otg_mode=1 that enable
+            # stripped, otherwise the board is silently downgraded to dwc2's
+            # slower built-in host mode.
+            self._update_line_in_section("cm4", "otg_mode=", "otg_mode=1\n")
         logging.info("USB gadget mode disabled. Reboot required.")
 
     def enable_hat_i2c(self):
