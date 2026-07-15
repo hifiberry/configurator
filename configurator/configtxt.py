@@ -7,9 +7,17 @@ import logging
 import argparse
 from typing import Optional
 from .soundcard import Soundcard
+from .pimodel import PiModel
 
 # Constants
 HIFIBERRY_DETECTION_DISABLED = "# HiFiBerry sound detection disabled"
+DWC2_PREFIX = "dtoverlay=dwc2"
+DWC2_PERIPHERAL = "dtoverlay=dwc2,dr_mode=peripheral\n"
+DWC2_HOST = "dtoverlay=dwc2,dr_mode=host\n"
+
+
+class UnsupportedModelError(Exception):
+    """Raised when the detected Pi model cannot act as a USB peripheral."""
 
 
 class ConfigTxt:
@@ -243,6 +251,43 @@ class ConfigTxt:
         self._update_line("dtoverlay=disable-bt", "dtoverlay=disable-bt\n")
         logging.info("UPDI settings applied. Reboot may be required.")
 
+    def _dwc2_section(self, version):
+        """dwc2 lives in the model section when one already exists, else [all].
+
+        Stock RPi OS ships the dwc2 line under [cm5]; Raspberry Pi's own guidance
+        for other models places it in [all].
+        """
+        for section in ("cm5", "cm4", "pi5", "pi4"):
+            bounds = self._section_bounds(section)
+            if bounds is None:
+                continue
+            start, end = bounds
+            for i in range(start, end):
+                if self.lines[i].strip().startswith(DWC2_PREFIX):
+                    return section
+        return "all"
+
+    def enable_usb_gadget(self, pi_model=None):
+        """Switch the dwc2 controller to peripheral mode so the Pi can be a gadget."""
+        pi_model = pi_model or PiModel()
+        if not pi_model.supports_usb_gadget():
+            raise UnsupportedModelError(
+                f"{pi_model.get_model_name()} has no USB device-mode port"
+            )
+        # otg_mode=1 forces the XHCI host controller and defeats dwc2 device mode.
+        self._remove_line_in_section("cm4", "otg_mode=")
+        self._remove_line_in_section("all", "otg_mode=")
+        section = self._dwc2_section(pi_model.get_version())
+        self._update_line_in_section(section, DWC2_PREFIX, DWC2_PERIPHERAL)
+        logging.info("USB gadget mode enabled. Reboot required.")
+
+    def disable_usb_gadget(self, pi_model=None):
+        """Restore dwc2 host mode."""
+        pi_model = pi_model or PiModel()
+        section = self._dwc2_section(pi_model.get_version())
+        self._update_line_in_section(section, DWC2_PREFIX, DWC2_HOST)
+        logging.info("USB gadget mode disabled. Reboot required.")
+
     def enable_hat_i2c(self):
         overlay_line = "dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1\n"
         # Prevent duplicates if the line already exists
@@ -309,6 +354,8 @@ def main():
     parser.add_argument("--default-config", action="store_true", help="Apply the default configuration.")
     parser.add_argument("--report-change", action="store_true", help="Exit with return code 1 if changes were made.")
     parser.add_argument("--enable-updi", action="store_true", help="Enable UPDI settings: enable UART, dtoverlay for uart0, and disable Bluetooth.")
+    parser.add_argument("--enable-usb-gadget", action="store_true", help="Enable USB device (gadget) mode on the OTG port.")
+    parser.add_argument("--disable-usb-gadget", action="store_true", help="Restore USB host mode on the OTG port.")
     parser.add_argument("--enable-hat_i2c", action="store_true", help="Enable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
     parser.add_argument("--disable-hat_i2c", action="store_true", help="Disable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
     parser.add_argument("--enable-detection", action="store_true", help="Enable HiFiBerry sound card detection.")
@@ -362,6 +409,12 @@ def main():
 
         if args.enable_updi:
             config.enable_updi()
+
+        if args.enable_usb_gadget:
+            config.enable_usb_gadget()
+
+        if args.disable_usb_gadget:
+            config.disable_usb_gadget()
 
         if args.enable_hat_i2c:
             config.enable_hat_i2c()
