@@ -443,6 +443,17 @@ def main():
 
         if args.enable_usb_gadget:
             config.enable_usb_gadget()
+            # Pi5/CM5 fail to enumerate on Apple hosts unless the PD request is
+            # suppressed. See https://github.com/raspberrypi/linux/issues/6569
+            from .booteeprom import needs_psu_workaround, set_psu_max_current
+            from .pimodel import PiModel
+
+            version = PiModel().get_version()
+            if needs_psu_workaround(version):
+                if set_psu_max_current(3000):
+                    logging.info(
+                        "Applied PSU_MAX_CURRENT=3000 (required for USB gadget on Apple hosts)."
+                    )
 
         if args.disable_usb_gadget:
             config.disable_usb_gadget()
