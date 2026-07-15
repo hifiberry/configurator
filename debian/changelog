@@ -1,4 +1,4 @@
-hifiberry-configurator (2.13.19) stable; urgency=medium
+hifiberry-configurator (2.13.20) stable; urgency=medium
 
   * config-txt: add USB gadget (OTG device) mode support -- new
     `config-txt --enable-usb-gadget` / `--disable-usb-gadget` CLI flags
@@ -18,6 +18,9 @@ hifiberry-configurator (2.13.19) stable; urgency=medium
     model, silently downgrading a Pi5/CM5 image later moved to a CM4
     from the stock XHCI host controller to dwc2's slower built-in host
     mode, with no restore path on disable.
+  * release: bump to 2.13.20 -- 2.13.19 was already published from
+    elsewhere without this USB gadget work, so this branch's build must
+    not reuse that version number.
 
  -- HiFiBerry <info@hifiberry.com>  Wed, 15 Jul 2026 09:00:00 +0000
 
