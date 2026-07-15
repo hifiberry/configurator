@@ -445,14 +445,28 @@ def main():
             config.enable_usb_gadget()
             # Pi5/CM5 fail to enumerate on Apple hosts unless the PD request is
             # suppressed. See https://github.com/raspberrypi/linux/issues/6569
+            #
+            # This step is independent of the config.txt change above and must
+            # not be allowed to discard it: a failure here (missing binary,
+            # busy/unreadable EEPROM, etc.) is caught and logged as a warning
+            # rather than propagating, so config.save() below still runs.
             from .booteeprom import needs_psu_workaround, set_psu_max_current
-            from .pimodel import PiModel
 
             version = PiModel().get_version()
             if needs_psu_workaround(version):
-                if set_psu_max_current(3000):
-                    logging.info(
-                        "Applied PSU_MAX_CURRENT=3000 (required for USB gadget on Apple hosts)."
+                try:
+                    if set_psu_max_current(3000):
+                        logging.info(
+                            "Applied PSU_MAX_CURRENT=3000 (required for USB gadget on Apple hosts)."
+                        )
+                except Exception as e:
+                    logging.warning(
+                        "Could not set PSU_MAX_CURRENT=3000 in the bootloader EEPROM "
+                        f"({e}). The config.txt USB gadget change was still applied, "
+                        "but on Pi5/CM5 the Mac will NOT enumerate the gadget until "
+                        "PSU_MAX_CURRENT=3000 is set in the bootloader EEPROM -- set "
+                        "it manually (e.g. `rpi-eeprom-config --edit`) or rerun this "
+                        "command once rpi-eeprom-config is available."
                     )
 
         if args.disable_usb_gadget:
