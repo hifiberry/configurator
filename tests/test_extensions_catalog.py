@@ -167,3 +167,43 @@ def test_catalog_lists_normalized_extension():
                        candidate_version="1.0", installed_version=None)
     catalog = ExtensionCatalog(package_source=lambda: [info])
     assert [e.package for e in catalog.list_extensions()] == ["hifiberry-hello-extension"]
+
+
+# --- Regression: dpkg-buildpackage STRIPS the XB- prefix -----------------------
+# A deb built the standard way (dpkg-buildpackage -> dpkg-gencontrol) has
+# "Hifiberry-Extension: yes" in its repo record, not "XB-..." / "Xb-...". The
+# marker must match the stripped form too, or every properly-packaged extension
+# is dropped. (Caught packaging tidal-connect for real.)
+
+def _stripped_record(**overrides):
+    record = {
+        "Package": "hifiberry-tidal-connect",
+        "Description": "Tidal Connect endpoint for HiFiBerry\n Stream from the app.",
+        "Hifiberry-Extension": "yes",
+        "Extension-Name": "Tidal Connect",
+        "Extension-Category": "player",
+        "Extension-Needs-Reboot": "maybe",
+    }
+    record.update(overrides)
+    return record
+
+
+def test_marker_matches_dpkg_buildpackage_stripped_form():
+    assert is_extension_record(_stripped_record()) is True
+
+
+def test_build_extension_reads_stripped_form_fields():
+    info = PackageInfo(name="hifiberry-tidal-connect", record=_stripped_record(),
+                       candidate_version="1.0.0", installed_version=None)
+    ext = build_extension(info)
+    assert ext is not None
+    assert ext.name == "Tidal Connect"
+    assert ext.category == "player"
+    assert ext.needs_reboot == "maybe"
+
+
+def test_all_three_marker_forms_are_accepted():
+    # XB- (raw/uppercase), Xb- (apt-normalized), and stripped (dpkg-buildpackage)
+    for key in ("XB-Hifiberry-Extension", "Xb-Hifiberry-Extension", "Hifiberry-Extension"):
+        rec = {"Package": "p", key: "yes"}
+        assert is_extension_record(rec) is True, key

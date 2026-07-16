@@ -8,11 +8,16 @@ from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-MARKER_FIELD = "XB-Hifiberry-Extension"
-NAME_FIELD = "XB-Extension-Name"
-CATEGORY_FIELD = "XB-Extension-Category"
-REBOOT_FIELD = "XB-Extension-Needs-Reboot"
-ICON_URL_FIELD = "XB-Extension-Icon-Url"
+# Extension metadata is written in debian/control with an XB- prefix (dpkg's
+# mechanism for custom binary-package fields). dpkg-gencontrol STRIPS that
+# prefix, so a properly built deb's repo record has "Hifiberry-Extension", while
+# a hand-crafted deb (dpkg-deb --build) or the raw control keeps the "Xb-"
+# prefix. record_field() accepts both, so these constants use the stripped form.
+MARKER_FIELD = "Hifiberry-Extension"
+NAME_FIELD = "Extension-Name"
+CATEGORY_FIELD = "Extension-Category"
+REBOOT_FIELD = "Extension-Needs-Reboot"
+ICON_URL_FIELD = "Extension-Icon-Url"
 
 VALID_CATEGORIES = ("player", "dsp", "tool")
 DEFAULT_CATEGORY = "tool"
@@ -62,23 +67,28 @@ class Extension:
         }
 
 
-def field(record: Dict[str, str], name: str, default: str = "") -> str:
-    """Case-insensitive control-field lookup.
+def record_field(record: Dict[str, str], name: str, default: str = "") -> str:
+    """Look up an extension control field, tolerant of casing and the XB- prefix.
 
-    dpkg normalizes custom field names to a canonical case in the repo
-    ``Packages`` index — ``XB-Hifiberry-Extension`` in debian/control becomes
-    ``Xb-Hifiberry-Extension``. python3-apt's own ``Record`` is case-insensitive,
-    but ``dict(record)`` (which apt_package_source uses to make a plain,
-    serializable, testable dict) freezes whatever casing apt returned, so a
-    literal ``record.get("XB-Hifiberry-Extension")`` misses on a real repo.
-    Look fields up case-insensitively so the marker matches regardless of casing.
+    Two things vary in how the field reaches us:
+
+    * **Casing** — dpkg normalizes field names in the repo ``Packages`` index
+      (``Xb-Hifiberry-Extension``). python3-apt's ``Record`` is case-insensitive,
+      but ``dict(record)`` (used by apt_package_source to make a plain,
+      serializable, testable dict) freezes that casing.
+    * **The XB- prefix** — authors write ``XB-Hifiberry-Extension`` in
+      debian/control. ``dpkg-buildpackage`` strips the prefix to
+      ``Hifiberry-Extension``; ``dpkg-deb --build`` and the raw control keep it.
+
+    So try the bare name and the ``XB-`` prefixed name, each case-insensitively.
     """
-    if name in record:
-        return record[name]
-    target = name.lower()
-    for key, value in record.items():
-        if key.lower() == target:
-            return value
+    for candidate in (name, "XB-" + name):
+        if candidate in record:
+            return record[candidate]
+        target = candidate.lower()
+        for key, value in record.items():
+            if key.lower() == target:
+                return value
     return default
 
 
@@ -87,7 +97,7 @@ def is_extension_record(record: Dict[str, str]) -> bool:
 
     This is the security boundary: everything installable passes through here.
     """
-    return str(field(record, MARKER_FIELD)).strip().lower() == "yes"
+    return str(record_field(record, MARKER_FIELD)).strip().lower() == "yes"
 
 
 def _split_description(raw: str):
@@ -117,19 +127,19 @@ def build_extension(info: PackageInfo) -> Optional[Extension]:
     if not is_extension_record(info.record):
         return None
 
-    category = str(field(info.record, CATEGORY_FIELD)).strip().lower()
+    category = str(record_field(info.record, CATEGORY_FIELD)).strip().lower()
     if category not in VALID_CATEGORIES:
         category = DEFAULT_CATEGORY
 
-    needs_reboot = str(field(info.record, REBOOT_FIELD)).strip().lower()
+    needs_reboot = str(record_field(info.record, REBOOT_FIELD)).strip().lower()
     if needs_reboot not in VALID_NEEDS_REBOOT:
         needs_reboot = DEFAULT_NEEDS_REBOOT
 
-    summary, description = _split_description(field(info.record, "Description"))
+    summary, description = _split_description(record_field(info.record, "Description"))
 
     return Extension(
         package=info.name,
-        name=str(field(info.record, NAME_FIELD)).strip() or info.name,
+        name=str(record_field(info.record, NAME_FIELD)).strip() or info.name,
         category=category,
         summary=summary,
         description=description,
@@ -137,7 +147,7 @@ def build_extension(info: PackageInfo) -> Optional[Extension]:
         installed_version=info.installed_version,
         state=_state(info.candidate_version, info.installed_version),
         needs_reboot=needs_reboot,
-        icon_url=str(field(info.record, ICON_URL_FIELD)).strip() or None,
+        icon_url=str(record_field(info.record, ICON_URL_FIELD)).strip() or None,
     )
 
 
@@ -153,10 +163,14 @@ def apt_package_source() -> List[PackageInfo]:
         if candidate is None:
             continue
         try:
-            record = candidate.record
-            if str(record.get(MARKER_FIELD, "")).strip().lower() != "yes":
+            # Cheap pre-filter before converting the whole cache to dicts: apt's
+            # Record.get is case-insensitive, and we accept both the stripped and
+            # XB- prefixed marker names (see record_field).
+            raw = candidate.record
+            marker = raw.get(MARKER_FIELD) or raw.get("XB-" + MARKER_FIELD)
+            if str(marker or "").strip().lower() != "yes":
                 continue
-            record = dict(record)
+            record = dict(raw)
         except Exception as e:  # a malformed record must not kill the catalog
             logger.debug(f"Skipping {pkg.name}: unreadable record: {e}")
             continue
