@@ -54,16 +54,17 @@ def _default_downloader(url: str) -> bytes:
 def _default_deb_marker_check(path: str) -> bool:
     """True if the .deb at path carries the extension marker in its control.
 
-    The specific marker field names are passed to ``dpkg-deb -f`` on purpose: a
-    bare ``dpkg-deb -f`` extracts the whole control tarball, and its tar step
-    tries to chown — which fails under config-server's CapabilityBoundingSet
-    (CAP_CHOWN is stripped): "Cannot change ownership ... Operation not
-    permitted". Reading named fields avoids that extraction. Both the stripped
-    (dpkg-buildpackage) and XB- (dpkg-deb) marker spellings are requested.
+    dpkg-deb -f forks tar to extract the control member, and tar chowns to 0:0 —
+    which fails under config-server's environment (root:audio, CapabilityBoundingSet
+    strips CAP_CHOWN): "Cannot change ownership ... Operation not permitted". So,
+    like the apt step, dpkg-deb is run via systemd-run, which executes it under
+    PID 1 with the full root capability set. Both the stripped (dpkg-buildpackage)
+    and XB- (dpkg-deb) marker spellings are requested.
     """
     try:
         result = subprocess.run(
-            ["/usr/bin/dpkg-deb", "-f", path,
+            [SYSTEMD_RUN, "--pipe", "--wait", "--collect", "--quiet",
+             "/usr/bin/dpkg-deb", "-f", path,
              "Hifiberry-Extension", "Xb-Hifiberry-Extension"],
             capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
