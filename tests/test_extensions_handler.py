@@ -8,7 +8,7 @@ from flask import Flask
 from configurator.extensions.catalog import ExtensionCatalog, PackageInfo
 from configurator.extensions.jobs import ExtensionBusy, JobRegistry, PHASE_DONE
 from configurator.extensions.runner import InvalidPackageName, NotAnExtension
-from configurator.extensions.sources import InvalidSource
+from configurator.extensions.sources import InvalidSource, SourceNotFound
 from configurator.handlers.extensions_handler import ExtensionsHandler
 
 
@@ -246,6 +246,6 @@ def test_remove_source_succeeds():
 
 
 def test_remove_unknown_source_is_404():
-    handler = _handler(sources=FakeSources(raises=InvalidSource("Unknown source: x")))
+    handler = _handler(sources=FakeSources(raises=SourceNotFound("Unknown source: x")))
     status, _ = _call(handler.handle_remove_source, "nope")
     assert status == 404

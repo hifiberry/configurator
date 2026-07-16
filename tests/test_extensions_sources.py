@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from configurator.extensions.sources import InvalidSource, SourceManager
+from configurator.extensions.sources import InvalidSource, SourceManager, SourceNotFound
 
 ARMORED_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nabc\n-----END PGP PUBLIC KEY BLOCK-----\n"
 
@@ -160,6 +160,17 @@ def test_remove_unknown_source_raises(tmp_path):
         _manager(tmp_path).remove_source("nope")
 
 
+def test_remove_unknown_source_raises_source_not_found(tmp_path):
+    with pytest.raises(SourceNotFound):
+        _manager(tmp_path).remove_source("nope")
+
+
 def test_remove_refuses_an_unsafe_id(tmp_path):
     with pytest.raises(InvalidSource):
         _manager(tmp_path).remove_source("../../etc/passwd")
+
+
+def test_remove_refuses_an_unsafe_id_is_not_source_not_found(tmp_path):
+    with pytest.raises(InvalidSource) as exc_info:
+        _manager(tmp_path).remove_source("../../etc/passwd")
+    assert not isinstance(exc_info.value, SourceNotFound)

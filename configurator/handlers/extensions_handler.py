@@ -18,7 +18,7 @@ except ImportError:
 from ..extensions.catalog import ExtensionCatalog
 from ..extensions.jobs import ExtensionBusy, JobRegistry, TERMINAL_PHASES
 from ..extensions.runner import ExtensionRunner, InvalidPackageName, NotAnExtension
-from ..extensions.sources import InvalidSource, SourceManager
+from ..extensions.sources import InvalidSource, SourceManager, SourceNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -159,9 +159,10 @@ class ExtensionsHandler:
     def handle_remove_source(self, source_id: str):
         try:
             self.sources.remove_source(source_id)
+        except SourceNotFound as e:
+            return self._error(str(e), 404)
         except InvalidSource as e:
-            status = 404 if "Unknown source" in str(e) else 400
-            return self._error(str(e), status)
+            return self._error(str(e), 400)
         except Exception as e:
             logger.exception("Failed to remove source")
             return self._error(str(e), 500)

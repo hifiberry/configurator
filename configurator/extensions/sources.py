@@ -39,6 +39,10 @@ class InvalidSource(Exception):
     """The source definition was rejected."""
 
 
+class SourceNotFound(InvalidSource):
+    """The requested source does not exist."""
+
+
 def _gpg_dearmor(armored: str) -> bytes:
     result = subprocess.run(
         ["gpg", "--dearmor"],
@@ -157,7 +161,7 @@ class SourceManager:
         source_id = self._validate_id(source_id)
         list_path = self._list_path(source_id)
         if not os.path.isfile(list_path):
-            raise InvalidSource(f"Unknown source: {source_id}")
+            raise SourceNotFound(f"Unknown source: {source_id}")
 
         os.remove(list_path)
         keyring_path = self._keyring_path(source_id)
