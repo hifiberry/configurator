@@ -136,8 +136,12 @@ class ExtensionRunner:
 
     def uninstall(self, package: str) -> Job:
         self._require_extension(package)
+        # purge, not remove: an extension's registrations live in conffiles under
+        # /etc (players.d, configserver conf.d) that `remove` would leave behind,
+        # stranding a dangling player entry. purge also runs the postrm purge
+        # branch, so an extension can clean up what it built (e.g. a Docker image).
         return self._start(package, ACTION_UNINSTALL,
-                           [self.apt_get, "-y", "remove", package])
+                           [self.apt_get, "-y", "purge", package])
 
     def refresh(self) -> Job:
         return self._start(None, ACTION_REFRESH, [self.apt_get, "update"],

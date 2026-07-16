@@ -137,7 +137,7 @@ def test_uninstall_rejects_an_unmarked_package():
         runner.uninstall("openssh-server")
 
 
-def test_uninstall_builds_a_remove_argv():
+def test_uninstall_builds_a_purge_argv():
     executor = FakeExecutor()
     runner = _runner(
         packages=[_extension_info(installed="1.0.2")],
@@ -145,7 +145,9 @@ def test_uninstall_builds_a_remove_argv():
     )
     job = runner.uninstall("hifiberry-tidal-connect")
     argv = executor.calls[0]
-    assert "remove" in argv
+    # purge (not remove) so conffile registrations and postrm-purge cleanup run
+    assert "purge" in argv
+    assert "remove" not in argv
     assert argv[-1] == "hifiberry-tidal-connect"
     assert job.phase == PHASE_DONE
 
