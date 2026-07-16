@@ -123,6 +123,10 @@ def test_to_dict_is_json_shaped():
     assert data["package"] == "hifiberry-tidal-connect"
     assert data["state"] == "available"
     assert data["needs_reboot"] == "maybe"
+    # apt-repo extensions are tagged source "apt"; download hints stay server-side
+    assert data["source"] == "apt"
+    assert "download_url" not in data
+    assert "sha256" not in data
 
 
 # --- Regression: dpkg normalizes XB- to Xb- in the repo Packages index -------

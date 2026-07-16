@@ -51,6 +51,12 @@ class Extension:
     state: str
     needs_reboot: str
     icon_url: Optional[str] = None
+    # Where this extension comes from: "apt" for an apt-repo package, or
+    # "github:owner/name" for a GitHub-release package. download_url/sha256 are
+    # server-side install hints for the GitHub path and are not serialized.
+    source: str = "apt"
+    download_url: Optional[str] = None
+    sha256: Optional[str] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -64,6 +70,7 @@ class Extension:
             "state": self.state,
             "needs_reboot": self.needs_reboot,
             "icon_url": self.icon_url,
+            "source": self.source,
         }
 
 
