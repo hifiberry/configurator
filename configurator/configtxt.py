@@ -7,9 +7,26 @@ import logging
 import argparse
 from typing import Optional
 from .soundcard import Soundcard
+from .pimodel import PiModel
 
 # Constants
 HIFIBERRY_DETECTION_DISABLED = "# HiFiBerry sound detection disabled"
+DWC2_PREFIX = "dtoverlay=dwc2"
+DWC2_PERIPHERAL = "dtoverlay=dwc2,dr_mode=peripheral\n"
+DWC2_HOST = "dtoverlay=dwc2,dr_mode=host\n"
+
+# Pi model version -> the config.txt model section it boots from, for models
+# that have one. Models not listed here have no dedicated model section.
+DWC2_MODEL_SECTION = {
+    "CM5": "cm5",
+    "5": "pi5",
+    "CM4": "cm4",
+    "4": "pi4",
+}
+
+
+class UnsupportedModelError(Exception):
+    """Raised when the detected Pi model cannot act as a USB peripheral."""
 
 
 class ConfigTxt:
@@ -93,6 +110,61 @@ class ConfigTxt:
                 break
         if not updated:
             self.lines.append(new_line)
+
+    def _section_bounds(self, section):
+        """Return (start, end) line indices of a [section] body, or None if absent.
+
+        start is the first line after the [section] header; end is the index of
+        the next section header (or len(lines) at EOF).
+        """
+        header = f"[{section}]"
+        start = None
+        for i, line in enumerate(self.lines):
+            stripped = line.strip()
+            if start is None:
+                if stripped == header:
+                    start = i + 1
+                continue
+            if stripped.startswith("[") and stripped.endswith("]"):
+                return (start, i)
+        if start is None:
+            return None
+        return (start, len(self.lines))
+
+    def _ensure_section(self, section):
+        """Return (start, end) for a section, creating it at EOF if needed."""
+        bounds = self._section_bounds(section)
+        if bounds is not None:
+            return bounds
+        if self.lines and not self.lines[-1].endswith("\n"):
+            self.lines[-1] += "\n"
+        self.lines.append(f"\n[{section}]\n")
+        return (len(self.lines), len(self.lines))
+
+    def _update_line_in_section(self, section, prefix, new_line):
+        """Update or insert a line with the given prefix inside [section]."""
+        start, end = self._ensure_section(section)
+        for i in range(start, end):
+            if self.lines[i].strip().startswith(prefix):
+                self.lines[i] = new_line
+                logging.info(f"Updated '{prefix}' in [{section}].")
+                return
+        self.lines.insert(end, new_line)
+        logging.info(f"Added '{new_line.strip()}' to [{section}].")
+
+    def _remove_line_in_section(self, section, prefix):
+        """Remove any line with the given prefix inside [section]."""
+        bounds = self._section_bounds(section)
+        if bounds is None:
+            return
+        start, end = bounds
+        kept = [
+            line for i, line in enumerate(self.lines)
+            if not (start <= i < end and line.strip().startswith(prefix))
+        ]
+        if len(kept) != len(self.lines):
+            self.lines = kept
+            logging.info(f"Removed '{prefix}' from [{section}].")
 
     def disable_onboard_sound(self):
         self._update_line("dtparam=audio=", "dtparam=audio=off\n")
@@ -188,6 +260,75 @@ class ConfigTxt:
         self._update_line("dtoverlay=disable-bt", "dtoverlay=disable-bt\n")
         logging.info("UPDI settings applied. Reboot may be required.")
 
+    def _dwc2_owner_section(self, version):
+        """Return the version's own config.txt section name if it already
+        contains a dtoverlay=dwc2 line, else None.
+
+        A real config.txt carries every model's section at once (that's the
+        whole point of conditional sections -- one image boots many boards).
+        A model section that exists but has no dwc2 line in it (e.g. [cm4],
+        which only ever carries otg_mode=1) -- or a model with no section of
+        its own at all -- must NOT be treated as owning the dwc2 line: only
+        the section the *current* model actually reads, and that already has
+        a dwc2 line in stock config.txt, counts. Everything else falls back
+        to [all], per Raspberry Pi's own guidance for models that don't ship
+        their own dwc2 line.
+        """
+        model_section = DWC2_MODEL_SECTION.get(version)
+        if model_section is None:
+            return None
+        bounds = self._section_bounds(model_section)
+        if bounds is None:
+            return None
+        start, end = bounds
+        for i in range(start, end):
+            if self.lines[i].strip().startswith(DWC2_PREFIX):
+                return model_section
+        return None
+
+    def enable_usb_gadget(self, pi_model=None):
+        """Switch the dwc2 controller to peripheral mode so the Pi can be a gadget."""
+        pi_model = pi_model or PiModel()
+        if not pi_model.supports_usb_gadget():
+            raise UnsupportedModelError(
+                f"{pi_model.get_model_name()} has no USB device-mode port"
+            )
+        # otg_mode=1 forces the XHCI host controller and defeats dwc2 device
+        # mode. [cm4] is only read by a CM4, so only a CM4 may write to it --
+        # writing it unconditionally silently downgrades a Pi 5/CM5 later
+        # moved back into a CM4 to dwc2's slower built-in host mode.
+        if pi_model.get_version() == "CM4":
+            self._remove_line_in_section("cm4", "otg_mode=")
+        # [all], by contrast, is read by *every* model that boots this
+        # config.txt (that's the whole point of the section), so removing
+        # otg_mode= there is always in-bounds regardless of which model is
+        # currently enabling gadget mode: if this card is later moved into a
+        # CM4/Pi4, a stray otg_mode=1 left in [all] would force host mode on
+        # that board too and defeat its dwc2 peripheral setting.
+        self._remove_line_in_section("all", "otg_mode=")
+        section = self._dwc2_owner_section(pi_model.get_version()) or "all"
+        self._update_line_in_section(section, DWC2_PREFIX, DWC2_PERIPHERAL)
+        logging.info("USB gadget mode enabled. Reboot required.")
+
+    def disable_usb_gadget(self, pi_model=None):
+        """Restore dwc2 host mode, undoing exactly what enable_usb_gadget did."""
+        pi_model = pi_model or PiModel()
+        owner = self._dwc2_owner_section(pi_model.get_version())
+        if owner:
+            # Stock model section already had a dwc2 line (e.g. CM5) -- flip
+            # it back to host mode in place.
+            self._update_line_in_section(owner, DWC2_PREFIX, DWC2_HOST)
+        else:
+            # enable_usb_gadget added this line to [all] itself; remove it
+            # rather than leaving behind a line that was never there before.
+            self._remove_line_in_section("all", DWC2_PREFIX)
+        if pi_model.get_version() == "CM4":
+            # Restore the stock XHCI host controller otg_mode=1 that enable
+            # stripped, otherwise the board is silently downgraded to dwc2's
+            # slower built-in host mode.
+            self._update_line_in_section("cm4", "otg_mode=", "otg_mode=1\n")
+        logging.info("USB gadget mode disabled. Reboot required.")
+
     def enable_hat_i2c(self):
         overlay_line = "dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1\n"
         # Prevent duplicates if the line already exists
@@ -254,6 +395,8 @@ def main():
     parser.add_argument("--default-config", action="store_true", help="Apply the default configuration.")
     parser.add_argument("--report-change", action="store_true", help="Exit with return code 1 if changes were made.")
     parser.add_argument("--enable-updi", action="store_true", help="Enable UPDI settings: enable UART, dtoverlay for uart0, and disable Bluetooth.")
+    parser.add_argument("--enable-usb-gadget", action="store_true", help="Enable USB device (gadget) mode on the OTG port.")
+    parser.add_argument("--disable-usb-gadget", action="store_true", help="Restore USB host mode on the OTG port.")
     parser.add_argument("--enable-hat_i2c", action="store_true", help="Enable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
     parser.add_argument("--disable-hat_i2c", action="store_true", help="Disable HAT I2C overlay (dtoverlay=i2c-gpio,i2c_gpio_sda=0,i2c_gpio_scl=1).")
     parser.add_argument("--enable-detection", action="store_true", help="Enable HiFiBerry sound card detection.")
@@ -307,6 +450,37 @@ def main():
 
         if args.enable_updi:
             config.enable_updi()
+
+        if args.enable_usb_gadget:
+            config.enable_usb_gadget()
+            # Pi5/CM5 fail to enumerate on Apple hosts unless the PD request is
+            # suppressed. See https://github.com/raspberrypi/linux/issues/6569
+            #
+            # This step is independent of the config.txt change above and must
+            # not be allowed to discard it: a failure here (missing binary,
+            # busy/unreadable EEPROM, etc.) is caught and logged as a warning
+            # rather than propagating, so config.save() below still runs.
+            from .booteeprom import needs_psu_workaround, set_psu_max_current
+
+            version = PiModel().get_version()
+            if needs_psu_workaround(version):
+                try:
+                    if set_psu_max_current(3000):
+                        logging.info(
+                            "Applied PSU_MAX_CURRENT=3000 (required for USB gadget on Apple hosts)."
+                        )
+                except Exception as e:
+                    logging.warning(
+                        "Could not set PSU_MAX_CURRENT=3000 in the bootloader EEPROM "
+                        f"({e}). The config.txt USB gadget change was still applied, "
+                        "but on Pi5/CM5 the Mac will NOT enumerate the gadget until "
+                        "PSU_MAX_CURRENT=3000 is set in the bootloader EEPROM -- set "
+                        "it manually (e.g. `rpi-eeprom-config --edit`) or rerun this "
+                        "command once rpi-eeprom-config is available."
+                    )
+
+        if args.disable_usb_gadget:
+            config.disable_usb_gadget()
 
         if args.enable_hat_i2c:
             config.enable_hat_i2c()
