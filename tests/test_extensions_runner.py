@@ -165,3 +165,89 @@ def test_refresh_builds_an_update_argv_and_needs_no_package():
     assert "update" in executor.calls[0]
     assert job.action == "refresh"
     assert job.phase == PHASE_DONE
+
+
+# --- AptExecutor: systemd-run wrapping + status/log routing ------------------
+# The executor is normally the injected seam (tests use FakeExecutor), but the
+# systemd-run wrapping and APT::Status-Fd=1 line routing are real logic worth
+# locking without actually shelling out to apt.
+
+class _FakeStdout:
+    def __init__(self, lines):
+        self._it = iter(lines)
+
+    def __iter__(self):
+        return self._it
+
+    def close(self):
+        pass
+
+
+class _FakeProc:
+    def __init__(self, lines, returncode):
+        self.stdout = _FakeStdout(lines)
+        self._rc = returncode
+
+    def wait(self):
+        return self._rc
+
+
+def test_apt_executor_wraps_apt_in_systemd_run(monkeypatch):
+    from configurator.extensions import runner as runner_mod
+    from configurator.extensions.jobs import JobRegistry as _JR
+
+    captured = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _FakeProc([], 0)
+
+    monkeypatch.setattr(runner_mod.subprocess, "Popen", fake_popen)
+    job = _JR().create("hifiberry-tidal-connect", "install")
+    rc = runner_mod.AptExecutor()(
+        ["/usr/bin/apt-get", "-y", "install", "hifiberry-tidal-connect"], job
+    )
+    cmd = captured["cmd"]
+    assert rc == 0
+    assert cmd[0].endswith("systemd-run")
+    for flag in ("--pipe", "--wait", "--collect", "--quiet"):
+        assert flag in cmd
+    assert "--setenv=DEBIAN_FRONTEND=noninteractive" in cmd
+    # the real apt argv is passed through, and status is routed to stdout
+    assert "/usr/bin/apt-get" in cmd and "install" in cmd
+    assert cmd[-2:] == ["-o", "APT::Status-Fd=1"]
+
+
+def test_apt_executor_routes_status_lines_and_logs_the_rest(monkeypatch):
+    from configurator.extensions import runner as runner_mod
+    from configurator.extensions.jobs import JobRegistry as _JR, PHASE_INSTALLING
+
+    lines = [
+        "Reading package lists...\n",
+        "pmstatus:hifiberry-tidal-connect:50.0:Unpacking\n",
+        "Setting up hifiberry-tidal-connect...\n",
+    ]
+    monkeypatch.setattr(runner_mod.subprocess, "Popen",
+                        lambda cmd, **kw: _FakeProc(lines, 0))
+    job = _JR().create("hifiberry-tidal-connect", "install")
+    runner_mod.AptExecutor()(["/usr/bin/apt-get", "-y", "install", "x"], job)
+    data = job.to_dict()
+    # a status line updated phase/percent
+    assert job.phase == PHASE_INSTALLING
+    assert job.percent == 50.0
+    # plain lines were logged; the status message was logged too
+    assert "Reading package lists..." in data["log"]
+    assert "Unpacking" in data["log"]
+
+
+def test_apt_executor_returns_127_when_systemd_run_missing(monkeypatch):
+    from configurator.extensions import runner as runner_mod
+    from configurator.extensions.jobs import JobRegistry as _JR
+
+    def boom(cmd, **kw):
+        raise OSError("systemd-run not found")
+
+    monkeypatch.setattr(runner_mod.subprocess, "Popen", boom)
+    job = _JR().create("x", "install")
+    rc = runner_mod.AptExecutor()(["/usr/bin/apt-get", "-y", "install", "x"], job)
+    assert rc == 127

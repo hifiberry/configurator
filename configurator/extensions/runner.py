@@ -7,7 +7,6 @@ the request is spelled.
 """
 
 import logging
-import os
 import subprocess
 import threading
 from typing import Callable, List, Optional
@@ -26,6 +25,7 @@ from .postinstall import refresh_system_state
 logger = logging.getLogger(__name__)
 
 APT_GET = "/usr/bin/apt-get"
+SYSTEMD_RUN = "/usr/bin/systemd-run"
 
 ACTION_INSTALL = "install"
 ACTION_UNINSTALL = "uninstall"
@@ -41,76 +41,62 @@ class NotAnExtension(Exception):
 
 
 class AptExecutor:
-    """Runs apt-get, feeding stdout into the job log and APT::Status-Fd into
-    the job's phase/percent.
+    """Runs apt-get as a transient systemd unit via systemd-run.
 
-    apt writes progress to a separate fd, so we read two streams: stdout on
-    this thread and the status pipe on another.
+    config-server's own unit bounds capabilities to CAP_SYS_ADMIN, which strips
+    CAP_SETUID/SETGID (so apt cannot drop to its ``_apt`` sandbox user —
+    "seteuid 42 failed - Operation not permitted") and CAP_DAC_OVERRIDE (so even
+    as root it cannot reach the ``_apt``-owned apt lists). Running apt directly
+    from config-server therefore fails on any real device. systemd-run hands the
+    work to PID 1, which starts a transient unit with the full root capability
+    set, so apt and dpkg maintainer scripts run unrestricted without widening
+    config-server's own bounding set.
+
+    apt's machine-readable progress is routed to stdout with
+    ``APT::Status-Fd=1`` and interleaved with its normal output: lines that
+    parse as status updates drive the job's phase/percent, everything else is
+    logged. This keeps everything on one stream, so no extra fd needs to survive
+    the systemd-run boundary (systemd-run does not forward arbitrary fds).
     """
 
-    def __init__(self, apt_get: str = APT_GET):
+    def __init__(self, apt_get: str = APT_GET, systemd_run: str = SYSTEMD_RUN):
         self.apt_get = apt_get
+        self.systemd_run = systemd_run
 
     def __call__(self, argv: List[str], job: Job) -> int:
-        read_fd, write_fd = os.pipe()
-        argv = list(argv) + ["-o", f"APT::Status-Fd={write_fd}"]
-
-        env = dict(os.environ)
-        env["DEBIAN_FRONTEND"] = "noninteractive"
+        cmd = [
+            self.systemd_run,
+            "--pipe", "--wait", "--collect", "--quiet",
+            "--setenv=DEBIAN_FRONTEND=noninteractive",
+        ] + list(argv) + ["-o", "APT::Status-Fd=1"]
 
         try:
             proc = subprocess.Popen(
-                argv,
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                pass_fds=(write_fd,),
-                env=env,
                 text=True,
                 bufsize=1,
             )
         except OSError as e:
-            os.close(read_fd)
-            os.close(write_fd)
-            job.append_log(f"Failed to start apt-get: {e}")
+            job.append_log(f"Failed to start systemd-run: {e}")
             return 127
-
-        # The child owns the write end now; if we hold it open the reader
-        # below never sees EOF.
-        os.close(write_fd)
-
-        status_thread = threading.Thread(
-            target=self._read_status, args=(read_fd, job), daemon=True
-        )
-        status_thread.start()
 
         try:
             for line in proc.stdout:
-                job.append_log(line.rstrip("\n"))
-        finally:
-            proc.stdout.close()
-            returncode = proc.wait()
-            status_thread.join(timeout=5)
-            if status_thread.is_alive():
-                logger.warning(
-                    "status-reader thread did not exit within timeout; "
-                    "possible leaked fd/thread"
-                )
-
-        return returncode
-
-    @staticmethod
-    def _read_status(read_fd: int, job: Job) -> None:
-        try:
-            with os.fdopen(read_fd, "r") as status:
-                for line in status:
-                    parsed = parse_status_line(line)
-                    if parsed is None:
-                        continue
+                line = line.rstrip("\n")
+                parsed = parse_status_line(line)
+                if parsed is not None:
                     phase, percent, message = parsed
                     job.set_phase(phase, percent)
                     job.append_log(message)
-        except Exception as e:
-            logger.warning(f"status fd reader stopped: {e}")
+                elif line:
+                    job.append_log(line)
+        finally:
+            proc.stdout.close()
+            returncode = proc.wait()
+
+        return returncode
 
 
 def _default_thread_factory(target):
