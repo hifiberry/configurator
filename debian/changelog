@@ -1,3 +1,14 @@
+hifiberry-configurator (2.14.0) stable; urgency=medium
+
+  * Add the extension installer: install optional software ("extensions" —
+    Debian packages marked XB-Hifiberry-Extension) from the Web UI, from apt
+    repositories or from GitHub releases. Marker-gated installs run apt via
+    systemd-run; a job model streams progress; conf.d is reloaded in place so
+    a freshly installed extension is controllable without restarting
+    config-server (wires up the previously-unused ConfigParser.reload_config).
+
+ -- HiFiBerry <daniel@hifiberry.com>  Thu, 16 Jul 2026 16:00:00 +0000
+
 hifiberry-configurator (2.13.20) stable; urgency=medium
 
   * config-txt: add USB gadget (OTG device) mode support -- new

@@ -547,6 +547,16 @@ class SystemdServiceManager:
             error_msg = stderr if stderr else stdout
             return False, f"Failed to reload systemd daemon configuration: {error_msg}"
 
+    def refresh_service_map(self) -> None:
+        """Rebuild the cached service environment map.
+
+        The map is built once at startup, so a service installed afterwards is
+        absent from it. _get_service_environment() self-heals by probing unit
+        paths, but an explicit rescan after installing an extension keeps
+        list_services() honest too.
+        """
+        self._build_service_environment_map()
+
 
 def main():
     """Main function for command-line interface"""
