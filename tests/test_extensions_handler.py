@@ -52,6 +52,49 @@ class FakeRunner:
         self._maybe_raise()
         return self.jobs.create(None, "refresh")
 
+    def install_github(self, package, download_url, sha256):
+        self.calls.append(("install_github", package, download_url, sha256))
+        self._maybe_raise()
+        return self.jobs.create(package, "install")
+
+
+class FakeGithubCatalog:
+    """Stands in for GitHubCatalog; returns canned Extensions."""
+
+    def __init__(self, extensions=None):
+        self._exts = extensions or []
+
+    def list_extensions(self):
+        return list(self._exts)
+
+    def get_extension(self, package):
+        for e in self._exts:
+            if e.package == package:
+                return e
+        return None
+
+
+class FakeGithubSources:
+    def __init__(self, raises=None):
+        self.raises = raises
+        self.sources = []
+        self.removed = []
+
+    def list_sources(self):
+        return self.sources
+
+    def add_source(self, repo):
+        if self.raises:
+            raise self.raises
+        source = {"id": repo.replace("/", "-"), "repo": repo}
+        self.sources.append(source)
+        return source
+
+    def remove_source(self, source_id):
+        if self.raises:
+            raise self.raises
+        self.removed.append(source_id)
+
 
 class FakeSources:
     def __init__(self, raises=None):
@@ -77,6 +120,7 @@ class FakeSources:
 
 
 def _handler(packages=None, runner=None, sources=None, jobs=None,
+             github_catalog=None, github_sources=None,
              reboot_flag_path="/nonexistent"):
     packages = packages if packages is not None else [_extension_info()]
     jobs = jobs or JobRegistry()
@@ -86,6 +130,8 @@ def _handler(packages=None, runner=None, sources=None, jobs=None,
         jobs=jobs,
         runner=runner if runner is not None else FakeRunner(jobs),
         sources=sources if sources is not None else FakeSources(),
+        github_catalog=github_catalog if github_catalog is not None else FakeGithubCatalog(),
+        github_sources=github_sources if github_sources is not None else FakeGithubSources(),
         reboot_flag_path=reboot_flag_path,
     )
 
@@ -248,4 +294,100 @@ def test_remove_source_succeeds():
 def test_remove_unknown_source_is_404():
     handler = _handler(sources=FakeSources(raises=SourceNotFound("Unknown source: x")))
     status, _ = _call(handler.handle_remove_source, "nope")
+    assert status == 404
+
+
+# --- GitHub sources + merged catalog + install dispatch -----------------------
+from configurator.extensions.catalog import Extension
+from configurator.extensions.github import GitHubSourceNotFound, InvalidGitHubSource
+
+
+def _github_ext(package="hifiberry-tidal-connect"):
+    return Extension(
+        package=package, name="Tidal Connect", category="player",
+        summary="s", description="d", version="1.0.0", installed_version=None,
+        state="available", needs_reboot="maybe", icon_url=None,
+        source=f"github:pulpier/{package}",
+        download_url="https://gh/assets/x.deb", sha256="abc123",
+    )
+
+
+def test_list_merges_apt_and_github_catalogs():
+    handler = _handler(github_catalog=FakeGithubCatalog([_github_ext("hifiberry-gh")]))
+    status, payload = _call(handler.handle_list_extensions)
+    pkgs = {e["package"] for e in payload["data"]["extensions"]}
+    assert "hifiberry-tidal-connect" in pkgs  # apt
+    assert "hifiberry-gh" in pkgs             # github
+    assert payload["count"] == 2
+
+
+def test_list_survives_a_failing_github_catalog():
+    class Boom:
+        def list_extensions(self): raise RuntimeError("network down")
+    handler = _handler(github_catalog=Boom())
+    status, payload = _call(handler.handle_list_extensions)
+    assert status == 200
+    assert payload["data"]["extensions"][0]["package"] == "hifiberry-tidal-connect"
+
+
+def test_install_dispatches_github_extension_to_install_github():
+    jobs = JobRegistry()
+    runner = FakeRunner(jobs)
+    handler = _handler(
+        runner=runner, jobs=jobs,
+        github_catalog=FakeGithubCatalog([_github_ext("hifiberry-gh")]),
+    )
+    status, payload = _call(handler.handle_install, "hifiberry-gh")
+    assert status == 202
+    assert runner.calls[0][0] == "install_github"
+    assert runner.calls[0][1] == "hifiberry-gh"
+    assert runner.calls[0][3] == "abc123"  # sha256 passed through
+
+
+def test_install_uses_apt_path_for_non_github_package():
+    jobs = JobRegistry()
+    runner = FakeRunner(jobs)
+    handler = _handler(runner=runner, jobs=jobs, github_catalog=FakeGithubCatalog([]))
+    _call(handler.handle_install, "hifiberry-tidal-connect")
+    assert runner.calls[0][0] == "install"
+
+
+def test_list_github_sources():
+    gh = FakeGithubSources()
+    gh.sources.append({"id": "pulpier-x", "repo": "pulpier/x"})
+    status, payload = _call(_handler(github_sources=gh).handle_list_github_sources)
+    assert status == 200
+    assert payload["data"]["sources"][0]["repo"] == "pulpier/x"
+
+
+def test_add_github_source():
+    gh = FakeGithubSources()
+    status, payload = _call(_handler(github_sources=gh).handle_add_github_source,
+                            json={"repo": "pulpier/tidal-connect-hifiberry"})
+    assert status == 201
+    assert payload["data"]["source"]["repo"] == "pulpier/tidal-connect-hifiberry"
+
+
+def test_add_github_source_missing_repo_is_400():
+    status, _ = _call(_handler().handle_add_github_source, json={})
+    assert status == 400
+
+
+def test_add_invalid_github_source_is_400():
+    gh = FakeGithubSources(raises=InvalidGitHubSource("bad repo"))
+    status, _ = _call(_handler(github_sources=gh).handle_add_github_source,
+                      json={"repo": "../evil"})
+    assert status == 400
+
+
+def test_remove_github_source():
+    gh = FakeGithubSources()
+    status, _ = _call(_handler(github_sources=gh).handle_remove_github_source, "pulpier-x")
+    assert status == 200
+    assert gh.removed == ["pulpier-x"]
+
+
+def test_remove_unknown_github_source_is_404():
+    gh = FakeGithubSources(raises=GitHubSourceNotFound("Unknown GitHub source: x"))
+    status, _ = _call(_handler(github_sources=gh).handle_remove_github_source, "nope")
     assert status == 404

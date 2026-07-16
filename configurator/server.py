@@ -179,6 +179,9 @@ class ConfigAPIServer:
                         'GET /api/v1/extensions/sources': 'List extension repositories',
                         'POST /api/v1/extensions/sources': 'Add an extension repository',
                         'DELETE /api/v1/extensions/sources/<source_id>': 'Remove an extension repository',
+                        'GET /api/v1/extensions/github-sources': 'List GitHub extension sources',
+                        'POST /api/v1/extensions/github-sources': 'Add a GitHub extension source',
+                        'DELETE /api/v1/extensions/github-sources/<source_id>': 'Remove a GitHub extension source',
                     },
                 }
             })
@@ -588,6 +591,21 @@ class ConfigAPIServer:
         def remove_extension_source(source_id):
             """Remove an extension repository"""
             return self.extensions_handler.handle_remove_source(source_id)
+
+        @self.app.route('/api/v1/extensions/github-sources', methods=['GET'])
+        def list_extension_github_sources():
+            """List configured GitHub extension sources"""
+            return self.extensions_handler.handle_list_github_sources()
+
+        @self.app.route('/api/v1/extensions/github-sources', methods=['POST'])
+        def add_extension_github_source():
+            """Add a GitHub extension source (owner/name)"""
+            return self.extensions_handler.handle_add_github_source()
+
+        @self.app.route('/api/v1/extensions/github-sources/<source_id>', methods=['DELETE'])
+        def remove_extension_github_source(source_id):
+            """Remove a GitHub extension source"""
+            return self.extensions_handler.handle_remove_github_source(source_id)
 
         @self.app.route('/api/v1/extensions/<package>', methods=['GET'])
         def get_extension(package):
