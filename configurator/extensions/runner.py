@@ -52,15 +52,27 @@ def _default_downloader(url: str) -> bytes:
 
 
 def _default_deb_marker_check(path: str) -> bool:
-    """True if the .deb at path carries the extension marker in its control."""
+    """True if the .deb at path carries the extension marker in its control.
+
+    The specific marker field names are passed to ``dpkg-deb -f`` on purpose: a
+    bare ``dpkg-deb -f`` extracts the whole control tarball, and its tar step
+    tries to chown — which fails under config-server's CapabilityBoundingSet
+    (CAP_CHOWN is stripped): "Cannot change ownership ... Operation not
+    permitted". Reading named fields avoids that extraction. Both the stripped
+    (dpkg-buildpackage) and XB- (dpkg-deb) marker spellings are requested.
+    """
     try:
-        result = subprocess.run(["/usr/bin/dpkg-deb", "-f", path],
-                                capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            ["/usr/bin/dpkg-deb", "-f", path,
+             "Hifiberry-Extension", "Xb-Hifiberry-Extension"],
+            capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
+            logger.warning(f"dpkg-deb -f {path} failed (rc {result.returncode}): "
+                           f"{result.stderr.strip()}")
             return False
         record = {}
         for line in result.stdout.splitlines():
-            if line[:1] in (" ", "\t") or ":" not in line:
+            if ":" not in line:
                 continue
             key, value = line.split(":", 1)
             record[key.strip()] = value.strip()
