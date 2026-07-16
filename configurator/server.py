@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -74,7 +74,13 @@ class ConfigAPIServer:
         self.bluetooth_handler = BluetoothHandler()
         self.player_registry_handler = PlayerRegistryHandler(self.configdb)
         self.ble_handler = BLEProvisioningHandler()
-            
+        # Extensions: pass the systemd handler's service manager so a freshly
+        # installed extension's units and permissions are picked up without a
+        # restart (a restart would kill the job the UI is polling).
+        self.extensions_handler = ExtensionsHandler(
+            service_manager=getattr(self.systemd_handler, 'service_manager', None)
+        )
+
         logger.info("ConfigAPIServer.__init__: Creating SettingsManager")
         self.settings_manager = SettingsManager(self.configdb)
         
@@ -162,7 +168,18 @@ class ConfigAPIServer:
                     'setup_reset': '/api/v1/setup/reset',
                     'ble_provisioning_status': '/api/v1/ble/provisioning/status',
                     'ble_provisioning_start': '/api/v1/ble/provisioning/start',
-                    'ble_provisioning_stop': '/api/v1/ble/provisioning/stop'
+                    'ble_provisioning_stop': '/api/v1/ble/provisioning/stop',
+                    'extensions': {
+                        'GET /api/v1/extensions': 'List available and installed extensions',
+                        'GET /api/v1/extensions/<package>': 'Get extension details',
+                        'POST /api/v1/extensions/<package>/install': 'Install an extension',
+                        'POST /api/v1/extensions/<package>/uninstall': 'Uninstall an extension',
+                        'POST /api/v1/extensions/refresh': 'Refresh the extension catalog',
+                        'GET /api/v1/extensions/jobs/<job_id>': 'Get extension job status',
+                        'GET /api/v1/extensions/sources': 'List extension repositories',
+                        'POST /api/v1/extensions/sources': 'Add an extension repository',
+                        'DELETE /api/v1/extensions/sources/<source_id>': 'Remove an extension repository',
+                    },
                 }
             })
         
@@ -540,6 +557,52 @@ class ConfigAPIServer:
         def stop_ble_provisioning():
             """Stop BLE provisioning service"""
             return self.ble_handler.handle_stop()
+
+        # Extension endpoints
+        @self.app.route('/api/v1/extensions', methods=['GET'])
+        def list_extensions():
+            """List all available and installed extensions"""
+            return self.extensions_handler.handle_list_extensions()
+
+        @self.app.route('/api/v1/extensions/refresh', methods=['POST'])
+        def refresh_extensions():
+            """Refresh the extension catalog (apt update)"""
+            return self.extensions_handler.handle_refresh()
+
+        @self.app.route('/api/v1/extensions/jobs/<job_id>', methods=['GET'])
+        def get_extension_job(job_id):
+            """Get the status of an extension install/uninstall job"""
+            return self.extensions_handler.handle_get_job(job_id)
+
+        @self.app.route('/api/v1/extensions/sources', methods=['GET'])
+        def list_extension_sources():
+            """List configured extension repositories"""
+            return self.extensions_handler.handle_list_sources()
+
+        @self.app.route('/api/v1/extensions/sources', methods=['POST'])
+        def add_extension_source():
+            """Add an extension repository"""
+            return self.extensions_handler.handle_add_source()
+
+        @self.app.route('/api/v1/extensions/sources/<source_id>', methods=['DELETE'])
+        def remove_extension_source(source_id):
+            """Remove an extension repository"""
+            return self.extensions_handler.handle_remove_source(source_id)
+
+        @self.app.route('/api/v1/extensions/<package>', methods=['GET'])
+        def get_extension(package):
+            """Get details for a single extension"""
+            return self.extensions_handler.handle_get_extension(package)
+
+        @self.app.route('/api/v1/extensions/<package>/install', methods=['POST'])
+        def install_extension(package):
+            """Install an extension"""
+            return self.extensions_handler.handle_install(package)
+
+        @self.app.route('/api/v1/extensions/<package>/uninstall', methods=['POST'])
+        def uninstall_extension(package):
+            """Uninstall an extension"""
+            return self.extensions_handler.handle_uninstall(package)
 
         # Settings management endpoints
         @self.app.route('/api/v1/settings/save', methods=['POST'])
