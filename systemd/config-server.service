@@ -19,8 +19,14 @@ PrivateMounts=no
 Environment="XDG_RUNTIME_DIR=/run/user/0"
 Environment="PIPEWIRE_RUNTIME_DIR=/run/pipewire"
 
-# Capabilities needed for mount/unmount
-CapabilityBoundingSet=CAP_SYS_ADMIN
+# No CapabilityBoundingSet: config-server installs extensions via apt/dpkg, and
+# package maintainer scripts need arbitrary root capabilities — apt's sandbox
+# setuids to the _apt user (CAP_SETUID/SETGID), dpkg sets ownership and file
+# capabilities (CAP_CHOWN/FOWNER/SETFCAP/DAC_OVERRIDE), and mounts still need
+# CAP_SYS_ADMIN. Bounding to CAP_SYS_ADMIN made every apt operation fail
+# ("seteuid 42 failed - Operation not permitted"). The service already runs as
+# root with NoNewPrivileges=false, so an inclusive bounding set added negligible
+# hardening in this posture. Leaving the directive out keeps the full root set.
 DevicePolicy=auto
 
 # Security - relaxed for PipeWire access
