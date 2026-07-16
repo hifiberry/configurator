@@ -62,12 +62,32 @@ class Extension:
         }
 
 
+def field(record: Dict[str, str], name: str, default: str = "") -> str:
+    """Case-insensitive control-field lookup.
+
+    dpkg normalizes custom field names to a canonical case in the repo
+    ``Packages`` index — ``XB-Hifiberry-Extension`` in debian/control becomes
+    ``Xb-Hifiberry-Extension``. python3-apt's own ``Record`` is case-insensitive,
+    but ``dict(record)`` (which apt_package_source uses to make a plain,
+    serializable, testable dict) freezes whatever casing apt returned, so a
+    literal ``record.get("XB-Hifiberry-Extension")`` misses on a real repo.
+    Look fields up case-insensitively so the marker matches regardless of casing.
+    """
+    if name in record:
+        return record[name]
+    target = name.lower()
+    for key, value in record.items():
+        if key.lower() == target:
+            return value
+    return default
+
+
 def is_extension_record(record: Dict[str, str]) -> bool:
     """True only for a record explicitly marked as a HiFiBerry extension.
 
     This is the security boundary: everything installable passes through here.
     """
-    return str(record.get(MARKER_FIELD, "")).strip().lower() == "yes"
+    return str(field(record, MARKER_FIELD)).strip().lower() == "yes"
 
 
 def _split_description(raw: str):
@@ -97,19 +117,19 @@ def build_extension(info: PackageInfo) -> Optional[Extension]:
     if not is_extension_record(info.record):
         return None
 
-    category = str(info.record.get(CATEGORY_FIELD, "")).strip().lower()
+    category = str(field(info.record, CATEGORY_FIELD)).strip().lower()
     if category not in VALID_CATEGORIES:
         category = DEFAULT_CATEGORY
 
-    needs_reboot = str(info.record.get(REBOOT_FIELD, "")).strip().lower()
+    needs_reboot = str(field(info.record, REBOOT_FIELD)).strip().lower()
     if needs_reboot not in VALID_NEEDS_REBOOT:
         needs_reboot = DEFAULT_NEEDS_REBOOT
 
-    summary, description = _split_description(info.record.get("Description", ""))
+    summary, description = _split_description(field(info.record, "Description"))
 
     return Extension(
         package=info.name,
-        name=str(info.record.get(NAME_FIELD, "")).strip() or info.name,
+        name=str(field(info.record, NAME_FIELD)).strip() or info.name,
         category=category,
         summary=summary,
         description=description,
@@ -117,7 +137,7 @@ def build_extension(info: PackageInfo) -> Optional[Extension]:
         installed_version=info.installed_version,
         state=_state(info.candidate_version, info.installed_version),
         needs_reboot=needs_reboot,
-        icon_url=str(info.record.get(ICON_URL_FIELD, "")).strip() or None,
+        icon_url=str(field(info.record, ICON_URL_FIELD)).strip() or None,
     )
 
 

@@ -123,3 +123,47 @@ def test_to_dict_is_json_shaped():
     assert data["package"] == "hifiberry-tidal-connect"
     assert data["state"] == "available"
     assert data["needs_reboot"] == "maybe"
+
+
+# --- Regression: dpkg normalizes XB- to Xb- in the repo Packages index -------
+# On a real apt repo the marker arrives as "Xb-Hifiberry-Extension", not the
+# "XB-..." spelled in debian/control. Field lookups must be case-insensitive or
+# every extension is silently dropped from the catalog. (Caught on-device.)
+
+def _normalized_record(**overrides):
+    record = {
+        "Package": "hifiberry-hello-extension",
+        "Description": "Hello Extension\n A trivial test extension.",
+        "Xb-Hifiberry-Extension": "yes",
+        "Xb-Extension-Name": "Hello Extension",
+        "Xb-Extension-Category": "tool",
+        "Xb-Extension-Needs-Reboot": "no",
+    }
+    record.update(overrides)
+    return record
+
+
+def test_marker_matches_dpkg_normalized_casing():
+    assert is_extension_record(_normalized_record()) is True
+
+
+def test_build_extension_reads_normalized_casing_fields():
+    info = PackageInfo(
+        name="hifiberry-hello-extension",
+        record=_normalized_record(),
+        candidate_version="1.0",
+        installed_version=None,
+    )
+    ext = build_extension(info)
+    assert ext is not None
+    assert ext.name == "Hello Extension"       # not the package name
+    assert ext.category == "tool"
+    assert ext.needs_reboot == "no"
+
+
+def test_catalog_lists_normalized_extension():
+    info = PackageInfo(name="hifiberry-hello-extension",
+                       record=_normalized_record(),
+                       candidate_version="1.0", installed_version=None)
+    catalog = ExtensionCatalog(package_source=lambda: [info])
+    assert [e.package for e in catalog.list_extensions()] == ["hifiberry-hello-extension"]
