@@ -90,6 +90,11 @@ class AptExecutor:
             proc.stdout.close()
             returncode = proc.wait()
             status_thread.join(timeout=5)
+            if status_thread.is_alive():
+                logger.warning(
+                    "status-reader thread did not exit within timeout; "
+                    "possible leaked fd/thread"
+                )
 
         return returncode
 
@@ -105,7 +110,7 @@ class AptExecutor:
                     job.set_phase(phase, percent)
                     job.append_log(message)
         except Exception as e:
-            logger.debug(f"status fd reader stopped: {e}")
+            logger.warning(f"status fd reader stopped: {e}")
 
 
 def _default_thread_factory(target):
