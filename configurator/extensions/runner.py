@@ -6,13 +6,17 @@ not explicitly marked XB-Hifiberry-Extension: yes cannot be installed, however
 the request is spelled.
 """
 
+import hashlib
 import logging
+import os
 import subprocess
+import tempfile
 import threading
+import urllib.request
 from typing import Callable, List, Optional
 
 from .aptstatus import parse_status_line
-from .catalog import VALID_PACKAGE_RE, ExtensionCatalog
+from .catalog import VALID_PACKAGE_RE, ExtensionCatalog, is_extension_record
 from .jobs import (
     Job,
     JobRegistry,
@@ -38,6 +42,32 @@ class InvalidPackageName(Exception):
 
 class NotAnExtension(Exception):
     """The package is unknown, or is not marked as a HiFiBerry extension."""
+
+
+def _default_downloader(url: str) -> bytes:
+    """Download a release asset over HTTPS."""
+    req = urllib.request.Request(url, headers={"User-Agent": "hifiberry-configurator"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return resp.read()
+
+
+def _default_deb_marker_check(path: str) -> bool:
+    """True if the .deb at path carries the extension marker in its control."""
+    try:
+        result = subprocess.run(["/usr/bin/dpkg-deb", "-f", path],
+                                capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return False
+        record = {}
+        for line in result.stdout.splitlines():
+            if line[:1] in (" ", "\t") or ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            record[key.strip()] = value.strip()
+        return is_extension_record(record)
+    except Exception as e:
+        logger.warning(f"Could not read control of {path}: {e}")
+        return False
 
 
 class AptExecutor:
@@ -108,12 +138,16 @@ class ExtensionRunner:
                  executor: Optional[Callable[[List[str], Job], int]] = None,
                  refresher: Optional[Callable[[], object]] = None,
                  thread_factory: Optional[Callable] = None,
+                 downloader: Optional[Callable[[str], bytes]] = None,
+                 deb_marker_check: Optional[Callable[[str], bool]] = None,
                  apt_get: str = APT_GET):
         self.catalog = catalog
         self.jobs = jobs
         self.executor = executor or AptExecutor(apt_get)
         self.refresher = refresher or refresh_system_state
         self.thread_factory = thread_factory or _default_thread_factory
+        self.downloader = downloader or _default_downloader
+        self.deb_marker_check = deb_marker_check or _default_deb_marker_check
         self.apt_get = apt_get
 
     # -- gate ------------------------------------------------------------
@@ -147,7 +181,56 @@ class ExtensionRunner:
         return self._start(None, ACTION_REFRESH, [self.apt_get, "update"],
                            refresh_after=False)
 
+    def install_github(self, package: str, download_url: str, sha256: str) -> Job:
+        """Install an extension published as a GitHub release asset.
+
+        The package name is validated, but the marker/catalog gate is enforced
+        against the *downloaded* deb (sha256 + control marker) rather than the
+        apt catalog, since a GitHub extension is not in any apt repo.
+        """
+        if not package or not VALID_PACKAGE_RE.match(package):
+            raise InvalidPackageName(f"Invalid package name: {package!r}")
+        job = self.jobs.create(package, ACTION_INSTALL)
+
+        def run():
+            self._execute_github(job, download_url, sha256)
+
+        self.thread_factory(run).start()
+        return job
+
     # -- internals -------------------------------------------------------
+
+    def _execute_github(self, job: Job, download_url: str, sha256: str) -> None:
+        job.set_phase(PHASE_DOWNLOADING, 0)
+        try:
+            data = self.downloader(download_url)
+        except Exception as e:
+            job.finish(PHASE_FAILED, exit_code=None, error=f"download failed: {e}")
+            return
+
+        actual = hashlib.sha256(data).hexdigest()
+        if actual.lower() != str(sha256).strip().lower():
+            job.finish(PHASE_FAILED, exit_code=None,
+                       error="checksum mismatch: the downloaded file does not "
+                             "match the expected sha256")
+            return
+
+        fd, path = tempfile.mkstemp(suffix=".deb", prefix="hifiberry-ext-")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+            if not self.deb_marker_check(path):
+                job.finish(PHASE_FAILED, exit_code=None,
+                           error="the downloaded package is not a HiFiBerry extension")
+                return
+            # A path (contains "/") makes apt install the local file, not a repo pkg.
+            self._run_and_finish(job, [self.apt_get, "-y", "install", path],
+                                 refresh_after=True)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
     def _start(self, package, action, argv, refresh_after=True) -> Job:
         job = self.jobs.create(package, action)
@@ -160,6 +243,11 @@ class ExtensionRunner:
 
     def _execute(self, job: Job, argv: List[str], refresh_after: bool) -> None:
         job.set_phase(PHASE_DOWNLOADING, 0)
+        self._run_and_finish(job, argv, refresh_after)
+
+    def _run_and_finish(self, job: Job, argv: List[str], refresh_after: bool) -> None:
+        """Run the executor on argv, then refresh (on success) and finish the job.
+        Shared by the apt and GitHub install paths."""
         try:
             returncode = self.executor(argv, job)
         except Exception as e:

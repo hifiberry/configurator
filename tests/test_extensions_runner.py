@@ -253,3 +253,76 @@ def test_apt_executor_returns_127_when_systemd_run_missing(monkeypatch):
     job = _JR().create("x", "install")
     rc = runner_mod.AptExecutor()(["/usr/bin/apt-get", "-y", "install", "x"], job)
     assert rc == 127
+
+
+# --- GitHub install path (download -> verify sha256 + marker -> apt install file)
+import hashlib as _hashlib
+
+
+def _github_runner(executor=None, downloader=None, marker_ok=True, refresher=None):
+    from configurator.extensions import runner as runner_mod
+    from configurator.extensions.catalog import ExtensionCatalog
+    from configurator.extensions.jobs import JobRegistry as _JR
+    catalog = ExtensionCatalog(package_source=lambda: [])  # not used by github path
+    return runner_mod.ExtensionRunner(
+        catalog=catalog,
+        jobs=_JR(),
+        executor=executor or FakeExecutor(),
+        downloader=downloader or (lambda url: b"DEBDATA"),
+        deb_marker_check=lambda path: marker_ok,
+        refresher=refresher or (lambda: None),
+        thread_factory=lambda target: type("T", (), {"start": staticmethod(target)})(),
+    )
+
+
+def _sha(data):
+    return _hashlib.sha256(data).hexdigest()
+
+
+def test_github_install_verifies_sha_then_installs_the_file():
+    executor = FakeExecutor()
+    runner = _github_runner(executor=executor, downloader=lambda url: b"DEBDATA")
+    job = runner.install_github("hifiberry-tidal-connect",
+                                "https://gh/x.deb", _sha(b"DEBDATA"))
+    assert job.phase == PHASE_DONE
+    argv = executor.calls[0]
+    assert "install" in argv
+    assert argv[-1].endswith(".deb")
+    assert "/" in argv[-1]  # a path, so apt installs the local file
+
+
+def test_github_install_refuses_on_sha_mismatch_before_apt():
+    executor = FakeExecutor()
+    runner = _github_runner(executor=executor, downloader=lambda url: b"DEBDATA")
+    job = runner.install_github("hifiberry-tidal-connect", "https://gh/x.deb",
+                                "0" * 64)
+    assert job.phase == PHASE_FAILED
+    assert "checksum" in job.error.lower()
+    assert executor.calls == []  # apt never ran
+
+
+def test_github_install_refuses_unmarked_deb_before_apt():
+    executor = FakeExecutor()
+    runner = _github_runner(executor=executor, marker_ok=False,
+                            downloader=lambda url: b"DEBDATA")
+    job = runner.install_github("hifiberry-tidal-connect", "https://gh/x.deb",
+                                _sha(b"DEBDATA"))
+    assert job.phase == PHASE_FAILED
+    assert "not a hifiberry extension" in job.error.lower()
+    assert executor.calls == []
+
+
+def test_github_install_rejects_bad_package_name():
+    import pytest as _pytest
+    runner = _github_runner()
+    with _pytest.raises(InvalidPackageName):
+        runner.install_github("Bad Name", "https://gh/x.deb", "abc")
+
+
+def test_github_install_download_failure_is_reported():
+    def boom(url):
+        raise OSError("network down")
+    runner = _github_runner(downloader=boom)
+    job = runner.install_github("hifiberry-tidal-connect", "https://gh/x.deb", "abc")
+    assert job.phase == PHASE_FAILED
+    assert "download failed" in job.error.lower()
