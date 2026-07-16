@@ -21,10 +21,10 @@ SOURCES_DIR = "/etc/apt/sources.list.d"
 KEYRINGS_DIR = "/usr/share/keyrings"
 FILE_PREFIX = "hifiberry-ext-"
 
-SAFE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9-]*$')
-SAFE_URI_RE = re.compile(r'^https?://[A-Za-z0-9._~:/?#\[\]@!$&\'()*+,;=%-]+$')
-SAFE_SUITE_RE = re.compile(r'^[A-Za-z0-9._-]+$')
-SAFE_COMPONENTS_RE = re.compile(r'^[A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*$')
+SAFE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9-]*\Z')
+SAFE_URI_RE = re.compile(r'^https?://[A-Za-z0-9._~:/?#\[\]@!$&\'()*+,;=%-]+\Z')
+SAFE_SUITE_RE = re.compile(r'^[A-Za-z0-9._-]+\Z')
+SAFE_COMPONENTS_RE = re.compile(r'^[A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*\Z')
 
 PGP_HEADER = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 
@@ -132,9 +132,17 @@ class SourceManager:
         os.chmod(keyring_path, 0o644)  # apt reads this as _apt, not root
 
         list_path = self._list_path(source_id)
-        with open(list_path, "w") as f:
-            f.write(f"deb [signed-by={keyring_path}] {uri} {suite} {components}\n")
-        os.chmod(list_path, 0o644)
+        try:
+            with open(list_path, "w") as f:
+                f.write(f"deb [signed-by={keyring_path}] {uri} {suite} {components}\n")
+            os.chmod(list_path, 0o644)
+        except Exception:
+            # Don't leave an orphan keyring with no matching .list file.
+            try:
+                os.remove(keyring_path)
+            except OSError:
+                pass
+            raise
 
         logger.info(f"Added extension source {source_id}: {uri} {suite} {components}")
         return {

@@ -1,3 +1,4 @@
+import builtins
 import os
 
 import pytest
@@ -65,6 +66,26 @@ def test_nothing_is_written_when_the_key_is_refused(tmp_path):
     assert os.listdir(tmp_path / "keyrings") == []
 
 
+def test_orphan_keyring_is_removed_when_list_write_fails(tmp_path, monkeypatch):
+    manager = _manager(tmp_path)
+    real_open = builtins.open
+    calls = {"n": 0}
+
+    def flaky_open(path, mode="r", *args, **kwargs):
+        if str(path).endswith(".list") and "w" in mode:
+            raise OSError("disk full")
+        calls["n"] += 1
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", flaky_open)
+
+    with pytest.raises(OSError):
+        manager.add_source("acme", "https://repo.acme.com", "trixie", "main", ARMORED_KEY)
+
+    assert calls["n"] > 0  # the keyring write did happen
+    assert not (tmp_path / "keyrings" / "hifiberry-ext-acme.gpg").exists()
+
+
 @pytest.mark.parametrize("bad_id", ["../etc/evil", "acme repo", "ACME!", "", "a/b"])
 def test_unsafe_source_ids_are_refused(tmp_path, bad_id):
     manager = _manager(tmp_path)
@@ -90,6 +111,18 @@ def test_newline_injection_in_suite_is_refused(tmp_path):
         manager.add_source("acme", "https://repo.acme.com",
                            "trixie main\ndeb https://evil.com trixie", "main",
                            ARMORED_KEY)
+
+
+@pytest.mark.parametrize("args", [
+    ("acme", "https://repo.acme.com", "trixie\n", "main"),      # suite
+    ("acme", "https://repo.acme.com", "trixie", "main\n"),      # components
+    ("acme", "https://repo.acme.com\n", "trixie", "main"),      # uri
+    ("acme\n", "https://repo.acme.com", "trixie", "main"),      # id
+])
+def test_bare_trailing_newline_in_any_field_is_refused(tmp_path, args):
+    manager = _manager(tmp_path)
+    with pytest.raises(InvalidSource):
+        manager.add_source(*args, ARMORED_KEY)
 
 
 def test_list_sources_returns_managed_sources(tmp_path):
