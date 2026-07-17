@@ -1,3 +1,12 @@
+hifiberry-configurator (2.14.2) stable; urgency=medium
+
+  * auth manifest: classify GET /soundcard/detect-live as "ok". It is a
+    read-only hardware detection pass (like /soundcard/detect, already ok), and
+    the first-boot setup wizard calls it before any password exists — leaving
+    it "risky" made it 401 and broke sound-card selection during setup.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 17 Jul 2026 12:00:00 +0000
+
 hifiberry-configurator (2.14.1) stable; urgency=medium
 
   * Ship the auth-gateway classification manifest
