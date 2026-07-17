@@ -262,8 +262,15 @@ class ConfigAPIServer:
         
         @self.app.route('/api/v1/key/<key>', methods=['GET'])
         def get_config_value(key):
-            """Get a specific configuration value"""
+            """Get a specific configuration value (never decrypts secrets;
+            `secure=true` is ignored on this unauthenticated 'ok' path)."""
             return self.configdb.handle_get_config_value(key)
+
+        @self.app.route('/api/v1/key/<key>/secure', methods=['GET'])
+        def get_config_value_secure(key):
+            """Get a config value, decrypting it if stored secure. This path is
+            'risky' at the auth gateway, so it requires authentication."""
+            return self.configdb.handle_get_config_value_secure(key)
         
         @self.app.route('/api/v1/key/<key>', methods=['PUT', 'POST'])
         def set_config_value(key):

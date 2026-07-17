@@ -291,19 +291,34 @@ class ConfigDB:
             }), 500
     
     def handle_get_config_value(self, key: str):
-        """Flask handler: Get a specific configuration value"""
+        """Flask handler: Get a specific configuration value.
+
+        This route is reachable without authentication (the auth gateway
+        classifies GET /key/<key> as "ok"), so it must never return decrypted
+        secrets: a `secure=true` query parameter is deliberately ignored here.
+        Authenticated callers read encrypted values via the risky-tier path
+        GET /key/<key>/secure (handle_get_config_value_secure).
+        """
+        return self._get_config_value_response(key, secure=False)
+
+    def handle_get_config_value_secure(self, key: str):
+        """Flask handler: Get a config value, decrypting it if it is stored
+        secure. Served on the risky-tier path /key/<key>/secure, so the auth
+        gateway requires a valid session before this can be reached."""
+        return self._get_config_value_response(key, secure=True)
+
+    def _get_config_value_response(self, key: str, secure: bool):
         try:
-            secure = request.args.get('secure', 'false').lower() == 'true'
             default = request.args.get('default')
-            
+
             value = self.get(key, default, secure)
-            
+
             if value is None and default is None:
                 return jsonify({
                     'status': 'error',
                     'message': f'Configuration key "{key}" not found'
                 }), 404
-            
+
             return jsonify({
                 'status': 'success',
                 'data': {

@@ -9,8 +9,10 @@
         "/systemd/services", "/systemd/service/*", "/systemd/service/*/exists",
         "/players", "/players/icon/*",
         "/volume/headphone", "/volume/headphone/controls",
-        "/smb/mounts", "/smb/servers", "/i2c/devices",
-        "/soundcard/detect", "/soundcard/detect-live", "/soundcard/detection" ] },
+        "/smb/mounts", "/smb/servers", "/smb/capabilities", "/smb/mounts/*/diagnostics", "/i2c/devices",
+        "/soundcard/detect", "/soundcard/detect-live", "/soundcard/detection",
+        "/extensions", "/extensions/*", "/extensions/jobs/*",
+        "/bluetooth/*" ] },
     { "tier": "ok", "methods": ["POST"], "paths": [
         "/systemd/service/*/*", "/volume/headphone", "/filesystem/file-exists" ] },
     { "tier": "risky", "methods": ["*"], "paths": ["/**"] }

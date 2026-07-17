@@ -1,3 +1,18 @@
+hifiberry-configurator (2.14.4) stable; urgency=medium
+
+  * SECURITY: GET /key/<key> no longer decrypts secure values. It is reachable
+    without authentication (ok-tier at the auth gateway), so an unauthenticated
+    GET /key/<name>?secure=true could previously read decrypted secrets. The
+    `secure=true` param is now ignored on that path; decrypted reads move to a
+    new GET /key/<key>/secure route which is risky-tier (requires a session).
+  * auth manifest: classify these read-only endpoints as "ok" (they load on
+    page open and 401'd once the gateway is active): GET /extensions,
+    /extensions/*, /extensions/jobs/*, /smb/capabilities,
+    /smb/mounts/*/diagnostics, and /bluetooth/* (all Bluetooth reads; mutations
+    stay POST/risky).
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 17 Jul 2026 16:00:00 +0000
+
 hifiberry-configurator (2.14.3) stable; urgency=medium
 
   * auth manifest: classify POST /filesystem/file-exists as "ok". It is a
