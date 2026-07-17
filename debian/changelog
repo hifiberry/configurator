@@ -1,3 +1,12 @@
+hifiberry-configurator (2.14.3) stable; urgency=medium
+
+  * auth manifest: classify POST /filesystem/file-exists as "ok". It is a
+    read-only file-existence check (sandboxed to allowed directories, /etc by
+    default) that the System Info page's "System Files" card calls on load;
+    leaving it "risky" made it 401 once the auth gateway is active.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 17 Jul 2026 15:30:00 +0000
+
 hifiberry-configurator (2.14.2) stable; urgency=medium
 
   * auth manifest: classify GET /soundcard/detect-live as "ok". It is a

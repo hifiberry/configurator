@@ -12,7 +12,7 @@
         "/smb/mounts", "/smb/servers", "/i2c/devices",
         "/soundcard/detect", "/soundcard/detect-live", "/soundcard/detection" ] },
     { "tier": "ok", "methods": ["POST"], "paths": [
-        "/systemd/service/*/*", "/volume/headphone" ] },
+        "/systemd/service/*/*", "/volume/headphone", "/filesystem/file-exists" ] },
     { "tier": "risky", "methods": ["*"], "paths": ["/**"] }
   ]
 }
