@@ -1,3 +1,15 @@
+hifiberry-configurator (2.14.1) stable; urgency=medium
+
+  * Ship the auth-gateway classification manifest
+    (etc/hifiberry/auth.d/config.json): version/systeminfo reads, systemd
+    service status and player start/stop/restart, and volume/headphone are
+    "ok" (never need a password); all other config changes are "risky" and
+    require authentication through the gateway.
+  * Bind config-server to 127.0.0.1 instead of 0.0.0.0 so nginx with the auth
+    gateway is the only network entry point.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 17 Jul 2026 12:00:00 +0000
+
 hifiberry-configurator (2.14.0) stable; urgency=medium
 
   * Add the extension installer: install optional software ("extensions" —
