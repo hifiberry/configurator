@@ -1,3 +1,4 @@
 configserver.json etc/configserver/
 etc/modules-load.d/config-server-i2c.conf etc/modules-load.d/
 debian/hifiberry-config.nginx etc/nginx/hifiberry-api.d/
+auth/config.json etc/hifiberry/auth.d/

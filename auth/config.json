@@ -1,0 +1,18 @@
+{
+  "service": "config",
+  "match_prefix": "/api/config/v1",
+  "default_tier": "risky",
+  "rules": [
+    { "tier": "ok", "methods": ["GET"], "paths": [
+        "/version", "/systeminfo", "/network", "/soundcards",
+        "/setup/status", "/keys", "/key/*",
+        "/systemd/services", "/systemd/service/*", "/systemd/service/*/exists",
+        "/players", "/players/icon/*",
+        "/volume/headphone", "/volume/headphone/controls",
+        "/smb/mounts", "/smb/servers", "/i2c/devices",
+        "/soundcard/detect", "/soundcard/detection" ] },
+    { "tier": "ok", "methods": ["POST"], "paths": [
+        "/systemd/service/*/*", "/volume/headphone" ] },
+    { "tier": "risky", "methods": ["*"], "paths": ["/**"] }
+  ]
+}
