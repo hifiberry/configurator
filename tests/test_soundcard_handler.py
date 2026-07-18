@@ -42,8 +42,17 @@ from src.handlers.soundcard_handler import SoundcardHandler  # noqa: E402
 def get_response(result):
     """Helper to extract response and status code from handler result"""
     if isinstance(result, tuple):
-        return result[0], result[1]
-    return result, 200
+        response, status = result[0], result[1]
+    else:
+        response, status = result, 200
+
+    # Normalize Response-like objects from other test Flask mocks.
+    if hasattr(response, 'get_json'):
+        json_payload = response.get_json()
+        if json_payload is not None:
+            response = json_payload
+
+    return response, status
 
 
 class TestSoundcardHandlerListSoundcards(unittest.TestCase):

@@ -1,9 +1,13 @@
 from setuptools import setup, find_packages
 import os
+import sys
+
+# Add src to path so we can find the package
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Read version from version module
 def get_version():
-    version_file = os.path.join(os.path.dirname(__file__), 'configurator', '_version.py')
+    version_file = os.path.join(os.path.dirname(__file__), 'src', '_version.py')
     with open(version_file, 'r') as f:
         for line in f:
             if line.startswith('__version__'):
@@ -24,7 +28,8 @@ setup(
     author="HiFiBerry",
     author_email="support@hifiberry.com",
     license="MIT",
-    packages=find_packages(),
+    packages=find_packages(where='src'),
+    package_dir={'': 'src'},
     install_requires=requirements,
     data_files=[
         ('/usr/lib/systemd/system', [

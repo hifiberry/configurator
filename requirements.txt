@@ -1,9 +1,9 @@
-python3-pyalsaaudio>=0.8.0  # Required for ALSA sound card detection in soundcard.py and soundcard_detector.py
+# pyalsaaudio>=0.8.0  # Optional: ALSA sound card detection (has subprocess fallback)
 cryptography
 netifaces  # Required for network interface detection in sambaclient.py
-hateeprom  # Required for HAT EEPROM reading in hattools.py
+# hateeprom  # Required for HAT EEPROM reading - may need custom install
 flask>=3.1.3  # Required for API server in server.py
 waitress>=3.0.2  # Production WSGI server to prevent thread exhaustion
-dbus
+dbus-fast  # Pure Python D-Bus implementation for Bluetooth and systemd communication
 argcomplete  # Required for bash auto-completion of command-line arguments
-bless>=0.3.0  # Required for BLE GATT server in ble_provisioning.py
+# bless>=0.3.0  # Required for BLE GATT server in ble_provisioning.py - may need special handling

@@ -18,23 +18,13 @@ from unittest.mock import patch, MagicMock
 import sys
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from asoundconf import ALSAConfig, SIMPLE_CONFIG_TEMPLATE, parse_arguments, main
 
 
 class TestALSAConfig:
     """Test cases for ALSAConfig class"""
-    
-    @pytest.fixture
-    def temp_config_file(self):
-        """Fixture providing a temporary config file"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
-            temp_path = f.name
-        yield temp_path
-        # Cleanup
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
     
     def test_init_creates_instance(self):
         """Test that ALSAConfig initializes correctly with default parameters"""
@@ -331,7 +321,9 @@ class TestTemplateFormat:
         result = SIMPLE_CONFIG_TEMPLATE.format(hw=0, channels=2)
         assert "card 0" in result
         assert "channels 2" in result
-        assert "{" not in result  # No unformatted placeholders
+        # Check that format placeholders were replaced (not that { is absent, since it's in ALSA syntax)
+        assert "{hw}" not in result
+        assert "{channels}" not in result
     
     def test_template_structure(self):
         """Test that template contains required sections"""

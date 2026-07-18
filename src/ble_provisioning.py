@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 try:
     from bless.backends.attribute import GATTAttributePermissions
     from bless.backends.characteristic import GATTCharacteristicProperties
-    from bless.backends.bluezdbus.server import BlessServer
+    from bless.backends.bluezdbus.server import BlessServer  # type: ignore
 except ImportError:
     # Fallback for older bless versions or when types are unavailable
     GATTAttributePermissions = Any  # type: ignore

@@ -234,6 +234,7 @@ class TestBLEProvisioningServer:
     def test_handle_scan_trigger_with_trigger_byte(self, server):
         """Test WiFi scan trigger with 0xFF byte"""
         with patch("asyncio.ensure_future") as mock_future:
+            mock_future.side_effect = lambda coro: coro.close()
             server._handle_scan_trigger(bytearray(b"\xFF"))
         
         # Should schedule the scan
@@ -255,6 +256,7 @@ class TestBLEProvisioningServer:
         }).encode("utf-8")
         
         with patch("asyncio.ensure_future") as mock_future:
+            mock_future.side_effect = lambda coro: coro.close()
             server._handle_wifi_connect(bytearray(payload))
         
         assert server._connect_status["state"] == "connecting"

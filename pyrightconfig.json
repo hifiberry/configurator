@@ -1,0 +1,12 @@
+{
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "strict",
+  "include": ["src", "tests"],
+  "pythonPath": "${workspaceFolder}/src:${workspaceFolder}",
+  "venvPath": ".",
+  "reportMissingImports": false,
+  "reportMissingParameterType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownMemberType": false
+}

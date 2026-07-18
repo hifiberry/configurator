@@ -144,11 +144,15 @@ async def get_paired_devices() -> List[Dict[str, Any]]:
         
         return devices
         
-    except DBusError as e:
-        logging.error(f"DBus error getting paired devices: {e}")
-        raise
     except Exception as e:
-        logging.error(f"Error getting paired devices: {e}")
+        if (
+            isinstance(DBusError, type)
+            and issubclass(DBusError, BaseException)
+            and isinstance(e, DBusError)
+        ):
+            logging.error(f"DBus error getting paired devices: {e}")
+        else:
+            logging.error(f"Error getting paired devices: {e}")
         raise
 
 
@@ -186,9 +190,13 @@ async def unpair_device(address: str) -> Dict[str, str]:
         
         raise ValueError("Device not found")
         
-    except DBusError as e:
-        logging.error(f"DBus error unpairing device: {e}")
-        raise
     except Exception as e:
-        logging.error(f"Error unpairing device: {e}")
+        if (
+            isinstance(DBusError, type)
+            and issubclass(DBusError, BaseException)
+            and isinstance(e, DBusError)
+        ):
+            logging.error(f"DBus error unpairing device: {e}")
+        else:
+            logging.error(f"Error unpairing device: {e}")
         raise

@@ -289,7 +289,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         """Set up test fixtures"""
         self.handler = BluetoothHandler()
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices')
+    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_paired_devices(self, mock_get_devices):
         """Test getting paired devices"""
         # Mock returns a list-like object
@@ -309,7 +309,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         self.assertEqual(data['status'], 'success')
         self.assertIsNotNone(data.get('data'))
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices')
+    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_paired_devices_empty(self, mock_get_devices):
         """Test getting paired devices when list is empty"""
         mock_get_devices.return_value = []
@@ -323,7 +323,7 @@ class TestBluetoothHandlerDevices(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(data['status'], 'success')
 
-    @patch('src.handlers.bluetooth_handler.unpair_device')
+    @patch('src.handlers.bluetooth_handler.unpair_device', new_callable=Mock)
     @patch('src.handlers.bluetooth_handler.request')
     def test_unpair_device_success(self, mock_request, mock_unpair):
         """Test unpairing device successfully"""
@@ -442,7 +442,7 @@ class TestBluetoothHandlerReturnTypes(unittest.TestCase):
         result = self.handler.handle_get_bluetooth_settings()
         self.assertTrue(hasattr(result, 'get_json'))
 
-    @patch('src.handlers.bluetooth_handler.get_paired_devices')
+    @patch('src.handlers.bluetooth_handler.get_paired_devices', new_callable=Mock)
     def test_get_devices_returns_response(self, mock_get_devices):
         """Test that get_devices returns Response"""
         mock_get_devices.return_value = []

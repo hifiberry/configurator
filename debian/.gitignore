@@ -1,0 +1,33 @@
+# Debian build artifacts
+*.debhelper.log
+*.substvars
+autoreconf.before
+debhelper-build-stamp
+tmp/
+files*
+debs/
+
+# Build directories
+build/
+dist/
+*.egg-info/
+.eggs/
+__pycache__/
+
+# Python cache
+*.py[cod]
+*$py.class
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

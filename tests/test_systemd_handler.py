@@ -41,8 +41,19 @@ from src.handlers.systemd_handler import SystemdHandler  # noqa: E402
 def get_response(result):
     """Helper to extract response and status code from handler result"""
     if isinstance(result, tuple):
-        return result[0], result[1]
-    return result, 200
+        response, status = result[0], result[1]
+    else:
+        response, status = result, 200
+
+    # Some test modules replace Flask with mocks that return Response-like objects.
+    # Normalize those objects to their JSON payload so assertions can treat the
+    # response consistently as a dictionary.
+    if hasattr(response, 'get_json'):
+        json_payload = response.get_json()
+        if json_payload is not None:
+            response = json_payload
+
+    return response, status
 
 
 class TestSystemdHandlerOperation(unittest.TestCase):

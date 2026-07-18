@@ -1,24 +1,51 @@
 #!/usr/bin/make -f
 
+# Debian Trixie build configuration for dh_virtualenv
 # The tests/ suite is pytest-style and depends on runtime modules
 # (cryptography, etc.) that aren't present in the minimal build chroot; run
 # it in CI/dev via pytest instead of at packaging time.
 export PYBUILD_DISABLE=test
 
-# Inject the virtualenv sequence into dh
+# Verbose output for debugging
+export DH_VERBOSE=1
+
+# Standard dh sequencer (no specific buildsystem needed - dh_virtualenv handles it)
 %:
-	dh $@ --with virtualenv
+	dh $@
 
-# Override the default installation to use dh_virtualenv
-override_dh_virtualenv:
-	dh_virtualenv --builtin-venv --pypi-url https://pypi.org
+# Skip default auto_clean (python-distutils removed in compat 12+)
+override_dh_auto_clean:
+	@echo "Skipping auto_clean (handled by dh_virtualenv)"
 
-# Prevent standard python build tools from running globally
+# Skip default auto_configure (not needed)
+override_dh_auto_configure:
+	@echo "Skipping auto_configure (not needed)"
+
+# Skip default auto_build (dh_virtualenv handles everything)
+override_dh_auto_build:
+	@echo "Skipping auto_build (dh_virtualenv handles everything)"
+
+# Skip testing in the build environment (tests need cryptography, etc.)
+override_dh_auto_test:
+	@echo "Skipping tests (should be run separately with pytest in dev environment)"
+
+# Run dh_virtualenv to create the virtualenv with all dependencies
 override_dh_auto_install:
-	@echo "Skipping standard auto install, dh_virtualenv handles this."
+	dh_virtualenv \
+		--builtin-venv \
+		--install-suffix hifiberry-configurator \
+		--python /usr/bin/python3 \
+		--requirements requirements.txt \
+		--extra-pip-arg='--no-cache-dir' \
+		--extra-pip-arg='--compile'
 
-#%:
-#	dh $@ --buildsystem=pybuild
-#
-#override_dh_installsystemd:
-#	dh_installsystemd --no-restart-after-upgrade --no-stop-on-upgrade
+# Configure systemd services
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
+# Ensure proper directory permissions
+override_dh_fixperms:
+	dh_fixperms
+	# Ensure executable scripts in virtualenv bin are readable
+	chmod a+rx debian/hifiberry-configurator/usr/lib/hifiberry-configurator/bin/* 2>/dev/null || true
+

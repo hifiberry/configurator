@@ -22,12 +22,18 @@ class MockResponse:
         return self.json_data
 
     def __getitem__(self, key):
-        """Support tuple unpacking"""
-        if key == 0:
-            return self
-        elif key == 1:
-            return self.status_code
-        raise IndexError("list index out of range")
+        """Support tuple unpacking and dictionary-like access"""
+        # Support integer indexing for tuple unpacking
+        if isinstance(key, int):
+            if key == 0:
+                return self
+            elif key == 1:
+                return self.status_code
+            raise IndexError("list index out of range")
+        # Support string key access to underlying JSON data
+        if isinstance(key, str) and isinstance(self.json_data, dict):
+            return self.json_data[key]
+        raise KeyError(key)
 
     def __len__(self):
         """Support len() for tuple detection"""

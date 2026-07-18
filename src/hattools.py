@@ -12,7 +12,7 @@ from typing import Dict, Optional
 
 # Import from the hateeprom module in the eeprom package
 try:
-    from hateeprom import HatEEPROM
+    from hateeprom import HatEEPROM  # type: ignore
 except ImportError:
     # Fallback if hateeprom is not available
     HatEEPROM = None  # type: ignore
@@ -42,10 +42,10 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
     
     try:
         # Initialize HAT EEPROM interface
-        hat = HatEEPROM()
+        hat = HatEEPROM()  # type: ignore
         
         # Get HAT information using the short_info method
-        info = hat.short_info(debug=False)
+        info = hat.short_info(debug=False)  # type: ignore
         
         if info['success']:
             return {

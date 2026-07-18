@@ -39,6 +39,16 @@ Comprehensive documentation is available in the `docs/` directory:
 - **[API Documentation](docs/api-documentation.md)** - Complete REST API reference with examples
 - **[Version Management](docs/version-management.md)** - Version management and release process
 
+## Testing
+
+Run the test suite with:
+
+```bash
+python3 -m pytest -q
+```
+
+Async tests are handled by a local pytest hook in `tests/conftest.py`, so `@pytest.mark.asyncio` tests run without requiring `pytest-asyncio`.
+
 ## Requirements
 
 - Python 3.6+

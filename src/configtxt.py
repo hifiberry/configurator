@@ -300,7 +300,7 @@ class ConfigTxt:
             raise
 
 
-def main() -> None:
+def main() -> int:
     """Main entry point for command-line configuration management."""
     logging.basicConfig(
         level=logging.INFO,

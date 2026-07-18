@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd `dirname $0`
+cd "$(dirname "$0")"
 
 # Extract version from changelog as single source of truth
 CHANGELOG_VERSION=$(head -1 debian/changelog | sed 's/.*(\([^)]*\)).*/\1/')
