@@ -5,7 +5,6 @@ import subprocess
 import logging
 import argparse
 import time
-from datetime import datetime
 from xml.etree import ElementTree
 try:
     import argcomplete
@@ -15,7 +14,6 @@ except ImportError:
 from src.configtxt import ConfigTxt
 from src.hattools import get_hat_info  # Import the get_hat_info module
 from src.dsptoolkit import detect_dsp
-from src.soundcard import Soundcard
 from src.configdb import ConfigDB
 
 # Constants
@@ -369,7 +367,7 @@ class SoundcardDetector:
                 hat_info = {"vendor": None, "product": None, "uuid": None}
                 
             if attempt < self.hat_attempts - 1:  # Don't sleep on the last attempt
-                logging.debug(f"Retrying HAT detection in 1 second...")
+                logging.debug("Retrying HAT detection in 1 second...")
                 time.sleep(1)
         
         # Final status
@@ -862,7 +860,7 @@ class SoundcardDetector:
                 logging.info(f"Found existing HiFiBerry overlays: {current_hifiberry_overlays}")
                 logging.info(f"Replacing with detected card: {self.detected_card}")
             else:
-                logging.info(f"No existing HiFiBerry overlays found")
+                logging.info("No existing HiFiBerry overlays found")
                 logging.info(f"Adding overlay for detected card: {self.detected_card}")
 
             logging.info(f"Configuring card: {self.detected_card} (overlay: {self.detected_overlay})")

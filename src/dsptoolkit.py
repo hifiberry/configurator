@@ -5,15 +5,19 @@ HiFiBerry DSP Toolkit
 Module for detecting and interacting with DSP (Digital Signal Processor) hardware
 """
 
+import sys
 import logging
 import requests
 import json
 from typing import Optional, Dict, Any
 
 # Default DSP service configuration
-DEFAULT_DSP_HOST = "localhost"
-DEFAULT_DSP_PORT = 13141
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_DSP_HOST: str = "localhost"
+"""Default hostname for DSP service."""
+DEFAULT_DSP_PORT: int = 13141
+"""Default port for DSP service."""
+DEFAULT_TIMEOUT: float = 5.0
+"""Default timeout for DSP service requests in seconds."""
 
 class DSPToolkit:
     """
@@ -76,8 +80,10 @@ class DSPToolkit:
             DSP name string if detected, None otherwise
         """
         dsp_info = self.detect_dsp()
-        if dsp_info and dsp_info.get("status") == "detected":
-            return dsp_info.get("detected_dsp")
+        if dsp_info is not None and dsp_info.get("status") == "detected":
+            detected_dsp: Any = dsp_info.get("detected_dsp")
+            if isinstance(detected_dsp, str):
+                return detected_dsp
         return None
     
     def is_dsp_detected(self) -> bool:
@@ -148,12 +154,14 @@ def is_dsp_detected(host: str = DEFAULT_DSP_HOST, port: int = DEFAULT_DSP_PORT, 
     toolkit = DSPToolkit(host, port, timeout)
     return toolkit.is_dsp_detected()
 
-def main():
+def main() -> int:
     """
-    Command-line interface for DSP detection
+    Command-line interface for DSP detection.
+    
+    Returns:
+        Exit code (0 for success, 1 for failure)
     """
     import argparse
-    import sys
     
     parser = argparse.ArgumentParser(description='HiFiBerry DSP Detection Tool')
     parser.add_argument('--host', default=DEFAULT_DSP_HOST, 
@@ -185,23 +193,23 @@ def main():
         dsp_name = toolkit.get_detected_dsp_name()
         if dsp_name:
             print(dsp_name)
-            sys.exit(0)
+            return 0
         else:
-            sys.exit(1)
+            return 1
     
     elif args.status_only:
         status = toolkit.get_dsp_status()
         print(status)
-        sys.exit(0 if status == "detected" else 1)
+        return 0 if status == "detected" else 1
     
     elif args.json:
         dsp_info = toolkit.detect_dsp()
         if dsp_info:
             print(json.dumps(dsp_info, indent=2))
-            sys.exit(0)
+            return 0
         else:
             print(json.dumps({"status": "unavailable"}, indent=2))
-            sys.exit(1)
+            return 1
     
     else:
         # Default human-readable output
@@ -211,13 +219,13 @@ def main():
             if status == "detected":
                 dsp_name = dsp_info.get("detected_dsp", "Unknown")
                 print(f"DSP detected: {dsp_name}")
-                sys.exit(0)
+                return 0
             else:
                 print(f"DSP status: {status}")
-                sys.exit(1)
+                return 1
         else:
             print("DSP service unavailable")
-            sys.exit(1)
+            return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

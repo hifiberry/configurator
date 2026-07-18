@@ -7,7 +7,7 @@ across system restarts or configuration changes.
 """
 
 import logging
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Callable
 from .configdb import ConfigDB
 
 logger = logging.getLogger(__name__)

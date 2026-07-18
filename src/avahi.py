@@ -48,10 +48,9 @@ def configure_avahi_interfaces():
         
         # Track if we need to modify the file
         modified = False
-        new_lines = []
+        new_lines: list[str] = []
         in_server_section = False
         found_allow_interfaces = False
-        found_deny_interfaces = False
         
         for line in lines:
             stripped = line.strip()
@@ -74,7 +73,6 @@ def configure_avahi_interfaces():
                 continue
             elif in_server_section and (stripped.startswith('deny-interfaces=') or 
                                        stripped.startswith('#deny-interfaces=')):
-                found_deny_interfaces = True
                 modified = True
                 continue
             
@@ -83,7 +81,7 @@ def configure_avahi_interfaces():
         # Add our interface configuration to the [server] section
         if in_server_section or not found_allow_interfaces:
             # Find the [server] section and add our configuration
-            final_lines = []
+            final_lines: list[str] = []
             in_server_section = False
             server_section_processed = False
             

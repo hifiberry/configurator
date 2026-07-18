@@ -6,7 +6,6 @@ Core hostname functionality that can be used by both CLI tools and API handlers.
 """
 
 import logging
-import re
 import subprocess
 from typing import Tuple, Optional
 

@@ -101,10 +101,12 @@ class CmdlineTxt:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    parser = argparse.ArgumentParser(description="Manage /boot(*/firmware) cmdline.txt serial console setting.")
+    parser = argparse.ArgumentParser(description="Manage /boot(*/firmware) cmdline.txt kernel parameters.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--enable-serial-console", action="store_true", help="Enable the serial console by adding 'console=serial0,115200'.")
     group.add_argument("--disable-serial-console", action="store_true", help="Disable the serial console by removing 'console=serial0,115200'.")
+    group.add_argument("--enable-ipv6", action="store_true", help="Enable IPv6 by removing 'ipv6.disable=1'.")
+    group.add_argument("--disable-ipv6", action="store_true", help="Disable IPv6 by adding 'ipv6.disable=1'.")
 
     args = parser.parse_args()
 
@@ -115,6 +117,10 @@ def main() -> None:
             cmdline.enable_serial_console()
         elif args.disable_serial_console:
             cmdline.disable_serial_console()
+        elif args.enable_ipv6:
+            cmdline.enable_ipv6()
+        elif args.disable_ipv6:
+            cmdline.disable_ipv6()
 
         cmdline.save()
         logging.info("cmdline.txt update completed successfully.")

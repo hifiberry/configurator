@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""HAT (Hardware Attached on Top) information retrieval tool.
+
+Provides functions to read and display HAT EEPROM information including
+vendor, product name, and UUID.
+"""
+
 import argparse
 import logging
 import sys
@@ -9,7 +15,15 @@ try:
     from hateeprom import HatEEPROM
 except ImportError:
     # Fallback if hateeprom is not available
-    HatEEPROM = None
+    HatEEPROM = None  # type: ignore
+
+# Default values for missing HAT information
+DEFAULT_VENDOR: str = "no vendor"
+"""Default vendor string when vendor is not found."""
+DEFAULT_PRODUCT: str = "no product"
+"""Default product string when product is not found."""
+DEFAULT_UUID: str = "unknown"
+"""Default UUID string when UUID is not found."""
 
 def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
     """
@@ -48,7 +62,15 @@ def get_hat_info(verbose: bool = False) -> Dict[str, Optional[str]]:
             logging.error(f"Error reading HAT information: {e}")
         return {"vendor": None, "product": None, "uuid": None}
 
-def main():
+def main() -> int:
+    """Retrieve and display HAT information via command-line interface.
+    
+    Reads HAT EEPROM data and outputs vendor, product, and UUID information.
+    Supports different output formats and verbose logging.
+    
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
     # Configure logging to send messages to stderr
     # Set to ERROR level to only show critical errors, not warnings
     logging.basicConfig(level=logging.ERROR, stream=sys.stderr)
@@ -67,15 +89,17 @@ def main():
     info = get_hat_info(verbose=args.verbose)
 
     # Convert None values to default strings in main
-    vendor = info["vendor"] if info["vendor"] is not None else "no vendor"
-    product = info["product"] if info["product"] is not None else "no product"
-    uuid = info["uuid"] if info["uuid"] is not None else "unknown"
+    vendor: str = info["vendor"] if info["vendor"] is not None else DEFAULT_VENDOR
+    product: str = info["product"] if info["product"] is not None else DEFAULT_PRODUCT
+    uuid: str = info["uuid"] if info["uuid"] is not None else DEFAULT_UUID
 
     if args.all:
         print(f"{vendor}:{product}:{uuid}")
     else:
         print(f"{vendor}:{product}")
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
 

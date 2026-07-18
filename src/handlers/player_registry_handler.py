@@ -104,17 +104,17 @@ class PlayerRegistryHandler:
                 continue
             path = os.path.join(self.players_d_dir, filename)
             try:
-                with open(path, "r") as f:
+                with open(path, "r", encoding="utf-8") as f:
                     descriptor: Any = json.load(f)
             except (json.JSONDecodeError, OSError) as e:
-                logger.warning(f"Skipping invalid player descriptor {path}: {e}")
+                logger.warning("Skipping invalid player descriptor %s: %s", path, e)
                 continue
             if not isinstance(descriptor, dict):
-                logger.warning(f"Skipping {path}: not a JSON object")
+                logger.warning("Skipping %s: not a JSON object", path)
                 continue
             missing: List[str] = [f for f in REQUIRED_FIELDS if f not in descriptor]
             if missing:
-                logger.warning(f"Skipping {path}: missing fields {missing}")
+                logger.warning("Skipping %s: missing fields %s", path, missing)
                 continue
             descriptors.append(cast(Dict[str, Any], descriptor))
         return descriptors
@@ -126,7 +126,8 @@ class PlayerRegistryHandler:
         for setting in sanitize_settings(descriptor):
             value: Optional[Union[bool, str]] = None
             if self.configdb is not None:
-                raw: Any = self.configdb.get(setting_value_key(service, setting["key"]), default=None)
+                setting_key = setting_value_key(service, setting["key"])
+                raw: Any = self.configdb.get(setting_key, default=None)
                 value = coerce_setting_value(setting["type"], raw)
             if value is None:
                 value = setting["default"]
@@ -136,48 +137,66 @@ class PlayerRegistryHandler:
     def _build_players(self) -> List[Dict[str, Any]]:
         players: List[Dict[str, Any]] = []
         for descriptor in self._load_descriptors():
-            players.append(cast(Dict[str, Any], {
+            icon_url = f"/api/v1/players/icon/{descriptor['icon']}"
+            player_entry: Dict[str, Any] = {
                 "name": descriptor["name"],
                 "provided_by": descriptor["provided_by"],
                 "systemd_service": descriptor["systemd_service"],
-                "icon_url": f"/api/v1/players/icon/{descriptor['icon']}",
+                "icon_url": icon_url,
                 "allow_change": descriptor.get("allow_change", True),
                 "maintainer_name": descriptor.get("maintainer_name", ""),
                 "maintainer_url": descriptor.get("maintainer_url", ""),
                 "settings": self._settings_with_values(descriptor),
-            }))
+            }
+            players.append(player_entry)
         return players
 
     def handle_list_players(self) -> 'Union[Response, tuple[Response, int]]':
         """List all external players registered via drop-in descriptors."""
-        return jsonify({"status": "success", "data": {"players": self._build_players()}})  # type: ignore[return-value]
+        players = self._build_players()
+        return jsonify({
+            "status": "success",
+            "data": {"players": players}
+        })  # type: ignore[return-value]
 
     def handle_player_icon(self, name: str) -> 'Union[Response, tuple[Response, int]]':
         """Serve an external player icon SVG."""
         if not SAFE_NAME_RE.match(name):
-            return jsonify({"status": "error", "message": "Invalid icon name"}), 400  # type: ignore[return-value]
+            err_msg = "Invalid icon name"
+            return jsonify(
+                {"status": "error", "message": err_msg}
+            ), 400  # type: ignore[return-value]
 
         icon_path: str = os.path.join(self.icons_dir, f"{name}.svg")
         if not os.path.isfile(icon_path):
-            return jsonify({"status": "error", "message": "Icon not found"}), 404  # type: ignore[return-value]
+            err_msg = "Icon not found"
+            return jsonify(
+                {"status": "error", "message": err_msg}
+            ), 404  # type: ignore[return-value]
 
         try:
-            with open(icon_path, "r") as f:
+            with open(icon_path, "r", encoding="utf-8") as f:
                 svg_data: str = f.read()
             response: Any = make_response(svg_data)  # type: ignore[assignment]
-            response.headers["Content-Type"] = "image/svg+xml"  # type: ignore[union-attr]
-            response.headers["Cache-Control"] = "public, max-age=3600"  # type: ignore[union-attr]
+            response.headers["Content-Type"] = "image/svg+xml"
+            response.headers["Cache-Control"] = "public, max-age=3600"
             return response
         except OSError as e:
-            logger.error(f"Error reading icon {icon_path}: {e}")
-            return jsonify({"status": "error", "message": "Failed to read icon"}), 500  # type: ignore[return-value]
+            logger.error("Error reading icon %s: %s", icon_path, e)
+            err_msg = "Failed to read icon"
+            return jsonify(
+                {"status": "error", "message": err_msg}
+            ), 500  # type: ignore[return-value]
 
-    def set_player_settings(self, systemd_service: str, values: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    def set_player_settings(
+        self, systemd_service: str, values: Dict[str, Any]
+    ) -> Tuple[List[str], List[str]]:
         """Validate and persist setting values for one plugin.
 
         Returns (applied_keys, errors)."""
         descriptor: Optional[Dict[str, Any]] = next(
-            (d for d in self._load_descriptors() if d["systemd_service"] == systemd_service),
+            (d for d in self._load_descriptors()
+             if d["systemd_service"] == systemd_service),
             None,
         )
         if descriptor is None:
@@ -187,7 +206,9 @@ class PlayerRegistryHandler:
         if not isinstance(values, dict):  # type: ignore[arg-type]
             return [], ["invalid request body"]
 
-        allowed: Dict[str, Dict[str, Any]] = {s["key"]: s for s in sanitize_settings(descriptor)}
+        allowed: Dict[str, Dict[str, Any]] = {
+            s["key"]: s for s in sanitize_settings(descriptor)
+        }
         applied: List[str] = []
         errors: List[str] = []
         for key, value in values.items():
@@ -195,18 +216,28 @@ class PlayerRegistryHandler:
             if setting is None:
                 errors.append(f"unknown setting: {key}")
                 continue
+            coerced = coerce_setting_value(setting["type"], value)
+            serialized = serialize_setting_value(setting["type"], coerced)
             self.configdb.set(  # type: ignore[union-attr]
                 setting_value_key(systemd_service, key),
-                serialize_setting_value(setting["type"], coerce_setting_value(setting["type"], value)),
+                serialized,
             )
             applied.append(key)
         return applied, errors
 
-    def handle_set_player_settings(self, systemd_service: str) -> 'Union[Response, tuple[Response, int]]':
+    def handle_set_player_settings(
+        self, systemd_service: str
+    ) -> 'Union[Response, tuple[Response, int]]':
         """Flask handler: persist submitted player settings."""
-        values: Dict[str, Any] = cast(Dict[str, Any], request.get_json(silent=True) or {})  # type: ignore[union-attr]
+        json_data = request.get_json(silent=True) or {}  # type: ignore[union-attr]
+        values: Dict[str, Any] = cast(Dict[str, Any], json_data)
         applied, errors = self.set_player_settings(systemd_service, values)
         if not applied and errors:
-            return jsonify({"status": "error", "message": "; ".join(errors)}), 400  # type: ignore[return-value]
-        return jsonify({"status": "success",  # type: ignore[return-value]
-                        "data": {"applied": applied, "errors": errors}})
+            error_msg = "; ".join(errors)
+            return jsonify(
+                {"status": "error", "message": error_msg}
+            ), 400  # type: ignore[return-value]
+        return jsonify({
+            "status": "success",
+            "data": {"applied": applied, "errors": errors}
+        })  # type: ignore[return-value]

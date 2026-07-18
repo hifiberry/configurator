@@ -55,7 +55,7 @@ class SystemInfo:
                 self._system_uuid = None
         return self._system_uuid
     
-    def _get_soundcard(self, prioritize_aplay=False) -> Soundcard:
+    def _get_soundcard(self, prioritize_aplay: bool = False) -> Soundcard:
         """Get sound card information (cached)
         
         Args:
@@ -77,14 +77,14 @@ class SystemInfo:
             self.logger.error(f"Error getting hostnames: {e}")
             return None, None
     
-    def _get_memory_info(self) -> Dict[str, Any]:
+    def _get_memory_info(self) -> dict[str, Any]:
         """Get physical memory information"""
         try:
             # Read /proc/meminfo to get memory information
             with open('/proc/meminfo', 'r') as f:
                 meminfo = f.read()
             
-            memory_data = {}
+            memory_data: dict[str, Any] = {}
             for line in meminfo.split('\n'):
                 if line.startswith('MemTotal:'):
                     # Extract total memory in kB
@@ -148,7 +148,7 @@ class SystemInfo:
             self.logger.error(f"Failed to get hostnames: {e}")
             return None, None
     
-    def _is_soundcard_fixed_in_config_txt(self, soundcard) -> bool:
+    def _is_soundcard_fixed_in_config_txt(self, soundcard: Soundcard) -> bool:
         """
         Check if soundcard detection is disabled via config.txt comment.
 
@@ -171,14 +171,11 @@ class SystemInfo:
             # Check if the detection disabled comment is present
             return HIFIBERRY_DETECTION_DISABLED in config_content
 
-        except Exception as e:
-            self.logger.warning(f"Could not check config.txt for detection disabled comment: {e}")
-            return False
         except subprocess.CalledProcessError:
             # aplay -l failed (no sound cards found)
             return False
         except Exception as e:
-            self.logger.error(f"Failed to check if soundcard is configured: {e}")
+            self.logger.warning(f"Could not check config.txt for detection disabled comment: {e}")
             return False
 
     def _get_soundcard_pin_source(self) -> Optional[str]:
@@ -210,7 +207,7 @@ class SystemInfo:
 
         return None
     
-    def get_soundcard_info(self) -> dict:
+    def get_soundcard_info(self) -> dict[str, Any]:
         """Get sound card information as a dictionary
         
         Uses aplay -l as the highest priority source for detection,
@@ -224,17 +221,17 @@ class SystemInfo:
             fixed_in_config_txt = self._is_soundcard_fixed_in_config_txt(soundcard)
             pin_source = self._get_soundcard_pin_source()
 
-            result = {
-                'name': soundcard.name,
-                'volume_control': soundcard.volume_control,
-                'headphone_volume_control': soundcard.headphone_volume_control,
-                'hardware_index': soundcard.get_hardware_index(),
-                'output_channels': soundcard.output_channels,
-                'input_channels': soundcard.input_channels,
-                'features': soundcard.features,
-                'hat_name': soundcard.hat_name,
-                'supports_dsp': soundcard.supports_dsp,
-                'card_type': soundcard.card_type,
+            result: dict[str, Any] = {
+                'name': soundcard.name,  # type: ignore[attr-defined]
+                'volume_control': soundcard.volume_control,  # type: ignore[attr-defined]
+                'headphone_volume_control': soundcard.headphone_volume_control,  # type: ignore[attr-defined]
+                'hardware_index': soundcard.get_hardware_index(),  # type: ignore[attr-defined]
+                'output_channels': soundcard.output_channels,  # type: ignore[attr-defined]
+                'input_channels': soundcard.input_channels,  # type: ignore[attr-defined]
+                'features': soundcard.features,  # type: ignore[attr-defined]
+                'hat_name': soundcard.hat_name,  # type: ignore[attr-defined]
+                'supports_dsp': soundcard.supports_dsp,  # type: ignore[attr-defined]
+                'card_type': soundcard.card_type,  # type: ignore[attr-defined]
                 'fixedInConfigTxt': fixed_in_config_txt,
                 'pinSource': pin_source
             }
@@ -260,7 +257,7 @@ class SystemInfo:
                 'fixedInConfigTxt': False
             }
     
-    def get_system_info_dict(self) -> Dict[str, Any]:
+    def get_system_info_dict(self) -> dict[str, Any]:
         """Get all system information as a structured dictionary"""
         try:
             pi_model = self._get_pi_model()
@@ -328,7 +325,7 @@ class SystemInfo:
                 'error': str(e)
             }
     
-    def get_flat_info_dict(self) -> Dict[str, Any]:
+    def get_flat_info_dict(self) -> dict[str, Any]:
         """Get all system information as a flat name-value dictionary"""
         try:
             pi_model = self._get_pi_model()
@@ -358,7 +355,7 @@ class SystemInfo:
             elif memory_info.get('total_mb'):
                 memory_str = f"{memory_info['total_mb']} MB"
             
-            flat_dict = {
+            flat_dict: dict[str, Any] = {
                 'Pi Model': pi_model_full,
                 'Memory': memory_str,
                 'HAT': hat_full,

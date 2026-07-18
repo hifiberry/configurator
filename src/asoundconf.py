@@ -3,7 +3,6 @@
 import hashlib
 import os
 import argparse
-from typing import Optional, Dict, Any
 
 # Define the simple ALSA configuration template as a constant
 SIMPLE_CONFIG_TEMPLATE = """pcm.!default {{
@@ -21,12 +20,12 @@ ctl.!default {{
 
 class ALSAConfig:
     def __init__(self, filename: str = '/etc/asound.conf') -> None:
-        self.filename = filename
-        self.config = ""
-        self.original_checksum = ""
+        self.filename: str = filename
+        self.config: str = ""
+        self.original_checksum: str = ""
         self.load_config()
 
-    def load_config(self):
+    def load_config(self) -> None:
         """ Load the ALSA configuration from a file, or initialize it as empty if not existent. """
         if os.path.exists(self.filename):
             with open(self.filename, 'r') as file:
@@ -35,15 +34,15 @@ class ALSAConfig:
             self.config = ""  # Initialize as empty if the file does not exist
         self.original_checksum = self.calculate_checksum()
 
-    def calculate_checksum(self):
+    def calculate_checksum(self) -> str:
         """ Calculate MD5 checksum of the current configuration. """
         return hashlib.md5(self.config.encode('utf-8')).hexdigest()
 
-    def create_simple_config(self, hw, channels):
+    def create_simple_config(self, hw: int, channels: int) -> None:
         """ Create a simple ALSA configuration using the predefined template. """
         self.config = SIMPLE_CONFIG_TEMPLATE.format(hw=hw, channels=channels)
 
-    def save(self):
+    def save(self) -> bool:
         """ Save the configuration to disk only if it has changed. """
         current_checksum = self.calculate_checksum()
         if current_checksum != self.original_checksum:
@@ -53,14 +52,14 @@ class ALSAConfig:
             return True
         return False
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Manage ALSA configuration.")
     parser.add_argument("--default", action='store_true', help="Trigger creation of a default configuration")
     parser.add_argument("--channels", type=int, default=2, help="Set the number of channels")
     parser.add_argument("--hw", type=int, default=0, help="Set the default hardware card number")
     return parser.parse_args()
 
-def main():
+def main() -> None:
     args = parse_arguments()
     alsa_config = ALSAConfig()
 

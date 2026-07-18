@@ -3,7 +3,10 @@ import sys
 import os
 import configparser
 from pathlib import Path
-import dbus
+from typing import Dict, List, Any
+
+from dbus_fast.aio import MessageBus
+from dbus_fast import DBusError, BusType
 
 # From the user's script
 class ConfigFileManager:
@@ -63,7 +66,7 @@ class ConfigFileManager:
         self.logger.info(f"Pairable: {self.pairable}")
         self.logger.info(f"Pairable timeout: {self.pairable_timeout}")
 
-    def set_config_value(self, section, key, value):
+    def set_config_value(self, section: str, key: str, value: str) -> None:
         try:
             if not self.config.has_section(section):
                 self.config.add_section(section)
@@ -86,7 +89,7 @@ class ConfigFileManager:
 
 # New functions based on the user's Flask routes
 
-def get_bluetooth_settings():
+def get_bluetooth_settings() -> Dict[str, Any]:
     """Returns bluetooth settings."""
     cfm = ConfigFileManager()
     return {
@@ -97,7 +100,7 @@ def get_bluetooth_settings():
         "pairableTimeout": cfm.pairable_timeout,
     }
 
-def set_bluetooth_settings(settings):
+def set_bluetooth_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """Sets bluetooth settings."""
     cfm = ConfigFileManager()
     valid_keys = [
@@ -112,51 +115,80 @@ def set_bluetooth_settings(settings):
             value = settings.get(key)
             if key in ["discoverable_timeout", "pairable_timeout"] and value == "":
                 value = "0"
-            cfm.set_config_value("Bluetooth", key, value)
+            cfm.set_config_value("Bluetooth", key, str(value))
     return get_bluetooth_settings()
 
 
-def get_paired_devices():
-    """Returns a list of paired bluetooth devices."""
-    bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                             "org.freedesktop.DBus.ObjectManager")
-    objects = manager.GetManagedObjects()
-    devices = []
+async def get_paired_devices() -> List[Dict[str, Any]]:
+    """Returns a list of paired bluetooth devices using dbus-fast."""
+    try:
+        bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        introspection = await bus.introspect("org.bluez", "/")
+        obj = bus.get_proxy_object("org.bluez", "/", introspection)
+        
+        # Get the ObjectManager interface
+        om = obj.get_interface("org.freedesktop.DBus.ObjectManager")  # type: ignore
+        objects = await om.call_GetManagedObjects()  # type: ignore
+        
+        devices: List[Dict[str, Any]] = []
+        for path, interfaces in objects.items():  # type: ignore
+            if "org.bluez.Device1" in interfaces:  # type: ignore
+                device = interfaces["org.bluez.Device1"]  # type: ignore
+                if device.get("Paired", False):  # type: ignore
+                    devices.append({
+                        "name": str(device.get("Name", "Unknown")),  # type: ignore
+                        "address": str(device.get("Address")),  # type: ignore
+                        "connected": bool(device.get("Connected", False)),  # type: ignore
+                        "trusted": bool(device.get("Trusted", False)),  # type: ignore
+                    })
+        
+        return devices
+        
+    except DBusError as e:
+        logging.error(f"DBus error getting paired devices: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error getting paired devices: {e}")
+        raise
 
-    for path, interfaces in objects.items():
-        if "org.bluez.Device1" in interfaces:
-            device = interfaces["org.bluez.Device1"]
-            if device.get("Paired", False):
-                devices.append({
-                    "name": str(device.get("Name", "Unknown")),
-                    "address": str(device.get("Address")),
-                    "connected": bool(device.get("Connected", False)),
-                    "trusted": bool(device.get("Trusted", False)),
-                })
-    return devices
 
-def unpair_device(address):
-    """Unpairs a bluetooth device."""
+async def unpair_device(address: str) -> Dict[str, str]:
+    """Unpairs a bluetooth device using dbus-fast."""
     if not address:
         raise ValueError("Missing 'address' query parameter")
 
     address = address.upper()
-    bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                             "org.freedesktop.DBus.ObjectManager")
-    objects = manager.GetManagedObjects()
-
-    # Find the device object path and its adapter
-    for path, interfaces in objects.items():
-        if "org.bluez.Device1" in interfaces:
-            device = interfaces["org.bluez.Device1"]
-            if device.get("Address", "").upper() == address:
-                # Find the adapter this device belongs to
-                adapter_path = "/".join(path.split("/")[:-1])
-                adapter_obj = dbus.Interface(bus.get_object("org.bluez", adapter_path),
-                                             "org.bluez.Adapter1")
-                adapter_obj.RemoveDevice(path)
-                return {"status": "unpaired", "address": address}
-
-    raise ValueError("Device not found")
+    
+    try:
+        bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        introspection = await bus.introspect("org.bluez", "/")
+        obj = bus.get_proxy_object("org.bluez", "/", introspection)
+        
+        # Get the ObjectManager interface
+        om = obj.get_interface("org.freedesktop.DBus.ObjectManager")  # type: ignore
+        objects = await om.call_GetManagedObjects()  # type: ignore
+        
+        # Find the device object path and its adapter
+        for path, interfaces in objects.items():  # type: ignore
+            if "org.bluez.Device1" in interfaces:  # type: ignore
+                device = interfaces["org.bluez.Device1"]  # type: ignore
+                device_address: str = device.get("Address", "")  # type: ignore
+                if device_address.upper() == address:  # type: ignore
+                    # Find the adapter this device belongs to
+                    adapter_path = "/".join(path.split("/")[:-1])  # type: ignore
+                    adapter_introspection = await bus.introspect("org.bluez", adapter_path)
+                    adapter_obj = bus.get_proxy_object("org.bluez", adapter_path, adapter_introspection)
+                    adapter = adapter_obj.get_interface("org.bluez.Adapter1")  # type: ignore
+                    
+                    # Remove the device
+                    await adapter.call_RemoveDevice(path)  # type: ignore
+                    return {"status": "unpaired", "address": address}
+        
+        raise ValueError("Device not found")
+        
+    except DBusError as e:
+        logging.error(f"DBus error unpairing device: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error unpairing device: {e}")
+        raise

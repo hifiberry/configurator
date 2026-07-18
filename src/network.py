@@ -7,7 +7,7 @@ import argparse
 import logging
 import subprocess
 import netifaces
-from typing import List, Dict, Optional
+from typing import List, Dict
 from .cmdline import CmdlineTxt
 
 # Set up logging

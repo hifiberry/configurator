@@ -10,7 +10,7 @@ import os
 import glob
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, cast
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class ConfigParser:
         other types are replaced by the override value."""
         for key, value in override.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                ConfigParser._deep_merge(base[key], value)
+                ConfigParser._deep_merge(cast(Dict[str, Any], base[key]), cast(Dict[str, Any], value))
             else:
                 base[key] = value
         return base
@@ -53,13 +53,13 @@ class ConfigParser:
                 with open(path, 'r') as f:
                     snippet = json.load(f)
                 if isinstance(snippet, dict):
-                    self._deep_merge(config, snippet)
+                    self._deep_merge(config, cast(Dict[str, Any], snippet))
                     logger.debug(f"Merged drop-in config: {path}")
                 else:
                     logger.warning(f"Skipping drop-in {path}: top-level value must be an object")
             except json.JSONDecodeError as e:
                 logger.warning(f"Skipping invalid JSON in drop-in {path}: {e}")
-            except Exception as e:
+            except OSError as e:
                 logger.warning(f"Error loading drop-in {path}: {e}")
 
         return config
@@ -81,7 +81,7 @@ class ConfigParser:
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
 
-            logger.debug(f"Loaded config from {self.config_file}: {config}")
+            logger.debug(f"Loaded config from {self.config_file}")
 
             # Merge drop-in configs
             config = self._load_drop_ins(config)
@@ -92,7 +92,7 @@ class ConfigParser:
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config file {self.config_file}: {e}")
             return {}
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Error loading config file {self.config_file}: {e}")
             return {}
     
@@ -113,13 +113,13 @@ class ConfigParser:
         
         Args:
             section: Name of the section to retrieve
-            default: Default value if section doesn't exist
+            default: Default value if section doesn't exist. If None, returns empty dict.
             
         Returns:
-            Dictionary containing the section data
+            Dictionary containing the section data, or default/empty dict if not found
         """
         config = self.get_config()
-        return config.get(section, default or {})
+        return config.get(section, default if default is not None else {})
     
     def reload_config(self) -> Dict[str, Any]:
         """
@@ -153,19 +153,31 @@ class ConfigParser:
         """
         return self.config_file
 
-# Global config parser instance
-_config_parser = None
+# Global config parser instance (thread-safe initialization via module import)
+_config_parser: Optional[ConfigParser] = None
+_config_parser_lock = None  # Created on first access for lazy initialization
 
 def get_config_parser() -> ConfigParser:
     """
-    Get the global configuration parser instance
+    Get the global configuration parser instance.
+    Thread-safe singleton pattern.
     
     Returns:
         ConfigParser instance
     """
-    global _config_parser
+    global _config_parser, _config_parser_lock
+    
     if _config_parser is None:
-        _config_parser = ConfigParser()
+        # Lazy-initialize lock only when needed
+        if _config_parser_lock is None:
+            import threading
+            _config_parser_lock = threading.Lock()
+        
+        with _config_parser_lock:
+            # Double-check pattern for thread safety
+            if _config_parser is None:
+                _config_parser = ConfigParser()
+    
     return _config_parser
 
 def get_config() -> Dict[str, Any]:

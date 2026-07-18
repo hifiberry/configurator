@@ -2,12 +2,10 @@
 
 import os
 import sys
-import csv
 import argparse
 import logging
 import shutil
 import subprocess
-from tempfile import NamedTemporaryFile
 from typing import List, Dict, Optional, Tuple, Any
 from src.configdb import ConfigDB
 

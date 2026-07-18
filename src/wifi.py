@@ -2,7 +2,6 @@
 
 import sys
 import os
-import re
 import argparse
 import logging
 import subprocess
@@ -86,7 +85,7 @@ def find_wireless_interfaces() -> List[str]:
     Returns:
         List of wireless interface names
     """
-    interfaces = []
+    interfaces: List[str] = []
     
     # Try using iw to find wireless interfaces
     try:
@@ -98,7 +97,8 @@ def find_wireless_interfaces() -> List[str]:
             for line in result.stdout.splitlines():
                 if 'Interface' in line:
                     current_interface = line.split('Interface', 1)[1].strip()
-                    interfaces.append(current_interface)
+                    if current_interface:
+                        interfaces.append(current_interface)
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
     
@@ -112,7 +112,8 @@ def find_wireless_interfaces() -> List[str]:
                 for line in result.stdout.splitlines():
                     if ':wifi' in line:
                         interface = line.split(':', 1)[0]
-                        interfaces.append(interface)
+                        if interface:
+                            interfaces.append(interface)
         except (subprocess.SubprocessError, FileNotFoundError):
             pass
     
@@ -120,7 +121,7 @@ def find_wireless_interfaces() -> List[str]:
     if not interfaces:
         try:
             if os.path.exists('/proc/net/wireless'):
-                with open('/proc/net/wireless', 'r') as f:
+                with open('/proc/net/wireless', 'r', encoding='utf-8') as f:
                     for line in f:
                         # Skip header lines
                         if 'Inter-' in line or 'face' in line or '|' in line:
@@ -130,7 +131,8 @@ def find_wireless_interfaces() -> List[str]:
                         if parts:
                             # The interface name is the first field, often with a colon
                             interface = parts[0].rstrip(':')
-                            interfaces.append(interface)
+                            if interface:
+                                interfaces.append(interface)
         except Exception:
             pass
     
@@ -146,7 +148,7 @@ def scan_wifi_networks(timeout: int = 10) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries containing network information
     """
-    networks = []
+    networks: List[Dict[str, Any]] = []
     
     # Find wireless interfaces
     wireless_interfaces = find_wireless_interfaces()
@@ -192,11 +194,12 @@ def scan_with_networkmanager(interface: str, timeout: int) -> List[Dict[str, Any
     Returns:
         List of dictionaries containing network information
     """
-    networks = []
+    networks: List[Dict[str, Any]] = []
+    result = None
     
     try:
         # Start a scan
-        cmd = ['nmcli', 'device', 'wifi', 'rescan', 'ifname', interface]
+        cmd: List[str] = ['nmcli', 'device', 'wifi', 'rescan', 'ifname', interface]
         logger.debug(f"Running command: {' '.join(cmd)}")
         subprocess.run(cmd, capture_output=True, timeout=2)
         
@@ -215,7 +218,7 @@ def scan_with_networkmanager(interface: str, timeout: int) -> List[Dict[str, Any
                 break
         
         # Parse scan results
-        if result.returncode == 0:
+        if result is not None and result.returncode == 0:
             for line in result.stdout.splitlines():
                 fields = line.split(':')
                 if len(fields) >= 5:
@@ -254,19 +257,18 @@ def scan_with_iw(interface: str, timeout: int) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries containing network information
     """
-    networks = []
+    networks: List[Dict[str, Any]] = []
     
     try:
         # Start a scan
         logger.debug(f"Starting WiFi scan on {interface} with iw")
-        cmd = ['iw', 'dev', interface, 'scan']
+        cmd: List[str] = ['iw', 'dev', interface, 'scan']
         
         # Set a timeout slightly longer than requested to account for the scan itself
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+5)
         
         if result.returncode == 0:
-            current_network = None
-            current_bss = None
+            current_network: Dict[str, Any] = {}
             
             for line in result.stdout.splitlines():
                 line = line.strip()
@@ -279,8 +281,7 @@ def scan_with_iw(interface: str, timeout: int) -> List[Dict[str, Any]]:
                     
                     # Extract BSSID (MAC address)
                     bssid = line.split('BSS ', 1)[1].split('(', 1)[0].strip()
-                    current_network = {'bssid': bssid}
-                    current_bss = bssid
+                    current_network = {'bssid': bssid, 'signal': 0, 'channel': ''}
                 
                 # Extract SSID
                 elif 'SSID: ' in line:
@@ -296,9 +297,9 @@ def scan_with_iw(interface: str, timeout: int) -> List[Dict[str, Any]]:
                         # Convert dBm to percentage (approximate)
                         signal_dbm = float(signal_str)
                         signal_percent = min(100, max(0, int((signal_dbm + 100) * 2)))
-                        current_network['signal'] = signal_percent
+                        current_network['signal'] = signal_percent  # type: ignore[typeddict-item]
                     except ValueError:
-                        current_network['signal'] = 0
+                        current_network['signal'] = 0  # type: ignore[typeddict-item]
                 
                 # Extract channel
                 elif 'freq: ' in line:
@@ -314,20 +315,20 @@ def scan_with_iw(interface: str, timeout: int) -> List[Dict[str, Any]]:
                             channel = (freq_num - 5000) // 5
                         else:
                             channel = 0
-                        current_network['channel'] = str(channel)
+                        current_network['channel'] = str(channel)  # type: ignore[typeddict-item]
                     except ValueError:
-                        current_network['channel'] = ''
+                        current_network['channel'] = ''  # type: ignore[typeddict-item]
                 
                 # Extract security information
                 elif 'capability: ' in line:
                     if 'Privacy' in line:
-                        current_network['security'] = 'Protected'
+                        current_network['security'] = 'Protected'  # type: ignore[typeddict-item]
                     else:
-                        current_network['security'] = 'Open'
+                        current_network['security'] = 'Open'  # type: ignore[typeddict-item]
                 
                 # Additional security information
                 elif 'RSN' in line or 'WPA' in line:
-                    current_network['security'] = 'WPA'
+                    current_network['security'] = 'WPA'  # type: ignore[typeddict-item]
             
             # Add the last network
             if current_network and 'ssid' in current_network:
@@ -584,6 +585,7 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
         if verify_result.returncode == 0:
             # Check if any WiFi connection is active
             has_active_wifi = False
+            active_conn_name = ""
             
             for line in verify_result.stdout.splitlines():
                 if ':802-11-wireless' in line or ':wifi' in line:
@@ -594,9 +596,9 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
             
             if has_active_wifi:
                 # Now verify this is the connection we want by checking its properties
-                cmd = ['nmcli', '-t', '-f', 'connection.id,802-11-wireless.ssid', 'connection', 'show', active_conn_name]
-                logger.debug(f"Running command to check SSID: {' '.join(cmd)}")
-                conn_details = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                cmd_list: List[str] = ['nmcli', '-t', '-f', 'connection.id,802-11-wireless.ssid', 'connection', 'show', active_conn_name]
+                logger.debug(f"Running command to check SSID: {' '.join(cmd_list)}")
+                conn_details = subprocess.run(cmd_list, capture_output=True, text=True, timeout=5)
                 
                 if conn_details.returncode == 0:
                     for line in conn_details.stdout.splitlines():
@@ -618,7 +620,7 @@ def connect_to_wifi(ssid: str, passphrase: Optional[str] = None,
                             logger.debug(f"Device is connected to: {conn_name}")
                             # If we just activated a connection and the device is connected, assume success
                             if conn_name:
-                                logger.info(f"Device is connected to network, assuming success")
+                                logger.info("Device is connected to network, assuming success")
                                 return True
             
             logger.error(f"Failed to verify connection to {ssid}")
@@ -649,8 +651,8 @@ def _handle_connection_failure(old_connection: Optional[Dict[str, Any]],
     if revert_on_failure and old_connection and 'name' in old_connection:
         logger.info(f"Reverting to previous connection: {old_connection['name']}")
         try:
-            cmd = ['nmcli', 'connection', 'up', old_connection['name']]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            cmd_list: List[str] = ['nmcli', 'connection', 'up', old_connection['name']]
+            result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
                 logger.info(f"Successfully reverted to {old_connection['name']}")

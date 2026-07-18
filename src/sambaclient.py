@@ -113,7 +113,6 @@ def get_local_networks() -> List[Tuple[ipaddress.IPv4Network, str]]:
                     
                     # Create network object
                     try:
-                        ip_obj = ipaddress.IPv4Address(ip)
                         netmask_obj = ipaddress.IPv4Address(netmask)
                         # Calculate prefix length from netmask
                         prefix_len = bin(int(netmask_obj)).count('1')
@@ -246,7 +245,7 @@ def get_host_info(ip_address: str) -> Dict[str, str]:
                         logger.debug(f"Found workgroup: {name}")
                     elif '<20>' in line and 'ACTIVE' in line:  # File sharing service
                         host_info['services'].append('File Server')
-                        logger.debug(f"Found file server service")
+                        logger.debug("Found file server service")
     except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
         logger.error(f"Error querying detailed info for {ip_address}: {e}")
     

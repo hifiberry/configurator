@@ -28,7 +28,7 @@ class SystemdHandler:
         # Initialize the systemd service manager that handles both system and user services
         try:
             self.service_manager: Optional[SystemdServiceManager] = SystemdServiceManager()
-            logger.info(f"SystemdServiceManager initialized successfully")
+            logger.info("SystemdServiceManager initialized successfully")
             # Log some debug info about detected services
             if hasattr(self.service_manager, 'service_environments'):
                 logger.info(f"Service environment map: {self.service_manager.service_environments}")  # type: ignore[union-attr]

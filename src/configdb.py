@@ -10,9 +10,8 @@ import sys
 import sqlite3
 import logging
 import argparse
-import base64
 from typing import Any, Dict, List, Optional
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 try:
     from flask import request, jsonify
@@ -104,11 +103,17 @@ class ConfigDB:
 
         Returns:
             The decrypted value (string).
+            
+        Raises:
+            InvalidToken: If the encrypted value is corrupted or invalid.
         """
         key = self._get_encryption_key()
         fernet = Fernet(key)
-        decrypted_value = fernet.decrypt(encrypted_value.encode())
-        return decrypted_value.decode()
+        try:
+            decrypted_value = fernet.decrypt(encrypted_value.encode())
+            return decrypted_value.decode()
+        except InvalidToken as e:
+            raise InvalidToken(f"Failed to decrypt value: {str(e)}")
 
     def get(self, key: str, default: Any = None, secure: bool = False) -> Any:
         """
@@ -152,28 +157,41 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            if secure:
-                value = self.encrypt_value(value)
+            # Get current value BEFORE encryption for comparison
+            current_value = self.get(key, secure=False)
+            
+            # Check if value is already set (compare unencrypted values)
+            if current_value is not None:
+                decrypted_current = None
+                if secure:
+                    try:
+                        decrypted_current = self.decrypt_value(current_value)
+                    except InvalidToken:
+                        # Current value is corrupted, allow replacement
+                        decrypted_current = None
+                else:
+                    decrypted_current = current_value
+                    
+                if decrypted_current == value:
+                    logging.debug(f"Value for {key} is already set, skipping update")
+                    return True
 
-            # First check if the current value matches the new value
-            current_value = self.get(key, secure=secure)
-            if current_value == value:
-                logging.debug(f"Value for {key} is already '{value}', skipping update")
-                return True
+            # Encrypt value if needed
+            encrypted_value = self.encrypt_value(value) if secure else value
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT OR REPLACE INTO config (key, value, modified_at) 
                 VALUES (?, ?, CURRENT_TIMESTAMP)
-            ''', (key, value))
+            ''', (key, encrypted_value))
             conn.commit()
             conn.close()
 
             if current_value is not None:
-                logging.debug(f"Updated key {key} from '{current_value}' to '{value}'")
+                logging.debug(f"Updated key {key}")
             else:
-                logging.debug(f"Created new key {key} with value '{value}'")
+                logging.debug(f"Created new key {key}")
 
             return True
         except Exception as e:
@@ -276,6 +294,8 @@ class ConfigDB:
     # Flask handler methods for API endpoints
     def handle_get_config_keys(self):
         """Flask handler: Get all configuration keys"""
+        if request is None or jsonify is None:
+            raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
             prefix = request.args.get('prefix')
             keys = self.list_keys(prefix)
@@ -293,6 +313,8 @@ class ConfigDB:
     
     def handle_get_config_value(self, key: str):
         """Flask handler: Get a specific configuration value"""
+        if request is None or jsonify is None:
+            raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
             secure = request.args.get('secure', 'false').lower() == 'true'
             default = request.args.get('default')
@@ -321,6 +343,8 @@ class ConfigDB:
     
     def handle_set_config_value(self, key: str):
         """Flask handler: Set a configuration value"""
+        if request is None or jsonify is None:
+            raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
             if not request.is_json:
                 return jsonify({
@@ -368,6 +392,8 @@ class ConfigDB:
     
     def handle_delete_config_value(self, key: str):
         """Flask handler: Delete a configuration value"""
+        if request is None or jsonify is None:
+            raise RuntimeError("Flask is not available. Install flask to use HTTP handlers.")
         try:
             success = self.delete(key)
             
@@ -511,4 +537,5 @@ def main():
     return 1
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_code = main()
+    sys.exit(exit_code)

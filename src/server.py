@@ -6,15 +6,10 @@ A REST API server that provides access to the HiFiBerry configuration database
 and other system configuration services.
 """
 
-import os
 import sys
-import json
 import logging
 import argparse
-import requests
-from flask import Flask, request, jsonify, make_response
-from werkzeug.exceptions import BadRequest, NotFound, InternalServerError
-from typing import Dict, Any, Optional
+from flask import Flask, jsonify
 try:
     from waitress import serve
     WAITRESS_AVAILABLE = True

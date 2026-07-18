@@ -6,17 +6,16 @@ Store and restore ALSA volume settings in the configuration database
 """
 
 import sys
-import os
 import logging
 import argparse
 import subprocess
 from typing import Optional, List
 
 try:
-    import alsaaudio
-    ALSA_AVAILABLE = True
+    import alsaaudio  # type: ignore[import-untyped]
+    alsa_available = True
 except ImportError:
-    ALSA_AVAILABLE = False
+    alsa_available = False  # type: ignore[assignment]
     logging.warning("alsaaudio module not available, falling back to subprocess calls")
 
 from src.configdb import ConfigDB
@@ -40,10 +39,10 @@ PIPEWIRE_CAPTURE_VOLUME_KEY = "system.volume.pipewire.capture"
 HEADPHONE_VOLUME_CONTROLS = ["Headphone"]
 
 # Cache for sound card information
-_cached_card_index = None
-_cached_soundcard = None
+_cached_card_index: Optional[int] = None
+_cached_soundcard: Optional[Soundcard] = None
 
-def get_cached_card_index():
+def get_cached_card_index() -> Optional[int]:
     """
     Get the cached sound card index, initializing cache if needed
     
@@ -54,11 +53,11 @@ def get_cached_card_index():
     
     if _cached_card_index is None:
         _cached_soundcard = Soundcard()
-        _cached_card_index = _cached_soundcard.get_hardware_index()
+        _cached_card_index = _cached_soundcard.get_hardware_index()  # type: ignore[assignment]
     
-    return _cached_card_index
+    return _cached_card_index  # type: ignore[return-value]
 
-def get_current_volume(card_index, control_name):
+def get_current_volume(card_index: Optional[int], control_name: Optional[str]) -> Optional[str]:
     """
     Get the current volume setting from ALSA
     
@@ -73,22 +72,19 @@ def get_current_volume(card_index, control_name):
         logging.error("Cannot get volume: card_index or control_name is None")
         return None
     
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             # Use alsaaudio library for direct access
-            mixer = alsaaudio.Mixer(control_name, cardindex=card_index)
-            volume = mixer.getvolume()
+            mixer = alsaaudio.Mixer(control_name, cardindex=card_index)  # type: ignore[attr-defined]
+            volume = mixer.getvolume()  # type: ignore[attr-defined]
             if volume:
                 # Return the first channel's volume (usually both channels are the same)
-                return str(volume[0])
+                return str(volume[0])  # type: ignore[index]
             else:
                 logging.warning(f"No volume data returned for control '{control_name}' on card {card_index}")
                 return None
-        except alsaaudio.ALSAAudioError as e:
+        except Exception as e:  # type: ignore[misc]
             logging.error(f"ALSA error getting volume: {str(e)}")
-            return None
-        except Exception as e:
-            logging.error(f"Error getting volume via ALSA API: {str(e)}")
             return None
     else:
         # Fallback to subprocess
@@ -113,7 +109,7 @@ def get_current_volume(card_index, control_name):
             logging.error(f"Error getting volume: {str(e)}")
             return None
 
-def set_volume(card_index, control_name, volume_value):
+def set_volume(card_index: Optional[int], control_name: Optional[str], volume_value: str) -> bool:
     """
     Set the volume using ALSA
     
@@ -129,26 +125,23 @@ def set_volume(card_index, control_name, volume_value):
         logging.error("Cannot set volume: card_index or control_name is None")
         return False
     
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             # Use alsaaudio library for direct access
-            mixer = alsaaudio.Mixer(control_name, cardindex=card_index)
+            mixer = alsaaudio.Mixer(control_name, cardindex=card_index)  # type: ignore[attr-defined]
             
             # Convert volume_value to integer if it's a percentage
             try:
                 volume_int = int(float(volume_value))
                 # Ensure volume is within valid range (0-100)
                 volume_int = max(0, min(100, volume_int))
-                mixer.setvolume(volume_int)
+                mixer.setvolume(volume_int)  # type: ignore[attr-defined]
                 return True
             except ValueError:
                 logging.error(f"Invalid volume value: {volume_value}")
                 return False
-        except alsaaudio.ALSAAudioError as e:
+        except Exception as e:  # type: ignore[misc]
             logging.error(f"ALSA error setting volume: {str(e)}")
-            return False
-        except Exception as e:
-            logging.error(f"Error setting volume via ALSA API: {str(e)}")
             return False
     else:
         # Fallback to subprocess
@@ -171,7 +164,7 @@ def set_volume(card_index, control_name, volume_value):
             logging.error(f"Error setting volume: {str(e)}")
             return False
 
-def store_volume():
+def store_volume() -> bool:
     """
     Store the current volume setting in the configuration database
     
@@ -183,21 +176,23 @@ def store_volume():
     try:
         # Store physical card volume if available
         card_index = get_cached_card_index()
+        control_name: Optional[str] = None
         
         if card_index is not None:
             # Get the cached soundcard instance
             global _cached_soundcard
-            control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)
+            if _cached_soundcard is not None:
+                control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)  # type: ignore[assignment]
         
         if card_index is not None and control_name is not None:
             # Get current volume from physical card
-            volume = get_current_volume(card_index, control_name)
+            volume = get_current_volume(card_index, control_name)  # type: ignore[arg-type]
             if volume is not None:
                 # Store in database
                 db = ConfigDB()
                 db.set(VOLUME_DB_KEY, volume)
                 db.set(VOLUME_CARD_DB_KEY, str(card_index))
-                db.set(VOLUME_CONTROL_DB_KEY, control_name)
+                db.set(VOLUME_CONTROL_DB_KEY, control_name)  # type: ignore[arg-type]
                 
                 logging.info(f"Physical card volume {volume} stored for card {card_index}, control '{control_name}'")
             else:
@@ -239,7 +234,7 @@ def store_volume():
         logging.error(f"Error storing volume: {str(e)}")
         return False
 
-def restore_volume():
+def restore_volume() -> bool:
     """
     Restore volume from the configuration database
     
@@ -259,11 +254,13 @@ def restore_volume():
         if volume is not None and stored_card_index is not None and stored_control_name is not None:
             # Get current sound card information
             card_index = get_cached_card_index()
+            control_name: Optional[str] = None
             
             if card_index is not None:
                 # Get the cached soundcard instance
                 global _cached_soundcard
-                control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)
+                if _cached_soundcard is not None:
+                    control_name = _cached_soundcard.get_mixer_control_name(use_softvol_fallback=True)  # type: ignore[assignment]
             
             if card_index is not None and control_name is not None:
                 # Check if the sound card has changed
@@ -272,7 +269,7 @@ def restore_volume():
                                    f"control '{stored_control_name}' to card {card_index}, control '{control_name}'")
                 
                 # Set the volume
-                result = set_volume(card_index, control_name, volume)
+                result = set_volume(card_index, control_name, volume)  # type: ignore[arg-type]
                 if result:
                     logging.info(f"Physical card volume restored to {volume} for card {card_index}, control '{control_name}'")
                 else:
@@ -321,20 +318,18 @@ def restore_volume():
         logging.error(f"Error restoring volume: {str(e)}")
         return False
 
-def is_pipewire_available():
+def is_pipewire_available() -> bool:
     """
     Check if PipeWire virtual controls are available
     
     Returns:
         True if PipeWire Master control is available, False otherwise
     """
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             # Try to access Master control using ALSA API
-            mixer = alsaaudio.Mixer('Master')
+            alsaaudio.Mixer('Master')  # type: ignore[attr-defined]
             return True
-        except alsaaudio.ALSAAudioError:
-            return False
         except Exception:
             return False
     else:
@@ -346,7 +341,7 @@ def is_pipewire_available():
         except subprocess.CalledProcessError:
             return False
 
-def get_pipewire_volume(control_name):
+def get_pipewire_volume(control_name: str) -> Optional[str]:
     """
     Get the current volume setting from PipeWire virtual controls
     
@@ -356,25 +351,22 @@ def get_pipewire_volume(control_name):
     Returns:
         Volume value as string, or None if retrieval fails
     """
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             # Use alsaaudio library for direct access
             if control_name == 'Capture':
-                mixer = alsaaudio.Mixer(control_name, id=0, cardindex=-1)
+                mixer = alsaaudio.Mixer(control_name, id=0, cardindex=-1)  # type: ignore[attr-defined]
             else:
-                mixer = alsaaudio.Mixer(control_name, cardindex=-1)
-            volume = mixer.getvolume()
+                mixer = alsaaudio.Mixer(control_name, cardindex=-1)  # type: ignore[attr-defined]
+            volume = mixer.getvolume()  # type: ignore[attr-defined]
             if volume:
                 # Return the first channel's volume (usually both channels are the same)
-                return str(volume[0])
+                return str(volume[0])  # type: ignore[index]
             else:
                 logging.warning(f"No volume data returned for PipeWire control '{control_name}'")
                 return None
-        except alsaaudio.ALSAAudioError as e:
+        except Exception as e:  # type: ignore[misc]
             logging.error(f"ALSA error getting PipeWire volume: {str(e)}")
-            return None
-        except Exception as e:
-            logging.error(f"Error getting PipeWire volume via ALSA API: {str(e)}")
             return None
     else:
         # Fallback to subprocess
@@ -394,7 +386,7 @@ def get_pipewire_volume(control_name):
             logging.error(f"Error getting PipeWire volume: {str(e)}")
             return None
 
-def set_pipewire_volume(control_name, volume_value):
+def set_pipewire_volume(control_name: str, volume_value: str) -> bool:
     """
     Set the volume using PipeWire virtual controls
     
@@ -405,29 +397,26 @@ def set_pipewire_volume(control_name, volume_value):
     Returns:
         True if successful, False otherwise
     """
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             # Use alsaaudio library for direct access
             if control_name == 'Capture':
-                mixer = alsaaudio.Mixer(control_name, id=0, cardindex=-1)
+                mixer = alsaaudio.Mixer(control_name, id=0, cardindex=-1)  # type: ignore[attr-defined]
             else:
-                mixer = alsaaudio.Mixer(control_name, cardindex=-1)
+                mixer = alsaaudio.Mixer(control_name, cardindex=-1)  # type: ignore[attr-defined]
             
             # Convert volume_value to integer
             try:
                 volume_int = int(float(volume_value))
                 # Ensure volume is within valid range (0-100)
                 volume_int = max(0, min(100, volume_int))
-                mixer.setvolume(volume_int)
+                mixer.setvolume(volume_int)  # type: ignore[attr-defined]
                 return True
             except ValueError:
                 logging.error(f"Invalid PipeWire volume value: {volume_value}")
                 return False
-        except alsaaudio.ALSAAudioError as e:
+        except Exception as e:  # type: ignore[misc]
             logging.error(f"ALSA error setting PipeWire volume: {str(e)}")
-            return False
-        except Exception as e:
-            logging.error(f"Error setting PipeWire volume via ALSA API: {str(e)}")
             return False
     else:
         # Fallback to subprocess
@@ -439,7 +428,7 @@ def set_pipewire_volume(control_name, volume_value):
             logging.error(f"Error setting PipeWire volume: {str(e)}")
             return False
 
-def get_available_headphone_controls():
+def get_available_headphone_controls() -> List[str]:
     """
     Get list of available headphone volume controls on the current sound card
     
@@ -457,7 +446,7 @@ def get_available_headphone_controls():
         available_controls = list_available_controls(card_index)
         
         # Filter for headphone controls
-        headphone_controls = []
+        headphone_controls: List[str] = []
         for control in HEADPHONE_VOLUME_CONTROLS:
             if control in available_controls:
                 headphone_controls.append(control)
@@ -467,7 +456,7 @@ def get_available_headphone_controls():
         logging.error(f"Error getting available headphone controls: {str(e)}")
         return []
 
-def get_headphone_volume():
+def get_headphone_volume() -> tuple[Optional[str], Optional[str]]:
     """
     Get the current headphone volume setting
     
@@ -502,7 +491,7 @@ def get_headphone_volume():
         logging.error(f"Error getting headphone volume: {str(e)}")
         return None, None
 
-def set_headphone_volume(volume_value):
+def set_headphone_volume(volume_value: str) -> bool:
     """
     Set the headphone volume
     
@@ -541,7 +530,7 @@ def set_headphone_volume(volume_value):
         logging.error(f"Error setting headphone volume: {str(e)}")
         return False
 
-def store_headphone_volume():
+def store_headphone_volume() -> bool:
     """
     Store the current headphone volume setting in the configuration database
     
@@ -583,7 +572,7 @@ def store_headphone_volume():
         logging.error(f"Error storing headphone volume: {str(e)}")
         return False
 
-def restore_headphone_volume():
+def restore_headphone_volume() -> bool:
     """
     Restore headphone volume from the configuration database
     
@@ -649,15 +638,15 @@ def list_available_controls(card_index: Optional[int] = None) -> List[str]:
     Returns:
         List of control names or empty list if error
     """
-    controls = []
+    controls: List[str] = []
     
-    if ALSA_AVAILABLE:
+    if alsa_available:
         try:
             if card_index is not None:
-                mixer_list = alsaaudio.mixers(cardindex=card_index)
+                mixer_list = alsaaudio.mixers(cardindex=card_index)  # type: ignore[attr-defined]
             else:
-                mixer_list = alsaaudio.mixers()
-            controls = list(mixer_list)
+                mixer_list = alsaaudio.mixers()  # type: ignore[attr-defined]
+            controls = list(mixer_list)  # type: ignore[assignment]
             logging.debug(f"Available ALSA controls: {controls}")
         except Exception as e:
             logging.error(f"Error listing ALSA controls: {str(e)}")
@@ -678,7 +667,7 @@ def list_available_controls(card_index: Optional[int] = None) -> List[str]:
     
     return controls
 
-def main():
+def main() -> int:
     # Configure logging to send messages to stderr
     logging.basicConfig(level=logging.INFO,
                         format='%(levelname)s: %(message)s',
@@ -722,7 +711,7 @@ def main():
     
     # Log ALSA API availability
     if args.verbose:
-        if ALSA_AVAILABLE:
+        if alsa_available:
             logging.info("Using Python ALSA API (alsaaudio)")
         else:
             logging.info("Using subprocess calls to amixer (alsaaudio not available)")
@@ -740,7 +729,7 @@ def main():
                 print(f"  - {control}")
         
         # List default/PipeWire controls
-        print(f"\nDefault card controls:")
+        print("\nDefault card controls:")
         controls = list_available_controls()
         for control in controls:
             print(f"  - {control}")
@@ -795,6 +784,7 @@ def main():
             return 1
     
     # Execute main command
+    result = True
     if args.store:
         result = store_volume()
     elif args.restore:
