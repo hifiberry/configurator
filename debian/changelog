@@ -1,3 +1,9 @@
+hifiberry-configurator (2.14.5) stable; urgency=medium
+
+  * auth manifest: classify GET /pipewire/filtergraph as "ok".
+
+ -- HiFiBerry <support@hifiberry.com>  Sat, 01 Aug 2026 08:00:00 +0000
+
 hifiberry-configurator (2.14.4) stable; urgency=medium
 
   * SECURITY: GET /key/<key> no longer decrypts secure values. It is reachable

@@ -12,7 +12,7 @@
         "/smb/mounts", "/smb/servers", "/smb/capabilities", "/smb/mounts/*/diagnostics", "/i2c/devices",
         "/soundcard/detect", "/soundcard/detect-live", "/soundcard/detection",
         "/extensions", "/extensions/*", "/extensions/jobs/*",
-        "/bluetooth/*" ] },
+        "/bluetooth/*", "/pipewire/filtergraph" ] },
     { "tier": "ok", "methods": ["POST"], "paths": [
         "/systemd/service/*/*", "/volume/headphone", "/filesystem/file-exists" ] },
     { "tier": "risky", "methods": ["*"], "paths": ["/**"] }
