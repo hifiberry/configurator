@@ -1445,6 +1445,139 @@ Scan I2C bus for connected devices and detect kernel-used addresses.
 - Kernel-used addresses are detected from /sys/bus/i2c/devices/
 - Similar functionality to `i2cdetect -y <bus>` command but using Python I2C library
 
+## Player Registry
+
+External players (third-party or community packages) register themselves by
+dropping a descriptor into `/etc/hifiberry/players.d/`. These endpoints expose
+that registry to the web interface.
+
+This section describes the **HTTP surface** — what a client sends and receives.
+For how to author a descriptor, where the files go and what the settings fields
+mean when you write them, see `docs/add-your-own-player.md` in the
+`hifiberry-os` repository.
+
+Descriptors are re-read on every request, so a newly installed package appears
+without restarting config-server. Malformed descriptors are skipped with a
+warning rather than failing the request.
+
+### `GET /api/v1/players`
+
+List registered external players.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "players": [
+      {
+        "name": "AES67",
+        "provided_by": "hifiberry-aes67",
+        "systemd_service": "aes67",
+        "icon_url": "/api/v1/players/icon/aes67",
+        "allow_change": true,
+        "maintainer_name": "HiFiBerry",
+        "maintainer_url": "https://www.hifiberry.com/",
+        "settings": [
+          {
+            "key": "latency",
+            "type": "number",
+            "label": "Latency (ms)",
+            "description": "Receive buffer.",
+            "default": 20,
+            "value": 10,
+            "min": 3,
+            "max": 30,
+            "step": 1,
+            "widget": "slider"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- **name**: Display name
+- **provided_by**: Package or project providing the player
+- **systemd_service**: Service the web interface starts and stops, and the key used by the settings endpoint below
+- **icon_url**: Path to the player's icon
+- **allow_change**: Whether the enable/disable toggle is offered
+- **maintainer_name** / **maintainer_url**: Optional attribution
+- **settings**: Declared settings, each enriched with its current value. Empty array when the descriptor declares none.
+
+**Settings entry fields:**
+- **key**, **type**, **label**, **default**: as declared in the descriptor
+- **description**: Optional help text
+- **value**: Current value from ConfigDB, falling back to `default` when unset
+- **options** (`select` only): `[{"value": ..., "label": ...}]`. Resolved at request time when the descriptor names an `options_url`
+- **min**, **max**, **step** (`number` only): Bounds. Always present — an entry without usable bounds is dropped from the response
+- **widget**: Optional presentation hint, e.g. `slider` for a `number`
+
+**Notes:**
+- `type` is one of `toggle`, `select`, `number`
+- A `select` whose options come from `options_url` is fetched while building this
+  response. Only loopback URLs are accepted, with a short timeout. If the source
+  is unreachable, the currently stored value is returned as the sole option so
+  the user's choice is not blanked out
+- Settings entries that fail validation are omitted; the rest of the player is
+  still returned
+
+### `GET /api/v1/players/icon/<name>`
+
+Serve a player's icon.
+
+**Response:** the SVG document, `Content-Type: image/svg+xml`, cacheable for one
+hour.
+
+**Notes:**
+- `name` accepts letters, digits, underscore and hyphen only; anything else is
+  rejected rather than resolved as a path
+- Returns 404 when no matching icon is installed
+
+### `PUT /api/v1/players/<systemd_service>/settings`
+
+Persist setting values for one player. `POST` is accepted as well.
+
+**Request Body:**
+```json
+{
+  "stream": "AU-U22-f0f33b : 1",
+  "latency": 10
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "applied": ["stream", "latency"],
+    "errors": []
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "status": "error",
+  "message": "latency: out of range (3..30)"
+}
+```
+
+**Notes:**
+- Keys not declared by the descriptor are rejected
+- `number` values are checked against the declared `min`/`max`; an out-of-range
+  or non-numeric value is not stored
+- A request that applies nothing and produced errors returns **400**. A request
+  that applies some keys returns **200** with the remaining problems listed in
+  `errors`, so partial success is visible rather than silent
+- Values are stored in ConfigDB under `player.<systemd_service>.<key>`, as text.
+  Plugins read them back from there; nothing is pushed to the plugin, so it is
+  responsible for noticing changes
+
 ## Settings Management
 
 The Settings Management API provides functionality for saving and restoring system settings. Modules can register settings that should persist across system restarts or configuration changes.
