@@ -191,3 +191,18 @@ def test_dynamic_select_accepts_a_fetched_value(tmp_path):
 
     applied, errors = handler.set_player_settings("aes67", {"stream": "AU-U22 : 1"})
     assert applied == ["stream"] and errors == []
+
+
+def test_presentation_hints_are_passed_through():
+    """A `widget` hint lets the UI pick a control without new validation here."""
+    got = sanitize_settings(_descriptor([_number_setting(widget="slider")]))
+    assert got[0]["widget"] == "slider"
+
+
+def test_presentation_hints_survive_to_the_listing(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "aes67.json",
+                      _descriptor([_number_setting(widget="slider")]))
+    configdb = ConfigDB(db_path=str(tmp_path / "config.sqlite"))
+    handler = PlayerRegistryHandler(configdb=configdb, players_d_dir=str(players_d))
+    assert handler._build_players()[0]["settings"][0]["widget"] == "slider"
