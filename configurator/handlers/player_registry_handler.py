@@ -10,6 +10,8 @@ import os
 import re
 import json
 import logging
+import urllib.request
+from urllib.parse import urlparse
 from typing import Dict, Any, List
 
 try:
@@ -29,8 +31,15 @@ SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 REQUIRED_FIELDS = ("name", "provided_by", "systemd_service", "icon")
 
-SETTING_TYPES = ("toggle", "select")
+SETTING_TYPES = ("toggle", "select", "number")
 _SETTING_REQUIRED = ("key", "type", "label", "default")
+
+# A select may source its options from a plugin's own API instead of listing
+# them statically, for choices only known at runtime (e.g. AES67 streams
+# announced on the network). config-server runs as root, so only loopback URLs
+# are accepted -- fetching arbitrary hosts here would be an SSRF.
+_ALLOWED_OPTION_HOSTS = ("localhost", "127.0.0.1", "::1")
+_OPTIONS_FETCH_TIMEOUT = 2.0
 
 
 def setting_value_key(systemd_service, key):
@@ -46,6 +55,15 @@ def coerce_setting_value(setting_type, raw):
         if isinstance(raw, bool):
             return raw
         return str(raw).strip().lower() in ("true", "1", "yes", "on")
+    if setting_type == "number":
+        if isinstance(raw, bool):
+            return None
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            return None
+        # Keep whole numbers integral so the UI shows "10", not "10.0".
+        return int(number) if number.is_integer() else number
     return str(raw)
 
 
@@ -73,13 +91,52 @@ def sanitize_settings(descriptor):
             continue
         if entry["type"] not in SETTING_TYPES:
             continue
-        # Drop select entries without a non-empty options list
+        # Drop select entries that offer no way to obtain options at all
         if entry["type"] == "select":
             options = entry.get("options")
-            if not isinstance(options, list) or len(options) == 0:
+            has_static = isinstance(options, list) and len(options) > 0
+            if not has_static and not _valid_options_url(entry.get("options_url")):
                 continue
+        if entry["type"] == "number":
+            bounds = _number_bounds(entry)
+            if bounds is None:
+                continue
+            entry = {**entry, **bounds}
         clean.append(entry)
     return clean
+
+
+def _valid_options_url(url):
+    """True for a loopback http(s) URL. See _ALLOWED_OPTION_HOSTS."""
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    return (parsed.hostname or "") in _ALLOWED_OPTION_HOSTS
+
+
+def _number_bounds(entry):
+    """Validated {min, max, step} for a number setting, or None if unusable.
+
+    Bounds are mandatory: without them the UI would happily submit any value,
+    and these feed real device configuration.
+    """
+    raw_min, raw_max = entry.get("min"), entry.get("max")
+    raw_step = entry.get("step", 1)
+    values = {}
+    for name, raw in (("min", raw_min), ("max", raw_max), ("step", raw_step)):
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            return None
+        values[name] = raw
+    if values["min"] > values["max"]:
+        return None
+    if values["step"] <= 0:
+        return None
+    return values
 
 
 class PlayerRegistryHandler:
@@ -115,6 +172,57 @@ class PlayerRegistryHandler:
             descriptors.append(descriptor)
         return descriptors
 
+    def _fetch_json(self, url):
+        """GET a loopback URL and return parsed JSON, or None on any failure.
+
+        Split out so tests can stub it; a plugin being down must never break
+        the players listing.
+        """
+        try:
+            with urllib.request.urlopen(url, timeout=_OPTIONS_FETCH_TIMEOUT) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception as e:  # noqa: BLE001 - any failure means "no options"
+            logger.debug(f"Could not fetch options from {url}: {e}")
+            return None
+
+    def _resolve_options(self, setting, current_value):
+        """Options for a select, fetching them if the descriptor names a URL.
+
+        When the source is unreachable the stored value is kept as the sole
+        option, so a plugin that is momentarily down does not make the UI look
+        as though the user never chose anything.
+        """
+        static = setting.get("options")
+        if isinstance(static, list) and static:
+            return static
+        url = setting.get("options_url")
+        if not _valid_options_url(url):
+            return []
+        payload = self._fetch_json(url)
+        items = payload
+        path = setting.get("options_path")
+        if isinstance(payload, dict):
+            items = payload.get(path) if path else None
+        if not isinstance(items, list):
+            if current_value:
+                return [{"value": current_value, "label": str(current_value)}]
+            return []
+        value_field = setting.get("options_value")
+        label_field = setting.get("options_label", value_field)
+        options = []
+        for item in items:
+            if isinstance(item, dict):
+                if not value_field:
+                    continue
+                value = item.get(value_field)
+                label = item.get(label_field, value)
+            else:
+                value = label = item
+            if value is None:
+                continue
+            options.append({"value": value, "label": str(label)})
+        return options
+
     def _settings_with_values(self, descriptor):
         """Descriptor settings enriched with the current stored value."""
         service = descriptor["systemd_service"]
@@ -126,7 +234,10 @@ class PlayerRegistryHandler:
                 value = coerce_setting_value(setting["type"], raw)
             if value is None:
                 value = setting["default"]
-            out.append({**setting, "value": value})
+            enriched = {**setting, "value": value}
+            if setting["type"] == "select":
+                enriched["options"] = self._resolve_options(setting, value)
+            out.append(enriched)
         return out
 
     def _build_players(self):
@@ -190,6 +301,16 @@ class PlayerRegistryHandler:
             if setting is None:
                 errors.append(f"unknown setting: {key}")
                 continue
+            if setting["type"] == "number":
+                number = coerce_setting_value("number", value)
+                if number is None:
+                    errors.append(f"{key}: not a number")
+                    continue
+                if not (setting["min"] <= number <= setting["max"]):
+                    errors.append(
+                        f"{key}: out of range ({setting['min']}..{setting['max']})")
+                    continue
+                value = number
             self.configdb.set(
                 setting_value_key(systemd_service, key),
                 serialize_setting_value(setting["type"], coerce_setting_value(setting["type"], value)),
