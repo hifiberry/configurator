@@ -253,7 +253,29 @@ class ConfigAPIServer:
                     'message': 'Failed to retrieve system information',
                     'error': str(e)
                 }), 500
-        
+
+        # Support report endpoint (authenticated: not in the auth policy's "ok" list)
+        @self.app.route('/api/v1/supportinfo', methods=['GET'])
+        def get_support_info():
+            """Diagnostic report for bug reports, as redacted plain text.
+
+            Calls exactly the functions config-supportinfo uses, so the
+            redaction that guards the CLI guards this endpoint too. Do not
+            reimplement collection or redaction here.
+            """
+            from . import supportinfo
+            try:
+                text = supportinfo.render_text(supportinfo.build_report())
+            except Exception as e:
+                logger.error(f"Error generating support info: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Failed to generate support information',
+                }), 500
+            return make_response(
+                (text, 200, {'Content-Type': 'text/plain; charset=utf-8'})
+            )
+
         # Configuration endpoints using configdb handlers
         @self.app.route('/api/v1/keys', methods=['GET'])
         def get_config_keys():

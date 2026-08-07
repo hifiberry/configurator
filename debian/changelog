@@ -1,3 +1,10 @@
+hifiberry-configurator (2.15.9) stable; urgency=medium
+
+  * Add an authenticated /supportinfo endpoint that serves the same redacted
+    diagnostic report as config-supportinfo, for the WebUI download.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 15:18:19 +0200
+
 hifiberry-configurator (2.15.8) stable; urgency=medium
 
   * config-supportinfo: move the "Recent errors" repeat-count marker
