@@ -38,6 +38,17 @@ def test_collect_system_survives_a_broken_systeminfo():
     assert result == {"error": "could not read system info: boom"}
 
 
+def test_collect_system_drops_unexpected_new_fields():
+    info_with_new_fields = dict(
+        FLAT_INFO,
+        **{"Serial Number": "1000000012345678", "MAC Address": "dc:a6:32:00:00:00"},
+    )
+    with patch.object(supportinfo, "_flat_system_info", return_value=info_with_new_fields):
+        result = supportinfo.collect_system()
+    assert "Serial Number" not in result
+    assert "MAC Address" not in result
+
+
 def test_collect_os_reads_pretty_name():
     os_release = 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nID=debian\n'
     with patch("builtins.open", create=True) as mock_open:

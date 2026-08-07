@@ -185,12 +185,15 @@ def redact_secrets(text: str) -> str:
 
 # --- Hardware and OS collectors -----------------------------------------
 #
-# UUID, Hostname and Pretty Hostname are dropped from the hardware report:
-# the UUID is a stable device identifier and hostnames regularly contain
-# people's real names, and this report is meant to be pasted into public
-# GitHub issues. Neither field helps debugging.
+# Kept fields are selected by allowlist, not by excluding known-bad ones: a
+# denylist silently leaks the next identifying field that get_flat_info_dict()
+# grows (e.g. a MAC address or serial number) straight into a report that
+# gets pasted into public GitHub issues. UUID, Hostname and Pretty Hostname
+# are deliberately left off this allowlist -- the UUID is a stable device
+# identifier and hostnames regularly contain people's real names, and
+# neither helps debugging.
 
-OMITTED_SYSTEM_FIELDS = {"UUID", "Hostname", "Pretty Hostname"}
+SAFE_SYSTEM_FIELDS = {"Pi Model", "Memory", "HAT", "Sound Card"}
 
 
 def _flat_system_info() -> dict:
@@ -206,7 +209,7 @@ def collect_system() -> dict:
         info = _flat_system_info()
     except Exception as e:
         return {"error": f"could not read system info: {e}"}
-    return {k: v for k, v in info.items() if k not in OMITTED_SYSTEM_FIELDS}
+    return {k: v for k, v in info.items() if k in SAFE_SYSTEM_FIELDS}
 
 
 def collect_os() -> dict:
