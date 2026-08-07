@@ -236,19 +236,16 @@ def collect_os() -> dict:
 PACKAGE_PATTERNS = [
     "hifiberry-*",
     "hbos-*",
-    "audiocontrol*",
     "pipewire",
     "mpd",
     "librespot",
     "shairport-sync",
     "squeezelite",
     "raat",
-    "roonbridge",
 ]
 
 SERVICE_PATTERNS = [
     "hifiberry*",
-    "audiocontrol*",
     "config-server*",
     "pipewire*",
     "mpd*",
@@ -256,18 +253,40 @@ SERVICE_PATTERNS = [
     "shairport*",
     "squeezelite*",
     "raat*",
+    "nqptp*",
+    "sigmatcpserver*",
+    "roomeq*",
+    "aes67*",
+    "usbaudio*",
+    "sendspin*",
+    "analoginput*",
+    "acr-webmcp*",
+    "nowplaying-sdl*",
+    "sambamount*",
 ]
 
 
 def _run(cmd: list, timeout: int = 10) -> str:
-    """Run a command and return its stdout, or a note about why it failed."""
+    """Run a command and return its stdout, or a note about why it failed.
+
+    stdout wins whenever there is any -- that is the dpkg-query case, which
+    routinely exits non-zero while still printing the matches it found. Only
+    when a non-zero exit left stdout empty is stderr surfaced instead, so a
+    permission error (e.g. journalctl run without the adm/systemd-journal
+    group) shows up as a reason rather than a silent blank section.
+    """
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, check=False
         )
     except (OSError, subprocess.SubprocessError) as e:
         return f"(command failed: {e})"
-    return result.stdout.strip()
+    stdout = result.stdout.strip()
+    if stdout:
+        return stdout
+    if result.returncode != 0 and result.stderr.strip():
+        return f"(command failed: {result.stderr.strip()})"
+    return stdout
 
 
 def collect_packages() -> str:

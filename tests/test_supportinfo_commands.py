@@ -8,6 +8,12 @@ def _completed(stdout):
     return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
 
 
+def _failed(stderr, stdout=""):
+    return subprocess.CompletedProcess(
+        args=[], returncode=1, stdout=stdout, stderr=stderr
+    )
+
+
 def test_run_returns_stripped_stdout():
     with patch("subprocess.run", return_value=_completed("hello\n")):
         assert supportinfo._run(["true"]) == "hello"
@@ -23,6 +29,22 @@ def test_run_reports_missing_binary_instead_of_raising():
 def test_run_reports_timeout():
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="x", timeout=10)):
         assert supportinfo._run(["x"]).startswith("(command failed:")
+
+
+def test_run_surfaces_stderr_when_stdout_is_empty_and_exit_is_nonzero():
+    stderr = "Failed to determine journal file ownership: Permission denied"
+    with patch("subprocess.run", return_value=_failed(stderr)):
+        result = supportinfo._run(["journalctl"])
+    assert result.startswith("(command failed:")
+    assert stderr in result
+
+
+def test_run_prefers_stdout_over_stderr_when_both_present():
+    with patch(
+        "subprocess.run",
+        return_value=_failed("some warning on stderr", stdout="hifiberry-mpd 1.2.3\n"),
+    ):
+        assert supportinfo._run(["dpkg-query"]) == "hifiberry-mpd 1.2.3"
 
 
 def test_collect_packages_asks_dpkg_for_the_known_patterns():
@@ -50,3 +72,24 @@ def test_collect_services_lists_audio_units():
     assert "mpd.service" in result
     cmd = run.call_args[0][0]
     assert cmd[0] == "systemctl"
+
+
+def test_package_patterns_drop_names_that_match_nothing_in_the_project():
+    assert "audiocontrol*" not in supportinfo.PACKAGE_PATTERNS
+    assert "roonbridge" not in supportinfo.PACKAGE_PATTERNS
+
+
+def test_service_patterns_cover_the_units_missing_from_the_original_list():
+    for pattern in (
+        "nqptp*",
+        "sigmatcpserver*",
+        "roomeq*",
+        "aes67*",
+        "usbaudio*",
+        "sendspin*",
+        "analoginput*",
+        "acr-webmcp*",
+        "nowplaying-sdl*",
+        "sambamount*",
+    ):
+        assert pattern in supportinfo.SERVICE_PATTERNS
