@@ -298,11 +298,22 @@ def collect_packages() -> str:
 
     dpkg-query exits non-zero for patterns that match nothing, which is normal
     here -- most systems have only a few players installed. check=False in
-    _run keeps the matches we did get.
+    _run keeps the matches we did get. A pattern can also match a package
+    dpkg merely knows about (e.g. it was removed but not purged) rather than
+    one that is installed; dpkg-query prints that as a line with an empty
+    version field ("librespot "), which reads as broken output in a bug
+    report, so those lines are dropped here.
     """
-    return _run(
+    raw = _run(
         ["dpkg-query", "-W", "-f=${Package} ${Version}\n"] + PACKAGE_PATTERNS
     )
+    kept = []
+    for line in raw.splitlines():
+        parts = line.split(" ", 1)
+        version = parts[1].strip() if len(parts) > 1 else ""
+        if version:
+            kept.append(line)
+    return "\n".join(kept)
 
 
 def collect_services() -> str:
@@ -313,12 +324,81 @@ def collect_services() -> str:
     )
 
 
+# journalctl's default output starts every line with a timestamp
+# ("Aug 07 09:54:42"); with --no-hostname the hostname field that used to
+# follow it is gone, so everything after the timestamp is "IDENTIFIER[PID]:
+# MESSAGE". That tail is what two occurrences of the same error are
+# compared on -- the timestamp itself must not be part of the key, or every
+# occurrence of an otherwise identical message would count as distinct.
+_JOURNAL_TIMESTAMP = re.compile(r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(.*)$")
+
+
+def _dedup_journal(text: str, keep: int) -> str:
+    """Collapse repeated journal messages into one entry each.
+
+    A single restart-looping unit can otherwise fill the whole window with
+    identical lines and crowd out every other error, which is exactly what a
+    bug report needs to show. The text is walked once, in the chronological
+    order journalctl prints it, keyed on everything after the timestamp; a
+    repeat updates the existing entry's timestamp to the latest occurrence
+    and bumps its count rather than appending a new line, so a unit that
+    failed 190 times occupies one slot, not 190. At most `keep` distinct
+    entries are kept: the most recently-first-seen ones, i.e. the last
+    `keep` messages to appear for the first time in the input, still shown
+    in that same chronological order.
+    """
+    if not text:
+        return text
+
+    order = []
+    entries = {}
+    for line in text.splitlines():
+        match = _JOURNAL_TIMESTAMP.match(line)
+        if match:
+            timestamp, message = match.group(1), match.group(2)
+        else:
+            timestamp, message = None, line
+        if message in entries:
+            entry = entries[message]
+            entry["count"] += 1
+            if timestamp:
+                entry["timestamp"] = timestamp
+        else:
+            entries[message] = {"timestamp": timestamp, "count": 1}
+            order.append(message)
+
+    kept = order[-keep:] if keep > 0 else []
+    rendered = []
+    for message in kept:
+        entry = entries[message]
+        prefix = f"{entry['timestamp']} " if entry["timestamp"] else ""
+        suffix = f" (x{entry['count']})" if entry["count"] > 1 else ""
+        rendered.append(f"{prefix}{message}{suffix}")
+    return "\n".join(rendered)
+
+
 def collect_journal(lines: int = 40) -> str:
-    """The most recent errors from the current boot."""
-    return _run(
-        ["journalctl", "-b", "-p", "err", "--no-pager", "-n", str(lines)],
+    """The most recent distinct errors from the current boot.
+
+    A flapping unit can produce dozens of identical lines in a row, so
+    journalctl is asked for a much wider window than will be shown (ten
+    times `lines`, with a floor of 200) and the result is collapsed down to
+    at most `lines` distinct entries by _dedup_journal -- `lines` keeps its
+    meaning from the caller's point of view, the number of entries shown.
+    --no-hostname keeps the hostname (which regularly contains someone's
+    real name) out of the report, the same reason Task 2 leaves Hostname out
+    of the System section; the resulting "timestamp identifier: message"
+    prefix shape is already handled by the PEM redaction walk.
+    """
+    fetch = max(lines * 10, 200)
+    raw = _run(
+        [
+            "journalctl", "-b", "-p", "err", "--no-pager", "--no-hostname",
+            "-n", str(fetch),
+        ],
         timeout=20,
     )
+    return _dedup_journal(raw, lines)
 
 
 def collect_disk() -> str:
