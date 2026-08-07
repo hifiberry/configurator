@@ -1,3 +1,13 @@
+hifiberry-configurator (2.15.2) stable; urgency=medium
+
+  * config-detect: stop logging "No sound card detected to configure." when a
+    card is pinned. detect_card()'s ConfigDB and config.txt-comment bypass
+    paths set detected_card but deliberately leave detected_overlay as None,
+    which configure_card() treated as a failed detection. The spurious error
+    appeared on every boot of every pinned system.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 15:00:00 +0200
+
 hifiberry-configurator (2.15.1) stable; urgency=medium
 
   * config-supportinfo: deduplicate the "Recent errors" section so a single

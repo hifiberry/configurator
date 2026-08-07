@@ -822,7 +822,14 @@ class SoundcardDetector:
 
     def configure_card(self, load_overlay=False, reboot_on_change=False, force=False):
         if not self.detected_overlay:
-            logging.error("No sound card detected to configure.")
+            if self.detected_card:
+                # detect_card() Step 0 (ConfigDB) and Step 0b (config.txt comment)
+                # resolve a pinned card without deriving an overlay - the flow that
+                # wrote the pin already put the overlay in config.txt. That is a
+                # successful detection, not a failed one.
+                logging.info(f"Using pinned card {self.detected_card}; no overlay to configure.")
+            else:
+                logging.error("No sound card detected to configure.")
             return
 
         # Check if detection is disabled in config.txt (unless --force is used)
