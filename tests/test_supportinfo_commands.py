@@ -1,3 +1,4 @@
+import re
 import subprocess
 from unittest.mock import patch
 
@@ -342,3 +343,109 @@ def test_merge_service_states_never_treats_a_failure_as_not_found():
     assert "not-found" not in result
     assert "running state unavailable" in result
     assert "enabled state unavailable" in result
+
+
+# --- Rendering: alignment, glyph stripping, column placeholders ---------
+#
+# Real hardware output surfaced three rendering-only bugs the mocked tests
+# above never exercised: systemctl's leading "●" glyph on a not-found unit
+# shifted every field in that row over by one; a unit that only appeared
+# in list-unit-files (never in list-units) collapsed its running-state
+# placeholder to a single word instead of occupying the normal three
+# columns; and nothing was actually padded, so columns did not line up.
+# These tests assert the alignment *property* -- not a golden string --
+# so they keep catching a regression without breaking on the next
+# unrelated wording change.
+
+def _columns(line: str) -> list:
+    """Split a rendered row on its column boundaries (runs of 2+ spaces)."""
+    return re.split(r" {2,}", line.rstrip())
+
+
+def test_collect_services_rows_share_the_same_column_count_as_the_header():
+    units_stdout = "\n".join([
+        "mpd.service loaded active running Music Player Daemon",
+        "sambamount.service loaded active exited Samba Mount",
+        "● shairport-sync.service not-found inactive dead",
+    ])
+    files_stdout = "\n".join([
+        "mpd.service disabled disabled",
+        "sambamount.service enabled enabled",
+        "hifiberry-raat.service static enabled",
+    ])
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(units_stdout=units_stdout, files_stdout=files_stdout),
+    ):
+        result = supportinfo.collect_services()
+
+    lines = result.splitlines()
+    assert len(lines) > 1  # a header plus at least one row
+    column_counts = {len(_columns(line)) for line in lines}
+    assert len(column_counts) == 1, f"ragged columns: {lines}"
+
+
+def test_collect_services_enabled_column_starts_at_the_same_offset_on_every_row():
+    units_stdout = "\n".join([
+        "mpd.service loaded active running",
+        "sambamount.service loaded active exited",
+    ])
+    files_stdout = "\n".join([
+        "mpd.service disabled disabled",
+        "sambamount.service enabled enabled",
+        "hifiberry-raat.service static enabled",
+    ])
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(units_stdout=units_stdout, files_stdout=files_stdout),
+    ):
+        result = supportinfo.collect_services()
+
+    header, *rows = result.splitlines()
+    enabled_offsets = {line.index("ENABLED" if line is header else "[enabled:") for line in [header] + rows}
+    assert len(enabled_offsets) == 1, f"misaligned ENABLED column: {result}"
+
+
+def test_collect_services_strips_the_systemctl_status_glyph():
+    units_stdout = "● shairport-sync.service not-found inactive dead"
+    files_stdout = "shairport-sync.service enabled enabled"
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(units_stdout=units_stdout, files_stdout=files_stdout),
+    ):
+        result = supportinfo.collect_services()
+
+    assert "●" not in result  # "●"
+    # The glyph must not have swallowed the unit name into the LOAD field.
+    line = next(l for l in result.splitlines() if l.startswith("shairport-sync.service"))
+    assert "not-found" in line
+    assert "enabled: enabled" in line
+
+
+def test_collect_services_unit_missing_running_state_still_occupies_its_columns():
+    # hifiberry-raat.service only appears in list-unit-files (a static unit
+    # with no loaded instance) -- it must still render the same number of
+    # columns as a unit with full running-state data, with an explicit
+    # placeholder rather than a collapsed/missing field.
+    units_stdout = "mpd.service loaded active running"
+    files_stdout = "\n".join([
+        "mpd.service enabled enabled",
+        "hifiberry-raat.service static enabled",
+    ])
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(units_stdout=units_stdout, files_stdout=files_stdout),
+    ):
+        result = supportinfo.collect_services()
+
+    lines = result.splitlines()
+    header, *rows = lines
+    raat_line = next(l for l in rows if l.startswith("hifiberry-raat.service"))
+    mpd_line = next(l for l in rows if l.startswith("mpd.service"))
+
+    assert len(_columns(raat_line)) == len(_columns(header))
+    assert len(_columns(raat_line)) == len(_columns(mpd_line))
+    columns = _columns(raat_line)
+    assert "not-found" in columns  # LOAD: no running-state entry
+    assert columns.count("-") == 2  # ACTIVE and SUB: explicit placeholders
+    assert "enabled: static" in raat_line

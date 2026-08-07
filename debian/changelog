@@ -1,3 +1,20 @@
+hifiberry-configurator (2.15.5) stable; urgency=medium
+
+  * config-supportinfo: fix the readability of the merged Services section
+    added in 2.15.4. Real hardware output showed three rendering-only bugs
+    the mocked tests didn't catch: systemctl's leading status glyph on a
+    not-found unit shifted every field in that row over by one and
+    corrupted the unit name used as the row's key; a unit with no running-
+    state data (only present in `list-unit-files`) collapsed to a single
+    placeholder word instead of occupying the normal LOAD/ACTIVE/SUB
+    columns, leaving rows with different field counts; and no column was
+    actually padded, so nothing lined up. Columns are now computed from
+    the rows actually printed and padded to width, the glyph is stripped
+    before parsing, and a missing value gets an explicit "-" instead of
+    vanishing. What is collected, suppressed, and merged is unchanged.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 18:00:00 +0200
+
 hifiberry-configurator (2.15.4) stable; urgency=medium
 
   * config-supportinfo: report each service's enabled state (will it start

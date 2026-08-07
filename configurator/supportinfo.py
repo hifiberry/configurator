@@ -339,9 +339,24 @@ def collect_packages() -> str:
 # suppress (see _merge_service_states).
 _COMMAND_FAILED_PREFIX = "(command failed:"
 
+# Explicit stand-in for a column with nothing to say (e.g. ACTIVE/SUB for a
+# unit that only appeared in `list-unit-files`, never in `list-units`).
+# Never blank: a blank cell collapses the column count for that row and
+# breaks the alignment every other row relies on.
+_NO_VALUE = "-"
+
+# systemctl prefixes a unit-state glyph (a red "●" for a failed/not-found
+# unit) directly onto the UNIT column of `list-units` output, glyph-then-space,
+# ahead of the unit name -- unrelated to --no-legend, which only controls the
+# header/footer. Left in place it becomes the first whitespace-split token,
+# which shifts every following field over by one and corrupts the unit name
+# used as this row's dict key. Stripped unconditionally before parsing; a
+# normal line has nothing here to strip.
+_LEADING_GLYPH = re.compile(r"^[^\w\s]+\s+")
+
 
 def _parse_list_units(raw: str) -> dict:
-    """Parse `systemctl list-units` output into {unit: "load active sub"}.
+    """Parse `systemctl list-units` output into {unit: (load, active, sub)}.
 
     Each line is "UNIT LOAD ACTIVE SUB DESCRIPTION"; DESCRIPTION may itself
     contain spaces (or be absent, e.g. for a "not-found" row), so only the
@@ -351,11 +366,12 @@ def _parse_list_units(raw: str) -> dict:
     """
     states = {}
     for line in raw.splitlines():
+        line = _LEADING_GLYPH.sub("", line, count=1)
         parts = line.split(None, 4)
         if len(parts) < 4:
             continue
         unit, load, active, sub = parts[:4]
-        states[unit] = f"{load} {active} {sub}"
+        states[unit] = (load, active, sub)
     return states
 
 
@@ -374,6 +390,33 @@ def _parse_list_unit_files(raw: str) -> dict:
         unit, state = parts[0], parts[1]
         states[unit] = state
     return states
+
+
+def _render_service_rows(rows: list) -> list:
+    """Render (unit, load, active, sub, enabled) tuples as an aligned table.
+
+    Column widths are computed from exactly the rows being printed (post
+    suppression) plus their headers, then every UNIT/LOAD/ACTIVE/SUB cell is
+    left-padded to its column's width -- so the ENABLED column, and every
+    column before it, starts at the same character offset on every row,
+    header included. Padding is computed with plain str.ljust on the column
+    values only; the "  " separator between columns is added on top of
+    that, not folded into the width, so two adjacent equal-width columns
+    are never visually ambiguous.
+    """
+    headers = ("UNIT", "LOAD", "ACTIVE", "SUB")
+    widths = [
+        max(len(headers[i]), max(len(row[i]) for row in rows))
+        for i in range(len(headers))
+    ]
+
+    def fixed_columns(values):
+        return "  ".join(value.ljust(width) for value, width in zip(values, widths))
+
+    lines = [fixed_columns(headers) + "  ENABLED"]
+    for unit, load, active, sub, enabled in rows:
+        lines.append(fixed_columns((unit, load, active, sub)) + f"  [enabled: {enabled}]")
+    return lines
 
 
 def _merge_service_states(units_raw: str, files_raw: str) -> str:
@@ -396,6 +439,12 @@ def _merge_service_states(units_raw: str, files_raw: str) -> str:
     *both* agree the unit is absent -- a command failure must never be
     read as "not installed", so a unit is kept (with "unknown" in place of
     whichever half failed) whenever either query could not run.
+
+    A unit missing from `list-units` (it only appeared in list-unit-files,
+    e.g. a static unit with no loaded instance) still gets a full-width
+    ACTIVE/SUB placeholder rather than being collapsed to a single word --
+    see _render_service_rows, which needs every row to carry the same
+    number of columns to align them.
     """
     units_failed = units_raw.startswith(_COMMAND_FAILED_PREFIX)
     files_failed = files_raw.startswith(_COMMAND_FAILED_PREFIX)
@@ -405,19 +454,21 @@ def _merge_service_states(units_raw: str, files_raw: str) -> str:
 
     rows = []
     for unit in sorted(set(running) | set(enabled)):
-        run_state = running.get(unit)
-        if run_state is None:
-            run_state = "unknown" if units_failed else "not-found"
+        load_active_sub = running.get(unit)
+        if load_active_sub is None:
+            load = "unknown" if units_failed else "not-found"
+            load_active_sub = (load, _NO_VALUE, _NO_VALUE)
+        load, active, sub = load_active_sub
+
         enable_state = enabled.get(unit)
         if enable_state is None:
             enable_state = "unknown" if files_failed else "not-found"
 
         if not units_failed and not files_failed:
-            load_state = run_state.split(" ", 1)[0]
-            if load_state == "not-found" and enable_state == "not-found":
+            if load == "not-found" and enable_state == "not-found":
                 continue
 
-        rows.append(f"{unit} {run_state} [enabled: {enable_state}]")
+        rows.append((unit, load, active, sub, enable_state))
 
     lines = []
     if units_failed:
@@ -425,8 +476,7 @@ def _merge_service_states(units_raw: str, files_raw: str) -> str:
     if files_failed:
         lines.append(f"(enabled state unavailable: {files_raw})")
     if rows:
-        lines.append("UNIT LOAD ACTIVE SUB ENABLED")
-        lines.extend(rows)
+        lines.extend(_render_service_rows(rows))
     return "\n".join(lines)
 
 
