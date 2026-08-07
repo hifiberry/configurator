@@ -740,6 +740,19 @@ def _dedup_journal(text: str, keep: int) -> str:
     entries are kept: the most recently-first-seen ones, i.e. the last
     `keep` messages to appear for the first time in the input, still shown
     in that same chronological order.
+
+    The occurrence count is rendered as a "(xN)" marker at the *start* of
+    the line, not the end. redact_secrets()'s Authorization-header pattern
+    is deliberately greedy -- a credential can contain almost any character,
+    so it replaces everything from the auth scheme to end of line -- and a
+    trailing "(xN)" on a redacted line would fall inside that span and
+    vanish, silently turning "this failed 37 times" back into "this failed"
+    for exactly the lines where the repeat count matters most. A leading
+    marker sits before anything redaction ever touches, so it survives
+    structurally instead of needing redaction to special-case this format.
+    Markers are right-aligned to a common width and lines with no repeat
+    are left-padded by that same width, so every timestamp still starts in
+    the same column and the section stays scannable.
     """
     if not text:
         return text
@@ -762,12 +775,23 @@ def _dedup_journal(text: str, keep: int) -> str:
             order.append(message)
 
     kept = order[-keep:] if keep > 0 else []
+    markers = {
+        message: f"(x{entries[message]['count']})"
+        for message in kept
+        if entries[message]["count"] > 1
+    }
+    width = max((len(marker) for marker in markers.values()), default=0)
+
     rendered = []
     for message in kept:
         entry = entries[message]
-        prefix = f"{entry['timestamp']} " if entry["timestamp"] else ""
-        suffix = f" (x{entry['count']})" if entry["count"] > 1 else ""
-        rendered.append(f"{prefix}{message}{suffix}")
+        line = ""
+        if width:
+            line += markers.get(message, "").rjust(width) + " "
+        if entry["timestamp"]:
+            line += f"{entry['timestamp']} "
+        line += message
+        rendered.append(line)
     return "\n".join(rendered)
 
 

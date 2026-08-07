@@ -122,6 +122,74 @@ def test_collect_journal_keeps_a_rare_error_distinct_from_a_dominant_repeat():
     assert result.index("rare disk I/O error") < result.index("ble-provisioning")
 
 
+def test_dedup_journal_puts_the_count_marker_at_the_start_not_the_end():
+    repeated = "\n".join(
+        f"Aug 07 09:{50 + i:02d}:00 systemd[1]: Failed to start "
+        "ble-provisioning.service - HiFiBerry BLE WiFi Provisioning."
+        for i in range(5)
+    )
+    with patch("subprocess.run", return_value=_completed(repeated)):
+        result = supportinfo.collect_journal(lines=40)
+    line = result.splitlines()[0]
+    assert line.startswith("(x5)")
+    assert not line.rstrip().endswith("(x5)")
+
+
+def test_journal_dedup_count_survives_redaction_of_an_authorization_header_line():
+    # The actual bug: redact_secrets' Authorization-header pattern is
+    # deliberately greedy (a credential can contain almost any character),
+    # replacing everything from the auth scheme to end of line. A count
+    # marker appended at the end of the line used to fall inside that span
+    # and vanish. Asserted end-to-end, through redact_secrets, not just on
+    # the renderer's own output.
+    raw = "\n".join(
+        f"Aug 07 10:27:{i:02d} nginx[1]: auth rejected, "
+        "Authorization: Basic am9lOmh1bnRlcjI="
+        for i in range(37)
+    )
+    with patch("subprocess.run", return_value=_completed(raw)):
+        deduped = supportinfo.collect_journal(lines=40)
+    redacted = supportinfo.redact_secrets(deduped)
+    assert "(x37)" in redacted
+    assert "am9lOmh1bnRlcjI=" not in redacted
+    assert "***REDACTED***" in redacted
+
+
+_JOURNAL_TS_IN_OUTPUT = re.compile(r"Aug \d{2} \d{2}:\d{2}:\d{2}")
+
+
+def test_dedup_journal_aligns_counted_and_uncounted_lines():
+    raw = "\n".join(
+        ["Aug 07 09:00:00 kernel: rare disk I/O error on sda1"]
+        + [
+            f"Aug 07 09:{10 + i:02d}:00 systemd[1]: Failed to start "
+            "ble-provisioning.service - HiFiBerry BLE WiFi Provisioning."
+            for i in range(5)
+        ]
+    )
+    with patch("subprocess.run", return_value=_completed(raw)):
+        result = supportinfo.collect_journal(lines=40)
+    lines = result.splitlines()
+    assert len(lines) == 2
+    offsets = [_JOURNAL_TS_IN_OUTPUT.search(line).start() for line in lines]
+    assert offsets[0] == offsets[1]
+
+
+def test_dedup_journal_aligns_a_three_digit_count_with_a_single_digit_count():
+    raw = "\n".join(
+        ["Aug 07 09:00:00 systemd[1]: Failed to start ble-provisioning.service."] * 400
+        + ["Aug 07 09:00:01 nginx[1]: connection reset by peer"] * 2
+    )
+    with patch("subprocess.run", return_value=_completed(raw)):
+        result = supportinfo.collect_journal(lines=40)
+    lines = result.splitlines()
+    assert len(lines) == 2
+    assert "(x400)" in lines[0]
+    assert "(x2)" in lines[1]
+    offsets = [_JOURNAL_TS_IN_OUTPUT.search(line).start() for line in lines]
+    assert offsets[0] == offsets[1]
+
+
 def test_collect_packages_drops_entries_with_no_version():
     # dpkg knows the name (it's in a PACKAGE_PATTERNS entry) but nothing of
     # that name is installed, so dpkg-query prints the name with an empty
