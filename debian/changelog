@@ -1,3 +1,21 @@
+hifiberry-configurator (2.15.10) stable; urgency=medium
+
+  * tests: guard test_server_supportinfo.py's flask import with
+    pytest.importorskip, so a checkout without flask installed no longer
+    aborts collection for the whole suite (every other test was being
+    silently skipped along with it).
+  * config-supportinfo: the Services section now also records which access
+    path (direct session bus vs. --machine) was used to reach the player
+    user's systemd --user instance, since config-server (always root) and
+    the CLI (usually the player user) can take different paths and only
+    one of them is exercised on a given device.
+  * server: scope-silence the supportinfo collectors' own WARNING/ERROR
+    logging to the /supportinfo request instead of leaving it unconfigured,
+    so repeated UI requests no longer spam config-server's journal; other
+    routes' logging is unaffected once the request completes.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 17:05:00 +0200
+
 hifiberry-configurator (2.15.9) stable; urgency=medium
 
   * Add an authenticated /supportinfo endpoint that serves the same redacted

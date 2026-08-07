@@ -6,6 +6,7 @@ everything it prints passes through redact_secrets() first.
 """
 
 import argparse
+import contextlib
 import getpass
 import json
 import logging
@@ -648,18 +649,27 @@ def _collect_user_service_rows() -> tuple:
     (_detect_player_user's source string) rather than the username itself
     -- so a maintainer can tell a file-based detection from a linger guess
     and spot a wrong one, without the report ever containing what is, on
-    every device seen so far, a person's real login name.
+    every device seen so far, a person's real login name. The same note
+    also records *which* of the two access paths above was taken (direct
+    session bus vs. --machine): the collection functions are shared between
+    the CLI and the config-server endpoint, but which path runs is decided
+    by the calling process's own identity, which is not shared -- the CLI
+    usually runs as the player user itself, config-server always runs as
+    root. The two paths can behave differently (--machine depends on
+    machined and a reachable linger session), so a reader comparing a bug
+    report against what the CLI shows locally needs to know which path
+    produced the rows in front of them.
     """
     player_user, source = _detect_player_user()
     if player_user is None:
         return [], [f"(user services unavailable: {source})"]
 
-    notes = [f"(user scope: {source})"]
-
     machine = (
         [] if _current_user() == player_user
         else [f"--machine={player_user}@.host"]
     )
+    access = "direct session bus" if not machine else "via --machine"
+    notes = [f"(user scope: {source}; access: {access})"]
 
     units_raw = _scrub_username(
         _run(
@@ -901,6 +911,30 @@ def setup_logging(verbose=False):
     console_handler.setFormatter(formatter)
 
     root_logger.addHandler(console_handler)
+
+
+@contextlib.contextmanager
+def quiet_collectors():
+    """Silence the collectors' WARNING/ERROR logging for the duration of a call.
+
+    setup_logging() is the CLI's answer to the same noise (see its
+    docstring), but it is not safe for a long-lived process to call: it
+    tears down and replaces every handler on the root logger, which for
+    config-supportinfo's one-shot process is fine and for config-server --
+    whose other routes must keep logging exactly as they already do --
+    would be a permanent, global side effect of one route. This only raises
+    the root logger's *level* for the lifetime of the with-block and always
+    restores the previous level on the way out, success or exception, so it
+    can wrap a single request's collection without touching config-server's
+    own handlers or leaking the change into the requests that follow.
+    """
+    root_logger = logging.getLogger()
+    previous_level = root_logger.level
+    root_logger.setLevel(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        root_logger.setLevel(previous_level)
 
 
 def main(argv=None) -> int:

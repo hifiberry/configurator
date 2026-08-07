@@ -690,7 +690,7 @@ def test_collect_user_services_uses_plain_user_flag_when_already_that_user():
              user_units_stdout="mpd.service loaded active running",
              user_files_stdout="mpd.service enabled enabled",
          )) as run:
-        supportinfo._collect_user_service_rows()
+        _, notes = supportinfo._collect_user_service_rows()
 
     commands = [call.args[0] for call in run.call_args_list]
     assert len(commands) == 2
@@ -698,6 +698,9 @@ def test_collect_user_services_uses_plain_user_flag_when_already_that_user():
         assert cmd[0] == "systemctl"
         assert "--user" in cmd
         assert not any(arg.startswith("--machine=") for arg in cmd)
+    # The report records which of the two access paths was actually taken,
+    # so a reader can tell a same-user collection from a --machine one.
+    assert "access: direct session bus" in notes[0]
 
 
 def test_collect_user_services_uses_machine_flag_when_a_different_user():
@@ -707,7 +710,7 @@ def test_collect_user_services_uses_machine_flag_when_a_different_user():
              user_units_stdout="mpd.service loaded active running",
              user_files_stdout="mpd.service enabled enabled",
          )) as run:
-        supportinfo._collect_user_service_rows()
+        _, notes = supportinfo._collect_user_service_rows()
 
     commands = [call.args[0] for call in run.call_args_list]
     assert len(commands) == 2
@@ -715,6 +718,10 @@ def test_collect_user_services_uses_machine_flag_when_a_different_user():
         assert cmd[0] == "systemctl"
         assert "--user" in cmd
         assert "--machine=matuschd@.host" in cmd
+    # Same note, but naming the other access path -- this is the case that
+    # matters most, since it is what config-server (always running as
+    # root) always takes.
+    assert "access: via --machine" in notes[0]
 
 
 def test_collect_services_distinguishes_same_named_units_by_scope():
@@ -837,8 +844,8 @@ def test_collect_services_alignment_holds_across_mixed_scope_rows():
     scopes = {_columns(r)[0] for r in rows}
     assert scopes == {"system", "user"}
     # And the note above the table names the detection source, not the
-    # account itself.
-    assert "(user scope: from /etc/hifiberry.user)" in result
+    # account itself, plus which access path was used to reach it.
+    assert "(user scope: from /etc/hifiberry.user; access: via --machine)" in result
     assert "matuschd" not in result
 
 
@@ -861,7 +868,7 @@ def test_collect_services_notes_the_file_detection_source():
              user_files_stdout="mpd.service enabled enabled",
          )):
         result = supportinfo.collect_services()
-    assert "(user scope: from /etc/hifiberry.user)" in result
+    assert "(user scope: from /etc/hifiberry.user; access: via --machine)" in result
     assert "realname" not in result
 
 
@@ -874,7 +881,7 @@ def test_collect_services_notes_the_linger_detection_source():
              user_files_stdout="mpd.service enabled enabled",
          )):
         result = supportinfo.collect_services()
-    assert "(user scope: from linger (single account))" in result
+    assert "(user scope: from linger (single account); access: via --machine)" in result
     assert "realname" not in result
 
 
