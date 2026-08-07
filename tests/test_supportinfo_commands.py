@@ -152,6 +152,15 @@ def test_package_patterns_drop_names_that_match_nothing_in_the_project():
     assert "roonbridge" not in supportinfo.PACKAGE_PATTERNS
 
 
+def test_package_patterns_cover_units_that_are_also_in_service_patterns():
+    # Final review, finding 2: roomeq and nowplaying-sdl were in
+    # SERVICE_PATTERNS (an earlier fix round updated the service list only),
+    # so a DSP bug report showed the roomeq unit running but no roomeq
+    # version.
+    assert "roomeq" in supportinfo.PACKAGE_PATTERNS
+    assert "nowplaying-sdl" in supportinfo.PACKAGE_PATTERNS
+
+
 def test_service_patterns_cover_the_units_missing_from_the_original_list():
     for pattern in (
         "nqptp*",

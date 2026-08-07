@@ -1,3 +1,18 @@
+hifiberry-configurator (2.15.3) stable; urgency=medium
+
+  * config-supportinfo: redact "Authorization: Basic ..." and "Authorization:
+    Digest ..." headers, not just "Authorization: Bearer ...". Basic's
+    credential is a base64-encoded "user:pass" and was previously passed
+    through the report verbatim.
+  * config-supportinfo: add roomeq and nowplaying-sdl to the package-version
+    list (PACKAGE_PATTERNS) -- both already appeared in the service list, so
+    a DSP bug report showed the roomeq unit running but not which version of
+    it.
+  * config-supportinfo(1): fix the man page's version string, still reading
+    2.15.0 after the 2.15.1 changes.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 16:00:00 +0200
+
 hifiberry-configurator (2.15.2) stable; urgency=medium
 
   * config-detect: stop logging "No sound card detected to configure." when a
