@@ -7,6 +7,7 @@ everything it prints passes through redact_secrets() first.
 
 import argparse
 import json
+import logging
 import platform
 import re
 import subprocess
@@ -364,12 +365,44 @@ def render_text(report: dict) -> str:
     for section, content in report.items():
         parts.append(f"## {section}")
         if isinstance(content, dict):
-            for name, value in content.items():
-                parts.append(f"{name}: {value}")
+            if content:
+                for name, value in content.items():
+                    parts.append(f"{name}: {value}")
+            else:
+                parts.append("(none)")
         else:
             parts.append(str(content) if content else "(none)")
         parts.append("")
     return redact_secrets("\n".join(parts))
+
+
+def setup_logging(verbose=False):
+    """Configure logging for this command, mirroring systeminfo.setup_logging().
+
+    Every failure that matters is already surfaced inside the report body as
+    "(command failed: ...)", via the collectors' own return values -- so the
+    WARNING/ERROR log lines the collectors (SystemInfo, hostname_utils, ...)
+    emit along the way are redundant with what the user is about to paste
+    into an issue, and would otherwise interleave with the report on a
+    terminal. Unlike systeminfo, which defaults to WARNING, this command
+    defaults above ERROR so that noise is suppressed by default; --verbose
+    restores full logging for local debugging.
+    """
+    log_level = logging.DEBUG if verbose else logging.CRITICAL
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    console_handler = logging.StreamHandler(stream=sys.stderr)
+    console_handler.setLevel(log_level)
+
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    console_handler.setFormatter(formatter)
+
+    root_logger.addHandler(console_handler)
 
 
 def main(argv=None) -> int:
@@ -386,7 +419,15 @@ def main(argv=None) -> int:
         default=40,
         help="number of recent error lines to include (default: 40)",
     )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="enable verbose logging"
+    )
     args = parser.parse_args(argv)
+
+    # Only main() configures logging: this module is also imported by
+    # config-server and other tools, and setting the root logger's level at
+    # import time would hijack their logging too.
+    setup_logging(args.verbose)
 
     report = build_report(journal_lines=args.journal_lines)
     if args.json:

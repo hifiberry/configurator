@@ -1,4 +1,5 @@
 import json
+import logging
 from unittest.mock import patch
 
 from configurator import supportinfo
@@ -68,3 +69,28 @@ def test_main_default_output_is_text(capsys):
         supportinfo.main([])
     out = capsys.readouterr().out
     assert out.startswith("## System")
+
+
+def test_render_text_empty_dict_section_renders_none():
+    text = supportinfo.render_text({"System": {}})
+    assert "## System" in text
+    assert "(none)" in text
+
+
+def test_main_verbose_flag_leaves_stdout_unchanged(capsys):
+    root_logger = logging.getLogger()
+    original_level = root_logger.level
+    try:
+        with patch.object(supportinfo, "build_report", return_value=dict(REPORT)):
+            supportinfo.main([])
+            default_out = capsys.readouterr().out
+            default_level = root_logger.level
+
+            supportinfo.main(["--verbose"])
+            verbose_out = capsys.readouterr().out
+            verbose_level = root_logger.level
+    finally:
+        root_logger.setLevel(original_level)
+
+    assert default_out == verbose_out
+    assert default_level != verbose_level
