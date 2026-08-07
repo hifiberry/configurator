@@ -1,3 +1,24 @@
+hifiberry-configurator (2.15.6) stable; urgency=medium
+
+  * config-supportinfo: query the player user's systemd --user instance for
+    the Services section, not just the system instance. On HiFiBerryOS the
+    player daemons (mpd, librespot, shairport, ...) run as systemd *user*
+    services under a dedicated account, so the system scope alone was
+    silent for exactly the reports that matter most: a real device with mpd
+    installed, enabled and playing showed no mpd at all. The player user is
+    read from /etc/hifiberry.user, falling back to the single lingering
+    user under /var/lib/systemd/linger/ on older images; querying uses
+    `systemctl --user` directly when config-supportinfo already runs as
+    that user, or `--machine=<user>@.host` otherwise (root, most commonly).
+    Both scopes render in the same table with a new SCOPE column, so a
+    same-named unit in each (mpd.service exists, differently, in both) is
+    never merged or confused with the other -- system and user units are
+    always distinct rows. A user instance that cannot be reached (no player
+    user found, connection refused, ...) is reported as unavailable with
+    the reason; it does not blank out the system half, or vice versa.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 19:00:00 +0200
+
 hifiberry-configurator (2.15.5) stable; urgency=medium
 
   * config-supportinfo: fix the readability of the merged Services section
