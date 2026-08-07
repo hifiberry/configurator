@@ -7,6 +7,7 @@ everything it prints passes through redact_secrets() first.
 
 import platform
 import re
+import subprocess
 
 REDACTED = "***REDACTED***"
 
@@ -228,3 +229,75 @@ def collect_os() -> dict:
         "Kernel": platform.release(),
         "Architecture": platform.machine(),
     }
+
+
+# --- Commands that shell out -------------------------------------------
+
+PACKAGE_PATTERNS = [
+    "hifiberry-*",
+    "hbos-*",
+    "audiocontrol*",
+    "pipewire",
+    "mpd",
+    "librespot",
+    "shairport-sync",
+    "squeezelite",
+    "raat",
+    "roonbridge",
+]
+
+SERVICE_PATTERNS = [
+    "hifiberry*",
+    "audiocontrol*",
+    "config-server*",
+    "pipewire*",
+    "mpd*",
+    "librespot*",
+    "shairport*",
+    "squeezelite*",
+    "raat*",
+]
+
+
+def _run(cmd: list, timeout: int = 10) -> str:
+    """Run a command and return its stdout, or a note about why it failed."""
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"(command failed: {e})"
+    return result.stdout.strip()
+
+
+def collect_packages() -> str:
+    """Installed versions of the HiFiBerry and player packages.
+
+    dpkg-query exits non-zero for patterns that match nothing, which is normal
+    here -- most systems have only a few players installed. check=False in
+    _run keeps the matches we did get.
+    """
+    return _run(
+        ["dpkg-query", "-W", "-f=${Package} ${Version}\n"] + PACKAGE_PATTERNS
+    )
+
+
+def collect_services() -> str:
+    """State of the audio-related systemd units."""
+    return _run(
+        ["systemctl", "list-units", "--all", "--no-legend", "--no-pager"]
+        + SERVICE_PATTERNS
+    )
+
+
+def collect_journal(lines: int = 40) -> str:
+    """The most recent errors from the current boot."""
+    return _run(
+        ["journalctl", "-b", "-p", "err", "--no-pager", "-n", str(lines)],
+        timeout=20,
+    )
+
+
+def collect_disk() -> str:
+    """Free space on the root filesystem."""
+    return _run(["df", "-h", "/"])
