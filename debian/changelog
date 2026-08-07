@@ -1,3 +1,16 @@
+hifiberry-configurator (2.15.1) stable; urgency=medium
+
+  * config-supportinfo: deduplicate the "Recent errors" section so a single
+    flapping unit no longer crowds out every other error, keep at most the
+    requested number of distinct entries (each showing its most recent
+    timestamp and an occurrence count), and pass --no-hostname to journalctl
+    so the hostname does not defeat the report's redaction of it.
+  * config-supportinfo: drop Packages lines with an empty version (a pattern
+    matching a package dpkg knows about but that isn't installed), which
+    previously showed as broken-looking output.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 14:00:00 +0200
+
 hifiberry-configurator (2.15.0) stable; urgency=medium
 
   * Add config-supportinfo, which collects a redacted diagnostic report
