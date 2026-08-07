@@ -88,3 +88,21 @@ def test_truncated_pem_private_key_block_is_removed():
     assert "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz" not in result
     assert "-----BEGIN RSA PRIVATE KEY-----" in result
     assert REDACTED in result
+
+
+def test_truncated_pem_block_does_not_swallow_trailing_report_content():
+    # Round 3: redact_secrets() runs over the whole collected report, not
+    # per line. An unterminated PEM block must not consume everything that
+    # follows it -- only the base64 key material.
+    report = (
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n"
+        "Sound Card: DAC2 HD\n"
+        "Kernel: 6.6.31\n"
+        "Uptime: 3 days"
+    )
+    result = redact_secrets(report)
+    assert "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz" not in result
+    assert "Sound Card: DAC2 HD" in result
+    assert "Kernel: 6.6.31" in result
+    assert "Uptime: 3 days" in result
