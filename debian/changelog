@@ -1,3 +1,19 @@
+hifiberry-configurator (2.15.4) stable; urgency=medium
+
+  * config-supportinfo: report each service's enabled state (will it start
+    on the next boot) alongside its running state, merged into one row per
+    unit in the Services section. collect_services() previously ran only
+    `systemctl list-units`, which says whether a unit is active right now
+    and says nothing about whether it is enabled -- the governing spec
+    asked for the enabled state and it was never delivered. "Player works
+    until I reboot, then it doesn't" is a common report, and the enabled
+    state is what settles it. Units that are neither installed nor enabled
+    (most of SERVICE_PATTERNS, on any given system) are dropped from the
+    merged output so the section does not balloon into a wall of
+    "not-found" rows for players nobody has installed.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 17:00:00 +0200
+
 hifiberry-configurator (2.15.3) stable; urgency=medium
 
   * config-supportinfo: redact "Authorization: Basic ..." and "Authorization:
