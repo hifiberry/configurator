@@ -33,7 +33,20 @@ _KEY_VALUE = re.compile(
 
 _URL_CREDENTIALS = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://[^\s:/@]+):([^\s@]+)@")
 
-_BEARER_TOKEN = re.compile(r"(?i)\b(Authorization\s*:\s*Bearer\s+)([^\s,;\"']+)")
+# HTTP "Authorization" headers that carry a credential. Bearer and Basic put
+# a single opaque token after the scheme name (a JWT, or base64 of
+# "user:pass" for Basic); Digest puts a comma-separated list of key="value"
+# fields (username, response hash, ...) that are individually just as
+# sensitive. Rather than parsing that structure, everything from the scheme
+# name to the end of the line is treated as the credential and replaced as
+# one unit -- simpler than the Digest fields, and still correct for the
+# single-token schemes. Only these three scheme names are recognised: a
+# scheme this does not know about (or a bare "Authorization:" with no
+# scheme at all) is left untouched rather than guessed at, so the scheme
+# name stays visible for whoever reads the report.
+_AUTH_CREDENTIAL = re.compile(
+    r"(?i)\b(Authorization\s*:\s*(?:Basic|Bearer|Digest)\s+)(\S.*)"
+)
 
 # --- PEM private-key blocks --------------------------------------------
 #
@@ -173,7 +186,8 @@ def redact_secrets(text: str) -> str:
     Handles four shapes: key/value pairs (password=..., psk: "...", and
     compound identifiers like WPA_PSK=... or AWS_SECRET_ACCESS_KEY=...),
     credentials embedded in URLs (smb://user:pass@host), HTTP
-    "Authorization: Bearer <token>" headers, and PEM private-key blocks
+    "Authorization: <scheme> <credential>" headers for the Basic, Bearer and
+    Digest schemes, and PEM private-key blocks
     (the body between a "-----BEGIN ... PRIVATE KEY-----" marker and its
     matching "-----END" marker -- or, if the block was truncated, e.g. by a
     log excerpt that cuts off mid-key, as far as the lines look like key
@@ -183,7 +197,7 @@ def redact_secrets(text: str) -> str:
     """
     text = _KEY_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", text)
     text = _URL_CREDENTIALS.sub(lambda m: f"{m.group(1)}:{REDACTED}@", text)
-    text = _BEARER_TOKEN.sub(lambda m: f"{m.group(1)}{REDACTED}", text)
+    text = _AUTH_CREDENTIAL.sub(lambda m: f"{m.group(1)}{REDACTED}", text)
     text = _redact_pem_keys(text)
     return text
 
@@ -246,6 +260,8 @@ PACKAGE_PATTERNS = [
     "shairport-sync",
     "squeezelite",
     "raat",
+    "roomeq",
+    "nowplaying-sdl",
 ]
 
 SERVICE_PATTERNS = [

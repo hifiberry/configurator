@@ -61,6 +61,40 @@ def test_bearer_token_is_removed():
     assert redact_secrets(header) == f"Authorization: Bearer {REDACTED}"
 
 
+def test_basic_auth_credential_is_removed():
+    # Final review, finding 1: "Authorization: Basic <base64>" was not
+    # redacted at all. "am9lOmh1bnRlcjI=" decodes to "joe:hunter2".
+    header = "Authorization: Basic am9lOmh1bnRlcjI="
+    result = redact_secrets(header)
+    assert result == f"Authorization: Basic {REDACTED}"
+    assert "am9lOmh1bnRlcjI=" not in result
+    assert "joe" not in result
+    assert "hunter2" not in result
+
+
+def test_digest_auth_credential_is_removed():
+    header = (
+        'Authorization: Digest username="joe", realm="protected area", '
+        'nonce="abc123", uri="/", response="deadbeefcafefeed"'
+    )
+    result = redact_secrets(header)
+    assert result == f"Authorization: Digest {REDACTED}"
+    assert "joe" not in result
+    assert "deadbeefcafefeed" not in result
+
+
+def test_unrecognised_auth_scheme_does_not_crash_and_keeps_the_scheme_name():
+    # Only Basic, Bearer and Digest carry a credential this module knows how
+    # to redact. A scheme it doesn't recognise -- or a bare "Authorization:"
+    # with no scheme at all -- must not crash, and the scheme name has to
+    # stay visible so a maintainer can tell which scheme was in play.
+    header = "Authorization: Negotiate YIIFxQYGKwYBBQUCoIIF"
+    assert redact_secrets(header) == header
+
+    header = "Authorization: sometoken123"
+    assert redact_secrets(header) == header
+
+
 def test_pem_private_key_block_is_removed():
     # Finding 3: PEM private-key blocks, everything between the BEGIN and
     # the matching END marker.
