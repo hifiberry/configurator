@@ -30,3 +30,47 @@ def test_harmless_text_is_untouched():
 
 def test_token_word_alone_is_not_mangled():
     assert redact_secrets("no tokens were found") == "no tokens were found"
+
+
+def test_compound_psk_identifier_is_removed():
+    # Finding 1: \b does not fire between "_" and "p", so WPA_PSK / WLAN_PSK
+    # were previously left unredacted.
+    assert redact_secrets("WPA_PSK=abcdef1234567890") == f"WPA_PSK={REDACTED}"
+    assert redact_secrets("WLAN_PSK=abcdef1234567890") == f"WLAN_PSK={REDACTED}"
+
+
+def test_wpa_passphrase_is_removed():
+    # Finding 2: "passphrase" was missing from the word list entirely, so
+    # hostapd.conf's actual key (wpa_passphrase) was never redacted.
+    assert redact_secrets("wpa_passphrase=hunter2") == f"wpa_passphrase={REDACTED}"
+
+
+def test_compound_secret_key_identifiers_are_removed():
+    # Finding 3: compound keys where the operator does not immediately
+    # follow one of the listed words.
+    assert redact_secrets("secret_key=abc123") == f"secret_key={REDACTED}"
+    assert (
+        redact_secrets("AWS_SECRET_ACCESS_KEY=abc123")
+        == f"AWS_SECRET_ACCESS_KEY={REDACTED}"
+    )
+
+
+def test_bearer_token_is_removed():
+    # Finding 3: "Authorization: Bearer <token>" headers.
+    header = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature"
+    assert redact_secrets(header) == f"Authorization: Bearer {REDACTED}"
+
+
+def test_pem_private_key_block_is_removed():
+    # Finding 3: PEM private-key blocks, everything between the BEGIN and
+    # the matching END marker.
+    block = (
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n"
+        "-----END RSA PRIVATE KEY-----"
+    )
+    result = redact_secrets(block)
+    assert "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz" not in result
+    assert "-----BEGIN RSA PRIVATE KEY-----" in result
+    assert "-----END RSA PRIVATE KEY-----" in result
+    assert REDACTED in result
