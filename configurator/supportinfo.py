@@ -5,9 +5,12 @@ The output of this tool is meant to be pasted into public GitHub issues, so
 everything it prints passes through redact_secrets() first.
 """
 
+import argparse
+import json
 import platform
 import re
 import subprocess
+import sys
 
 REDACTED = "***REDACTED***"
 
@@ -320,3 +323,78 @@ def collect_journal(lines: int = 40) -> str:
 def collect_disk() -> str:
     """Free space on the root filesystem."""
     return _run(["df", "-h", "/"])
+
+
+# --- Report assembly, redaction and CLI ---------------------------------
+
+
+def build_report(journal_lines: int = 40) -> dict:
+    """Collect every section of the diagnostic report."""
+    return {
+        "System": collect_system(),
+        "OS": collect_os(),
+        "Packages": collect_packages(),
+        "Services": collect_services(),
+        "Disk": collect_disk(),
+        "Recent errors": collect_journal(lines=journal_lines),
+    }
+
+
+def redact_report(report: dict) -> dict:
+    """Apply redaction to every string in the report, keeping its structure.
+
+    JSON is redacted here rather than after serialisation: running the value
+    patterns over rendered JSON would swallow the closing quote of a value like
+    "password=hunter2" and produce invalid JSON.
+    """
+    redacted = {}
+    for section, content in report.items():
+        if isinstance(content, dict):
+            redacted[section] = {
+                k: redact_secrets(str(v)) for k, v in content.items()
+            }
+        else:
+            redacted[section] = redact_secrets(str(content))
+    return redacted
+
+
+def render_text(report: dict) -> str:
+    """Render the report as a plain text block, ready to paste into an issue."""
+    parts = []
+    for section, content in report.items():
+        parts.append(f"## {section}")
+        if isinstance(content, dict):
+            for name, value in content.items():
+                parts.append(f"{name}: {value}")
+        else:
+            parts.append(str(content) if content else "(none)")
+        parts.append("")
+    return redact_secrets("\n".join(parts))
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="config-supportinfo",
+        description="Collect a redacted diagnostic report for HiFiBerryOS bug reports.",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="output machine-readable JSON"
+    )
+    parser.add_argument(
+        "--journal-lines",
+        type=int,
+        default=40,
+        help="number of recent error lines to include (default: 40)",
+    )
+    args = parser.parse_args(argv)
+
+    report = build_report(journal_lines=args.journal_lines)
+    if args.json:
+        print(json.dumps(redact_report(report), indent=2))
+    else:
+        print(render_text(report))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
