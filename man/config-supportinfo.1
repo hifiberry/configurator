@@ -1,0 +1,36 @@
+.TH CONFIG-SUPPORTINFO 1 "August 2026" "configurator 2.15.0" "HiFiBerry Configuration Tools"
+.SH NAME
+config-supportinfo \- collect a diagnostic report for bug reports
+.SH SYNOPSIS
+.B config-supportinfo
+[\fIOPTION\fR]
+.SH DESCRIPTION
+.B config-supportinfo
+collects hardware, package, service and error information into a single block
+of text that can be pasted into a bug report on
+https://github.com/hifiberry/hifiberry-os/issues.
+.PP
+Passwords, pre-shared keys, tokens and credentials embedded in URLs are
+replaced before anything is printed. Device UUID and hostnames are not
+included. Review the output before posting it anyway.
+.SH OPTIONS
+.TP
+.B \-\-json
+Output machine-readable JSON instead of text
+.TP
+.B \-\-journal\-lines \fIN\fR
+Number of recent error lines to include (default: 40)
+.TP
+.B \-v, \-\-verbose
+Enable verbose logging
+.SH EXIT STATUS
+.TP
+.B 0
+Report written to standard output
+.SH SEE ALSO
+.BR config-detect (1),
+.BR config-detectpi (1)
+.SH AUTHORS
+HiFiBerry Support <support@hifiberry.com>
+.SH COPYRIGHT
+Copyright (c) 2026 HiFiBerry. Licensed under the MIT License.
