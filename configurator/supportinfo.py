@@ -5,6 +5,7 @@ The output of this tool is meant to be pasted into public GitHub issues, so
 everything it prints passes through redact_secrets() first.
 """
 
+import platform
 import re
 
 REDACTED = "***REDACTED***"
@@ -180,3 +181,47 @@ def redact_secrets(text: str) -> str:
     text = _BEARER_TOKEN.sub(lambda m: f"{m.group(1)}{REDACTED}", text)
     text = _redact_pem_keys(text)
     return text
+
+
+# --- Hardware and OS collectors -----------------------------------------
+#
+# UUID, Hostname and Pretty Hostname are dropped from the hardware report:
+# the UUID is a stable device identifier and hostnames regularly contain
+# people's real names, and this report is meant to be pasted into public
+# GitHub issues. Neither field helps debugging.
+
+OMITTED_SYSTEM_FIELDS = {"UUID", "Hostname", "Pretty Hostname"}
+
+
+def _flat_system_info() -> dict:
+    """Indirection so tests can replace the hardware-dependent lookup."""
+    from configurator.systeminfo import SystemInfo
+
+    return SystemInfo().get_flat_info_dict()
+
+
+def collect_system() -> dict:
+    """Hardware description, without fields that identify the device or owner."""
+    try:
+        info = _flat_system_info()
+    except Exception as e:
+        return {"error": f"could not read system info: {e}"}
+    return {k: v for k, v in info.items() if k not in OMITTED_SYSTEM_FIELDS}
+
+
+def collect_os() -> dict:
+    """Distribution, kernel and architecture."""
+    pretty_name = "unknown"
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    pretty_name = line.split("=", 1)[1].strip().strip('"')
+                    break
+    except OSError:
+        pass
+    return {
+        "OS": pretty_name,
+        "Kernel": platform.release(),
+        "Architecture": platform.machine(),
+    }
