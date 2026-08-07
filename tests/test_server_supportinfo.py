@@ -1,15 +1,22 @@
 # tests/test_server_supportinfo.py
+import logging
 from unittest.mock import patch
 
 import pytest
+flask = pytest.importorskip("flask", reason="Flask is absent in the build chroot")
 
 from configurator.server import ConfigAPIServer
 
 
 @pytest.fixture
-def client():
-    server = ConfigAPIServer()
-    server.app.config["TESTING"] = True
+def server():
+    srv = ConfigAPIServer()
+    srv.app.config["TESTING"] = True
+    return srv
+
+
+@pytest.fixture
+def client(server):
     with server.app.test_client() as c:
         yield c
 
@@ -39,3 +46,62 @@ def test_supportinfo_failure_returns_500_without_leaking_details(client):
     body = response.get_data(as_text=True)
     assert "someuser" not in body
     assert "secret-path" not in body
+
+
+def test_supportinfo_endpoint_silences_collector_logging_during_collection(client, caplog):
+    """setup_logging() is what keeps the CLI quiet; the endpoint does not
+    call it (it must not permanently touch config-server's own logging --
+    see the next test), so it needs its own, scoped way to silence the
+    collectors' WARNING/ERROR noise for just this request. Simulates a
+    collector emitting a WARNING mid-collection and asserts it never
+    reaches a handler at all.
+
+    quiet_collectors() is thread-scoped (see
+    tests/test_supportinfo_quiet_collectors_concurrency.py for the
+    dedicated concurrency coverage); this test just confirms the endpoint
+    actually invokes it around collection.
+    """
+    caplog.set_level(logging.WARNING)
+
+    def fake_build_report(*_a, **_kw):
+        logging.getLogger("configurator.systeminfo").warning(
+            "collector noise that must not reach config-server's journal"
+        )
+        return {}
+
+    with patch("configurator.supportinfo.build_report", side_effect=fake_build_report), \
+         patch("configurator.supportinfo.render_text", return_value=""):
+        response = client.get("/api/v1/supportinfo")
+
+    assert response.status_code == 200
+    assert "collector noise that must not reach config-server's journal" not in caplog.text
+
+
+def test_supportinfo_request_does_not_permanently_silence_other_routes(server, client, caplog):
+    """The suppression above must be scoped to the one request -- a
+    supportinfo call must not leave config-server's own logging quiet for
+    every route that runs after it. Exercises supportinfo once (with a
+    collector that logs, same as above), then hits a neighbouring route
+    (systeminfo) that fails and logs its own error, and asserts that error
+    is still captured -- proving the suppression did not outlive the
+    request that triggered it.
+    """
+    def fake_build_report(*_a, **_kw):
+        logging.getLogger("configurator.systeminfo").warning("noise during supportinfo")
+        return {}
+
+    with patch("configurator.supportinfo.build_report", side_effect=fake_build_report), \
+         patch("configurator.supportinfo.render_text", return_value=""):
+        first = client.get("/api/v1/supportinfo")
+    assert first.status_code == 200
+
+    caplog.set_level(logging.ERROR, logger="configurator.server")
+    boom = RuntimeError("systeminfo exploded")
+    with patch.object(server.systeminfo, "get_system_info_dict", side_effect=boom):
+        second = client.get("/api/v1/systeminfo")
+
+    assert second.status_code == 500
+    assert any(
+        "Error getting system info" in record.message
+        for record in caplog.records
+    ), "neighbouring route's own error logging must survive a prior supportinfo request"

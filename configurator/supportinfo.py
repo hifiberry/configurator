@@ -6,6 +6,7 @@ everything it prints passes through redact_secrets() first.
 """
 
 import argparse
+import contextlib
 import getpass
 import json
 import logging
@@ -14,6 +15,7 @@ import platform
 import re
 import subprocess
 import sys
+import threading
 
 REDACTED = "***REDACTED***"
 
@@ -648,18 +650,27 @@ def _collect_user_service_rows() -> tuple:
     (_detect_player_user's source string) rather than the username itself
     -- so a maintainer can tell a file-based detection from a linger guess
     and spot a wrong one, without the report ever containing what is, on
-    every device seen so far, a person's real login name.
+    every device seen so far, a person's real login name. The same note
+    also records *which* of the two access paths above was taken (direct
+    session bus vs. --machine): the collection functions are shared between
+    the CLI and the config-server endpoint, but which path runs is decided
+    by the calling process's own identity, which is not shared -- the CLI
+    usually runs as the player user itself, config-server always runs as
+    root. The two paths can behave differently (--machine depends on
+    machined and a reachable linger session), so a reader comparing a bug
+    report against what the CLI shows locally needs to know which path
+    produced the rows in front of them.
     """
     player_user, source = _detect_player_user()
     if player_user is None:
         return [], [f"(user services unavailable: {source})"]
 
-    notes = [f"(user scope: {source})"]
-
     machine = (
         [] if _current_user() == player_user
         else [f"--machine={player_user}@.host"]
     )
+    access = "direct session bus" if not machine else "via --machine"
+    notes = [f"(user scope: {source}; access: {access})"]
 
     units_raw = _scrub_username(
         _run(
@@ -901,6 +912,84 @@ def setup_logging(verbose=False):
     console_handler.setFormatter(formatter)
 
     root_logger.addHandler(console_handler)
+
+
+# quiet_collectors() started out as a save/restore of the root logger's
+# *level*, mirroring setup_logging() below. That is wrong for a
+# multi-threaded, long-lived process: the level is one piece of state
+# shared by every thread, so two overlapping calls -- config-server runs
+# under waitress with several worker threads, and collection shells out to
+# journalctl/dpkg-query for seconds, so two /supportinfo requests (or one
+# of those overlapping any other route) is not a corner case -- race on
+# who's "previous" level was actually the original. If the thread that
+# entered first also exits first, the second thread's exit restores the
+# *already-raised* level it saved on entry, re-silencing the process with
+# nothing left to ever lower it again. The same design also silences every
+# other thread's logging -- other routes, waitress itself -- for the
+# whole multi-second collection, not just the collectors, since the level
+# is process-wide, not per-caller.
+#
+# A logging.Filter keyed on a threading.local() flag has neither problem.
+# Filter.filter() always runs synchronously on the thread that made the
+# logging call (Python's logging is not queued unless a QueueHandler sits
+# in the chain, which config-server's does not), so each thread reads and
+# writes only its own flag -- no lock, no shared counter, no state for a
+# second thread to race. And a thread that never entered quiet_collectors()
+# is never affected by one that did, which fixes the milder problem too.
+#
+# The filter has to be attached to *handlers*, not to the root logger's
+# own .filters: a Logger's .filters are only consulted for records that
+# logger originates itself (Logger.handle() calls self.filter() once, at
+# the point of origin); a record merely propagating up from a child logger
+# (e.g. "configurator.systeminfo") never re-runs an ancestor's .filters,
+# only its .filters on each *handler* it reaches via callHandlers(). The
+# filter is attached once per handler and never removed -- Handler.addFilter
+# already no-ops for an instance that's already attached, so re-attaching
+# on every call is harmless, and never removing it means there is no
+# teardown step left to race between overlapping calls; an attached filter
+# is a no-op for any thread whose flag is not set.
+_quiet_thread_state = threading.local()
+
+
+class _CollectorQuietFilter(logging.Filter):
+    """Drops a record iff the thread that emitted it is inside quiet_collectors()."""
+
+    def filter(self, record):
+        return not getattr(_quiet_thread_state, "active", False)
+
+
+_QUIET_FILTER = _CollectorQuietFilter()
+
+
+def _install_quiet_filter(root_logger):
+    for handler in root_logger.handlers:
+        handler.addFilter(_QUIET_FILTER)
+
+
+@contextlib.contextmanager
+def quiet_collectors():
+    """Silence the collectors' WARNING/ERROR logging for the duration of a call.
+
+    setup_logging() is the CLI's answer to the same noise (see its
+    docstring), but it is not safe for a long-lived, multi-threaded process
+    to call: it tears down and replaces every handler on the root logger,
+    which for config-supportinfo's one-shot process is fine and for
+    config-server -- whose other routes must keep logging exactly as they
+    already do, even while a collection is running on another thread --
+    would be a permanent, global side effect of one route. This attaches a
+    thread-scoped logging.Filter (see above) rather than touching the root
+    logger's level or handlers at all, so it can wrap a single request's
+    collection without affecting any other thread, whether that thread is
+    running a concurrent /supportinfo request, a different route, or
+    waitress itself.
+    """
+    root_logger = logging.getLogger()
+    _install_quiet_filter(root_logger)
+    _quiet_thread_state.active = True
+    try:
+        yield
+    finally:
+        _quiet_thread_state.active = False
 
 
 def main(argv=None) -> int:

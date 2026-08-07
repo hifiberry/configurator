@@ -262,10 +262,23 @@ class ConfigAPIServer:
             Calls exactly the functions config-supportinfo uses, so the
             redaction that guards the CLI guards this endpoint too. Do not
             reimplement collection or redaction here.
+
+            config-server always runs as root, never as the player user, so
+            the user-services collector's own-session-bus branch never
+            applies here -- this route always takes the `--machine=<user>@.host`
+            path (see _collect_user_service_rows), which needs machined and a
+            reachable linger session and can fail where a same-user CLI
+            invocation would not. The Services section records which path
+            was used for exactly this reason.
             """
             from . import supportinfo
             try:
-                text = supportinfo.render_text(supportinfo.build_report())
+                # The CLI silences the collectors' own WARNING/ERROR logging
+                # via setup_logging(); this route needs the same quiet, but
+                # scoped to this one request's thread instead of
+                # config-server's whole process -- see quiet_collectors().
+                with supportinfo.quiet_collectors():
+                    text = supportinfo.render_text(supportinfo.build_report())
             except Exception as e:
                 logger.error(f"Error generating support info: {e}")
                 return jsonify({
