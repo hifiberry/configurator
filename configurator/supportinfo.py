@@ -6,8 +6,10 @@ everything it prints passes through redact_secrets() first.
 """
 
 import argparse
+import getpass
 import json
 import logging
+import os
 import platform
 import re
 import subprocess
@@ -339,9 +341,28 @@ def collect_packages() -> str:
 # suppress (see _merge_service_states).
 _COMMAND_FAILED_PREFIX = "(command failed:"
 
+# Explicit stand-in for a column with nothing to say (e.g. ACTIVE/SUB for a
+# unit that only appeared in `list-unit-files`, never in `list-units`).
+# Never blank: a blank cell collapses the column count for that row and
+# breaks the alignment every other row relies on.
+_NO_VALUE = "-"
+
+# systemctl prefixes a unit-state glyph (a red "●" for a failed/not-found
+# unit) directly onto the UNIT column of `list-units` output, glyph-then-space,
+# ahead of the unit name -- unrelated to --no-legend, which only controls the
+# header/footer. Left in place it becomes the first whitespace-split token,
+# which shifts every following field over by one and corrupts the unit name
+# used as this row's dict key. Stripped unconditionally before parsing; a
+# normal line has nothing here to strip. The `\s*` allows for leading
+# indentation ahead of the glyph itself -- real hardware puts the glyph at
+# column 0, but nothing about the format guarantees that, and the
+# unanchored version silently mis-parsed an indented glyph the same way
+# the unstripped glyph itself once did.
+_LEADING_GLYPH = re.compile(r"^\s*[^\w\s]+\s+")
+
 
 def _parse_list_units(raw: str) -> dict:
-    """Parse `systemctl list-units` output into {unit: "load active sub"}.
+    """Parse `systemctl list-units` output into {unit: (load, active, sub)}.
 
     Each line is "UNIT LOAD ACTIVE SUB DESCRIPTION"; DESCRIPTION may itself
     contain spaces (or be absent, e.g. for a "not-found" row), so only the
@@ -351,11 +372,12 @@ def _parse_list_units(raw: str) -> dict:
     """
     states = {}
     for line in raw.splitlines():
+        line = _LEADING_GLYPH.sub("", line, count=1)
         parts = line.split(None, 4)
         if len(parts) < 4:
             continue
         unit, load, active, sub = parts[:4]
-        states[unit] = f"{load} {active} {sub}"
+        states[unit] = (load, active, sub)
     return states
 
 
@@ -376,8 +398,45 @@ def _parse_list_unit_files(raw: str) -> dict:
     return states
 
 
-def _merge_service_states(units_raw: str, files_raw: str) -> str:
-    """Combine running state and enabled state into one row per unit.
+def _render_service_rows(rows: list) -> list:
+    """Render (scope, unit, load, active, sub, enabled) tuples as an aligned table.
+
+    Column widths are computed from exactly the rows being printed (post
+    suppression) plus their headers, then every SCOPE/UNIT/LOAD/ACTIVE/SUB
+    cell is left-padded to its column's width -- so the ENABLED column, and
+    every column before it, starts at the same character offset on every
+    row, header included. Padding is computed with plain str.ljust on the
+    column values only; the "  " separator between columns is added on top
+    of that, not folded into the width, so two adjacent equal-width columns
+    are never visually ambiguous.
+
+    SCOPE ("system" or "user") is its own leading column, not folded into
+    UNIT, because "system" and "user" each define units with the same
+    name (mpd.service exists, differently, in both) -- see
+    collect_services for why the two scopes are never merged by name
+    alone. Keeping scope as a column, rather than e.g. a "user/" prefix on
+    the unit name, is what lets it line up and stay scannable alongside
+    everything else.
+    """
+    headers = ("SCOPE", "UNIT", "LOAD", "ACTIVE", "SUB")
+    widths = [
+        max(len(headers[i]), max(len(row[i]) for row in rows))
+        for i in range(len(headers))
+    ]
+
+    def fixed_columns(values):
+        return "  ".join(value.ljust(width) for value, width in zip(values, widths))
+
+    lines = [fixed_columns(headers) + "  ENABLED"]
+    for scope, unit, load, active, sub, enabled in rows:
+        lines.append(
+            fixed_columns((scope, unit, load, active, sub)) + f"  [enabled: {enabled}]"
+        )
+    return lines
+
+
+def _service_rows_for_scope(scope: str, units_raw: str, files_raw: str) -> tuple:
+    """Combine running state and enabled state into one row per unit, for one scope.
 
     `systemctl list-units` answers "is it running now"; `list-unit-files`
     answers "will it start on the next boot". A report that only carries
@@ -390,12 +449,26 @@ def _merge_service_states(units_raw: str, files_raw: str) -> str:
 
     Units that are neither installed nor enabled are dropped. SERVICE_PATTERNS
     matches every player this project supports, and most systems have only
-    one or two of them installed; a "not-found"/"not-found" row for each of
-    the rest would bury the units that actually matter under noise nobody
-    reads. This suppression only fires when *both* commands succeeded and
-    *both* agree the unit is absent -- a command failure must never be
-    read as "not installed", so a unit is kept (with "unknown" in place of
-    whichever half failed) whenever either query could not run.
+    one or two of them installed in a given scope; a "not-found"/"not-found"
+    row for each of the rest would bury the units that actually matter
+    under noise nobody reads. This suppression only fires when *both*
+    commands succeeded and *both* agree the unit is absent -- a command
+    failure must never be read as "not installed", so a unit is kept (with
+    "unknown" in place of whichever half failed) whenever either query
+    could not run.
+
+    A unit missing from `list-units` (it only appeared in list-unit-files,
+    e.g. a static unit with no loaded instance) still gets a full-width
+    ACTIVE/SUB placeholder rather than being collapsed to a single word --
+    see _render_service_rows, which needs every row to carry the same
+    number of columns to align them.
+
+    Returns (rows, notes): rows are (scope, unit, load, active, sub,
+    enabled) tuples, already scope-tagged so the caller can freely combine
+    rows from multiple scopes into one table without their unit names
+    colliding; notes are 0-2 "state unavailable" strings, one per command
+    that failed, each naming this scope so a reader can tell system
+    failures from user ones when both halves are shown together.
     """
     units_failed = units_raw.startswith(_COMMAND_FAILED_PREFIX)
     files_failed = files_raw.startswith(_COMMAND_FAILED_PREFIX)
@@ -405,49 +478,244 @@ def _merge_service_states(units_raw: str, files_raw: str) -> str:
 
     rows = []
     for unit in sorted(set(running) | set(enabled)):
-        run_state = running.get(unit)
-        if run_state is None:
-            run_state = "unknown" if units_failed else "not-found"
+        load_active_sub = running.get(unit)
+        if load_active_sub is None:
+            load = "unknown" if units_failed else "not-found"
+            load_active_sub = (load, _NO_VALUE, _NO_VALUE)
+        load, active, sub = load_active_sub
+
         enable_state = enabled.get(unit)
         if enable_state is None:
             enable_state = "unknown" if files_failed else "not-found"
 
         if not units_failed and not files_failed:
-            load_state = run_state.split(" ", 1)[0]
-            if load_state == "not-found" and enable_state == "not-found":
+            if load == "not-found" and enable_state == "not-found":
                 continue
 
-        rows.append(f"{unit} {run_state} [enabled: {enable_state}]")
+        rows.append((scope, unit, load, active, sub, enable_state))
 
-    lines = []
+    notes = []
     if units_failed:
-        lines.append(f"(running state unavailable: {units_raw})")
+        notes.append(f"({scope} running state unavailable: {units_raw})")
     if files_failed:
-        lines.append(f"(enabled state unavailable: {files_raw})")
-    if rows:
-        lines.append("UNIT LOAD ACTIVE SUB ENABLED")
-        lines.extend(rows)
-    return "\n".join(lines)
+        notes.append(f"({scope} enabled state unavailable: {files_raw})")
+    return rows, notes
+
+
+# --- The player user's systemd --user instance --------------------------
+#
+# On HiFiBerryOS the player daemons (mpd, librespot, shairport, ...) run as
+# systemd *user* services under a dedicated, unprivileged player account --
+# not as system services. A Services section built only from `systemctl
+# list-units` (the system manager) is therefore silent for exactly the
+# reports that matter most: it shows config-server, sigmatcpserver,
+# roomeq... and not one player, even when a player is installed, enabled
+# and actively playing.
+
+
+# Conservative: a valid Linux username, nothing else. Anything that does
+# not match -- a comment, a blank line, an accidental sentence -- must
+# fall through to the linger-directory fallback rather than being used
+# verbatim as a --machine=<name>@.host target.
+_PLAYER_USERNAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+
+
+def _read_hifiberry_user_file() -> str:
+    """Indirection so tests can replace the filesystem lookup.
+
+    /etc/hifiberry.user is a single line holding the player username, when
+    present. Root-owned, world-readable. Blank lines and "#"-prefixed
+    comments are skipped; the first remaining line is used only if it
+    looks like a real username (_PLAYER_USERNAME_RE) -- a comment-only or
+    otherwise malformed file (e.g. just "# the player user") must not
+    produce a bogus username, since that would build a broken --machine
+    target and report the user scope unavailable instead of correctly
+    falling through to the linger directory.
+    """
+    with open("/etc/hifiberry.user") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            return line if _PLAYER_USERNAME_RE.match(line) else ""
+    return ""
+
+
+def _list_linger_users() -> list:
+    """Indirection so tests can replace the filesystem lookup.
+
+    systemd creates one file per lingering user under this directory, named
+    after the username; a lingering user's systemd --user instance keeps
+    running without an active login session, which is required for the
+    player's units to survive a reboot without anyone signing in.
+    """
+    return sorted(os.listdir("/var/lib/systemd/linger/"))
+
+
+def _detect_player_user() -> tuple:
+    """Find the username the player daemons' systemd --user instance runs as.
+
+    /etc/hifiberry.user is the primary source and wins unconditionally when
+    it resolves to a valid name -- the linger fallback below is never even
+    consulted in that case. Older images may not carry the file (or it may
+    be empty/comment-only/malformed, see _read_hifiberry_user_file), so the
+    fallback is whoever has systemd linger enabled: the player user must
+    have it (its user services could not otherwise survive a reboot
+    without an interactive login), and on a HiFiBerryOS install it is
+    normally the only lingering user. If neither source resolves to
+    exactly one name, no username is guessed -- the caller reports the
+    user scope as unavailable, with the reason returned here, rather than
+    silently querying the wrong account or none at all.
+
+    Returns (username, source) on success -- source names *how* the user
+    was found (e.g. "from /etc/hifiberry.user"), not the username itself,
+    so a maintainer can audit the detection in a public bug report without
+    the report ever containing what is, on every device seen so far, a
+    person's real login name. Returns (None, reason) on failure, reason
+    being a human-readable explanation.
+    """
+    try:
+        name = _read_hifiberry_user_file()
+    except OSError:
+        name = ""
+    if name:
+        return name, "from /etc/hifiberry.user"
+
+    try:
+        entries = [u for u in _list_linger_users() if not u.startswith(".")]
+    except OSError:
+        entries = []
+
+    if len(entries) == 1:
+        return entries[0], "from linger (single account)"
+    if not entries:
+        return None, (
+            "no player user found (/etc/hifiberry.user missing and no "
+            "lingering user in /var/lib/systemd/linger/)"
+        )
+    return None, (
+        f"ambiguous player user: {len(entries)} lingering users found, "
+        "none chosen"
+    )
+
+
+def _current_user() -> str:
+    """Indirection so tests can replace the process-identity lookup."""
+    try:
+        return getpass.getuser()
+    except OSError:
+        return ""
+
+
+def _scrub_username(text: str, player_user: str) -> str:
+    """Strip the player username back out of raw systemctl output.
+
+    `--machine=<player_user>@.host` is passed on the command line, and a
+    connection failure (unreachable machine, no such user, ...) routinely
+    echoes it straight back in stderr -- which _run() then folds into a
+    "(command failed: ...)" note. That note reaches the rendered report
+    unredacted (redact_secrets targets credentials, not usernames), so
+    without this the same real login name _detect_player_user's source
+    string was deliberately built to avoid printing could still leak
+    through a failure message. Applied to both list-units and
+    list-unit-files output for the user scope, successful or not; a
+    literal username never legitimately appears in either.
+    """
+    if not player_user:
+        return text
+    return text.replace(f"{player_user}@.host", "<player>@.host").replace(
+        player_user, "<player>"
+    )
+
+
+def _collect_user_service_rows() -> tuple:
+    """Player-daemon units, queried from the player user's systemd --user instance.
+
+    `systemctl --user` talks to the calling process's own session bus, so
+    it only reaches the right instance for free when config-supportinfo
+    happens to run as the player user itself. Every other case --
+    config-supportinfo run as root, or as any other account, which is the
+    common case for a diagnostic tool -- needs `--machine=<user>@.host` to
+    reach that user's instance instead of failing or silently querying the
+    wrong (or no) session.
+
+    If the player user cannot be identified at all, this returns no rows
+    and one explanatory note rather than raising: a report with an
+    "unavailable" line and an otherwise complete system-scope section is
+    far more useful than one that aborts before it can print anything.
+
+    A successful detection is also noted, naming *how* the user was found
+    (_detect_player_user's source string) rather than the username itself
+    -- so a maintainer can tell a file-based detection from a linger guess
+    and spot a wrong one, without the report ever containing what is, on
+    every device seen so far, a person's real login name.
+    """
+    player_user, source = _detect_player_user()
+    if player_user is None:
+        return [], [f"(user services unavailable: {source})"]
+
+    notes = [f"(user scope: {source})"]
+
+    machine = (
+        [] if _current_user() == player_user
+        else [f"--machine={player_user}@.host"]
+    )
+
+    units_raw = _scrub_username(
+        _run(
+            ["systemctl", "--user"] + machine
+            + ["list-units", "--all", "--no-legend", "--no-pager"]
+            + SERVICE_PATTERNS
+        ),
+        player_user,
+    )
+    files_raw = _scrub_username(
+        _run(
+            ["systemctl", "--user"] + machine
+            + ["list-unit-files", "--no-legend", "--no-pager"]
+            + SERVICE_PATTERNS
+        ),
+        player_user,
+    )
+    rows, scope_notes = _service_rows_for_scope("user", units_raw, files_raw)
+    return rows, notes + scope_notes
 
 
 def collect_services() -> str:
     """Running and enabled state of the audio-related systemd units.
 
-    Two systemctl calls are needed because they report different things --
-    see _merge_service_states for why they are combined into one row per
-    unit rather than kept as separate sections. Each call goes through
-    _run independently, so one failing (e.g. systemctl missing entirely)
-    still leaves the other half of the picture intact.
+    Covers both scopes that matter on HiFiBerryOS: the system scope
+    (infrastructure daemons like config-server and sigmatcpserver) and the
+    user scope the player daemons actually run in (see the module note
+    above _read_hifiberry_user_file). The two are collected, suppressed
+    (_service_rows_for_scope) and queried independently, then combined
+    into one table with an explicit SCOPE column (_render_service_rows) --
+    never merged by unit name alone, since "system" and "user" each define
+    units of the same name (mpd.service exists, differently, in both), and
+    a same-name merge could show a player as not-found while its real,
+    running user unit sits right next to it.
+
+    Each half's two systemctl calls go through _run independently, so a
+    failure anywhere -- system or user, running-state or enabled-state,
+    missing systemctl, unreachable player user -- is reported as its own
+    note and never blanks out the rest of the section.
     """
-    units_raw = _run(
+    system_units = _run(
         ["systemctl", "list-units", "--all", "--no-legend", "--no-pager"]
         + SERVICE_PATTERNS
     )
-    files_raw = _run(
+    system_files = _run(
         ["systemctl", "list-unit-files", "--no-legend", "--no-pager"]
         + SERVICE_PATTERNS
     )
-    return _merge_service_states(units_raw, files_raw)
+    system_rows, system_notes = _service_rows_for_scope("system", system_units, system_files)
+    user_rows, user_notes = _collect_user_service_rows()
+
+    rows = system_rows + user_rows
+    lines = system_notes + user_notes
+    if rows:
+        lines.extend(_render_service_rows(rows))
+    return "\n".join(lines)
 
 
 # journalctl's default output starts every line with a timestamp

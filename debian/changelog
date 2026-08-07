@@ -1,3 +1,59 @@
+hifiberry-configurator (2.15.7) stable; urgency=medium
+
+  * config-supportinfo: review fixes for the player-user Services query
+    added in 2.15.6. The table now notes how the player user was found
+    ("user scope: from /etc/hifiberry.user" or "... from linger (single
+    account)") so a wrong guess is auditable in the report -- without ever
+    printing the username itself, which is a real person's login name on
+    every device seen so far, the same reason the hostname is already
+    left out. A failure message that could otherwise echo the account
+    name back (e.g. a refused --machine= connection) is scrubbed too.
+    _read_hifiberry_user_file() now skips blank and "#"-comment lines and
+    validates the remaining username against a conservative pattern, so a
+    comment-only or malformed file falls through to the linger fallback
+    instead of producing a bogus --machine target. The leading-glyph strip
+    is anchored past leading whitespace as well as column 0.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 20:00:00 +0200
+
+hifiberry-configurator (2.15.6) stable; urgency=medium
+
+  * config-supportinfo: query the player user's systemd --user instance for
+    the Services section, not just the system instance. On HiFiBerryOS the
+    player daemons (mpd, librespot, shairport, ...) run as systemd *user*
+    services under a dedicated account, so the system scope alone was
+    silent for exactly the reports that matter most: a real device with mpd
+    installed, enabled and playing showed no mpd at all. The player user is
+    read from /etc/hifiberry.user, falling back to the single lingering
+    user under /var/lib/systemd/linger/ on older images; querying uses
+    `systemctl --user` directly when config-supportinfo already runs as
+    that user, or `--machine=<user>@.host` otherwise (root, most commonly).
+    Both scopes render in the same table with a new SCOPE column, so a
+    same-named unit in each (mpd.service exists, differently, in both) is
+    never merged or confused with the other -- system and user units are
+    always distinct rows. A user instance that cannot be reached (no player
+    user found, connection refused, ...) is reported as unavailable with
+    the reason; it does not blank out the system half, or vice versa.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 19:00:00 +0200
+
+hifiberry-configurator (2.15.5) stable; urgency=medium
+
+  * config-supportinfo: fix the readability of the merged Services section
+    added in 2.15.4. Real hardware output showed three rendering-only bugs
+    the mocked tests didn't catch: systemctl's leading status glyph on a
+    not-found unit shifted every field in that row over by one and
+    corrupted the unit name used as the row's key; a unit with no running-
+    state data (only present in `list-unit-files`) collapsed to a single
+    placeholder word instead of occupying the normal LOAD/ACTIVE/SUB
+    columns, leaving rows with different field counts; and no column was
+    actually padded, so nothing lined up. Columns are now computed from
+    the rows actually printed and padded to width, the glyph is stripped
+    before parsing, and a missing value gets an explicit "-" instead of
+    vanishing. What is collected, suppressed, and merged is unchanged.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 18:00:00 +0200
+
 hifiberry-configurator (2.15.4) stable; urgency=medium
 
   * config-supportinfo: report each service's enabled state (will it start

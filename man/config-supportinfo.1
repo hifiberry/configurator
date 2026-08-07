@@ -1,4 +1,4 @@
-.TH CONFIG-SUPPORTINFO 1 "August 2026" "configurator 2.15.4" "HiFiBerry Configuration Tools"
+.TH CONFIG-SUPPORTINFO 1 "August 2026" "configurator 2.15.7" "HiFiBerry Configuration Tools"
 .SH NAME
 config-supportinfo \- collect a diagnostic report for bug reports
 .SH SYNOPSIS
@@ -9,7 +9,8 @@ config-supportinfo \- collect a diagnostic report for bug reports
 collects hardware, package, service and error information into a single block
 of text that can be pasted into a bug report on
 https://github.com/hifiberry/hifiberry-os/issues. For each audio-related
-systemd unit, the Services section reports both whether it is running now
+systemd unit, in both the system scope and the player user's systemd
+--user scope, the Services section reports both whether it is running now
 and whether it is enabled to start on the next boot.
 .PP
 Passwords, pre-shared keys, tokens and credentials embedded in URLs are
