@@ -74,3 +74,17 @@ def test_pem_private_key_block_is_removed():
     assert "-----BEGIN RSA PRIVATE KEY-----" in result
     assert "-----END RSA PRIVATE KEY-----" in result
     assert REDACTED in result
+
+
+def test_truncated_pem_private_key_block_is_removed():
+    # Round 2: a log excerpt (e.g. journalctl -n 40) can cut off mid-key,
+    # so there is a BEGIN marker and key material but no END marker
+    # anywhere in the text. The key material must still not survive.
+    block = (
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz"
+    )
+    result = redact_secrets(block)
+    assert "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz" not in result
+    assert "-----BEGIN RSA PRIVATE KEY-----" in result
+    assert REDACTED in result

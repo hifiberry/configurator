@@ -30,7 +30,7 @@ _URL_CREDENTIALS = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://[^\s:/@]+):([^\s@]+)
 _BEARER_TOKEN = re.compile(r"(?i)\b(Authorization\s*:\s*Bearer\s+)([^\s,;\"']+)")
 
 _PEM_PRIVATE_KEY = re.compile(
-    r"(?is)(-----BEGIN [^\n-]*PRIVATE KEY-----)(.*?)(-----END [^\n-]*PRIVATE KEY-----)"
+    r"(?is)(-----BEGIN [^\n-]*PRIVATE KEY-----)(.*?)(-----END [^\n-]*PRIVATE KEY-----|\Z)"
 )
 
 
@@ -42,7 +42,8 @@ def redact_secrets(text: str) -> str:
     credentials embedded in URLs (smb://user:pass@host), HTTP
     "Authorization: Bearer <token>" headers, and PEM private-key blocks
     (everything between a "-----BEGIN ... PRIVATE KEY-----" marker and its
-    matching "-----END" marker).
+    matching "-----END" marker, or the end of the text if the block was
+    truncated, e.g. by a log excerpt that cuts off mid-key).
     """
     text = _KEY_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", text)
     text = _URL_CREDENTIALS.sub(lambda m: f"{m.group(1)}:{REDACTED}@", text)
