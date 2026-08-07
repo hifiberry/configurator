@@ -1,3 +1,21 @@
+hifiberry-configurator (2.15.7) stable; urgency=medium
+
+  * config-supportinfo: review fixes for the player-user Services query
+    added in 2.15.6. The table now notes how the player user was found
+    ("user scope: from /etc/hifiberry.user" or "... from linger (single
+    account)") so a wrong guess is auditable in the report -- without ever
+    printing the username itself, which is a real person's login name on
+    every device seen so far, the same reason the hostname is already
+    left out. A failure message that could otherwise echo the account
+    name back (e.g. a refused --machine= connection) is scrubbed too.
+    _read_hifiberry_user_file() now skips blank and "#"-comment lines and
+    validates the remaining username against a conservative pattern, so a
+    comment-only or malformed file falls through to the linger fallback
+    instead of producing a bogus --machine target. The leading-glyph strip
+    is anchored past leading whitespace as well as column 0.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 20:00:00 +0200
+
 hifiberry-configurator (2.15.6) stable; urgency=medium
 
   * config-supportinfo: query the player user's systemd --user instance for

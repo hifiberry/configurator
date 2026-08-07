@@ -477,6 +477,23 @@ def test_collect_services_strips_the_systemctl_status_glyph():
     assert "enabled: enabled" in line
 
 
+def test_collect_services_strips_a_status_glyph_with_leading_whitespace():
+    # Same bug class as the unanchored-past-whitespace case: real hardware
+    # puts the glyph at column 0, but the parser must not depend on that.
+    units_stdout = "  ● shairport-sync.service not-found inactive dead"
+    files_stdout = "shairport-sync.service enabled enabled"
+    with _disable_user_scope(), patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(units_stdout=units_stdout, files_stdout=files_stdout),
+    ):
+        result = supportinfo.collect_services()
+
+    assert "●" not in result
+    line = _row_for(result, "shairport-sync.service")
+    assert "not-found" in line
+    assert "enabled: enabled" in line
+
+
 def test_collect_services_unit_missing_running_state_still_occupies_its_columns():
     # hifiberry-raat.service only appears in list-unit-files (a static unit
     # with no loaded instance) -- it must still render the same number of
@@ -520,9 +537,11 @@ def test_collect_services_unit_missing_running_state_still_occupies_its_columns(
 
 def test_detect_player_user_reads_the_hifiberry_user_file():
     with patch.object(supportinfo, "_read_hifiberry_user_file", return_value="matuschd"):
-        user, reason = supportinfo._detect_player_user()
+        user, source = supportinfo._detect_player_user()
     assert user == "matuschd"
-    assert reason is None
+    # The source names *how* detection happened, not the username -- see
+    # the privacy tests below.
+    assert source == "from /etc/hifiberry.user"
 
 
 def test_detect_player_user_falls_back_to_the_linger_directory():
@@ -532,9 +551,9 @@ def test_detect_player_user_falls_back_to_the_linger_directory():
     # single lingering user is the next best signal.
     with patch.object(supportinfo, "_read_hifiberry_user_file", side_effect=OSError("no such file")), \
          patch.object(supportinfo, "_list_linger_users", return_value=["matuschd"]):
-        user, reason = supportinfo._detect_player_user()
+        user, source = supportinfo._detect_player_user()
     assert user == "matuschd"
-    assert reason is None
+    assert source == "from linger (single account)"
 
 
 def test_detect_player_user_reports_unavailable_when_neither_source_resolves():
@@ -556,10 +575,48 @@ def test_detect_player_user_reports_unavailable_when_linger_is_ambiguous():
         user, reason = supportinfo._detect_player_user()
     assert user is None
     assert "ambiguous" in reason
+    # The candidate names themselves must not leak into the report either.
+    assert "alice" not in reason and "bob" not in reason
+
+
+def test_read_hifiberry_user_file_skips_blank_and_comment_lines():
+    fake_lines = ["# the player user\n", "\n", "matuschd\n"]
+    with patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value = fake_lines
+        name = supportinfo._read_hifiberry_user_file()
+    assert name == "matuschd"
+
+
+def test_read_hifiberry_user_file_falls_through_on_a_comment_only_file():
+    # Real bug: a comment-only file used to return "# the player user"
+    # verbatim as the username, producing a bogus --machine target and an
+    # unavailable user scope instead of correctly falling through to the
+    # linger directory.
+    fake_lines = ["# the player user\n", "\n"]
+    with patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value = fake_lines
+        name = supportinfo._read_hifiberry_user_file()
+    assert name == ""
+
+
+def test_read_hifiberry_user_file_falls_through_on_an_invalid_username():
+    fake_lines = ["this is not a username\n"]
+    with patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value = fake_lines
+        name = supportinfo._read_hifiberry_user_file()
+    assert name == ""
+
+
+def test_detect_player_user_falls_back_to_linger_on_a_comment_only_file():
+    with patch.object(supportinfo, "_read_hifiberry_user_file", return_value=""), \
+         patch.object(supportinfo, "_list_linger_users", return_value=["matuschd"]):
+        user, source = supportinfo._detect_player_user()
+    assert user == "matuschd"
+    assert source == "from linger (single account)"
 
 
 def test_collect_user_services_uses_plain_user_flag_when_already_that_user():
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="matuschd"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              user_units_stdout="mpd.service loaded active running",
@@ -576,7 +633,7 @@ def test_collect_user_services_uses_plain_user_flag_when_already_that_user():
 
 
 def test_collect_user_services_uses_machine_flag_when_a_different_user():
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="root"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              user_units_stdout="mpd.service loaded active running",
@@ -597,7 +654,7 @@ def test_collect_services_distinguishes_same_named_units_by_scope():
     # mpd.service that doesn't exist, and a user-scope mpd.service that is
     # installed, enabled and running. Both must render, distinctly, rather
     # than one clobbering the other.
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="root"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              units_stdout="● mpd.service not-found inactive dead",
@@ -607,7 +664,7 @@ def test_collect_services_distinguishes_same_named_units_by_scope():
          )):
         result = supportinfo.collect_services()
 
-    header, *rows = result.splitlines()
+    _, rows = _header_and_rows(result)
     mpd_rows = [r for r in rows if _columns(r)[1] == "mpd.service"]
     # The system-scope not-found/not-found mpd.service is suppressed as
     # noise (same rule as before); only the real, running user unit shows.
@@ -621,7 +678,7 @@ def test_collect_services_distinguishes_same_named_units_by_scope():
 def test_collect_services_shows_both_scopes_of_a_genuinely_colliding_unit():
     # Same unit name present -- and *not* suppressed -- in both scopes at
     # once: both rows must survive, tagged distinctly, never merged.
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="root"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              units_stdout="mpd.service loaded active running",
@@ -631,7 +688,7 @@ def test_collect_services_shows_both_scopes_of_a_genuinely_colliding_unit():
          )):
         result = supportinfo.collect_services()
 
-    header, *rows = result.splitlines()
+    _, rows = _header_and_rows(result)
     mpd_rows = [r for r in rows if _columns(r)[1] == "mpd.service"]
     assert len(mpd_rows) == 2
     scopes = {_columns(r)[0] for r in mpd_rows}
@@ -639,7 +696,7 @@ def test_collect_services_shows_both_scopes_of_a_genuinely_colliding_unit():
 
 
 def test_collect_services_reports_unreachable_user_instance_without_dropping_the_system_half():
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="root"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              units_stdout="config-server.service loaded active running",
@@ -675,7 +732,7 @@ def test_collect_services_reports_missing_player_user_without_being_fatal():
 
 
 def test_collect_services_alignment_holds_across_mixed_scope_rows():
-    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", None)), \
+    with patch.object(supportinfo, "_detect_player_user", return_value=("matuschd", "from /etc/hifiberry.user")), \
          patch.object(supportinfo, "_current_user", return_value="root"), \
          patch("subprocess.run", side_effect=_systemctl_side_effect(
              units_stdout="\n".join([
@@ -699,12 +756,114 @@ def test_collect_services_alignment_holds_across_mixed_scope_rows():
          )):
         result = supportinfo.collect_services()
 
-    lines = result.splitlines()
-    assert len(lines) == 6  # header + 2 system rows + 3 user rows
-    column_counts = {len(_columns(line)) for line in lines}
-    assert len(column_counts) == 1, f"ragged columns: {lines}"
-    header, *rows = lines
-    enabled_offsets = {line.index("ENABLED" if line is header else "[enabled:") for line in lines}
+    header, rows = _header_and_rows(result)
+    assert len(rows) == 5  # 2 system rows + 3 user rows
+    table_lines = [header] + rows
+    column_counts = {len(_columns(line)) for line in table_lines}
+    assert len(column_counts) == 1, f"ragged columns: {table_lines}"
+    enabled_offsets = {
+        line.index("ENABLED" if line is header else "[enabled:")
+        for line in table_lines
+    }
     assert len(enabled_offsets) == 1, f"misaligned ENABLED column: {result}"
     scopes = {_columns(r)[0] for r in rows}
     assert scopes == {"system", "user"}
+    # And the note above the table names the detection source, not the
+    # account itself.
+    assert "(user scope: from /etc/hifiberry.user)" in result
+    assert "matuschd" not in result
+
+
+# --- Privacy: the detection is auditable, the username is not ----------
+#
+# A reviewer noted the report never said which account got queried, so a
+# wrong guess would be undetectable -- but the username itself must never
+# appear either: it is a real person's login name on every device seen so
+# far, the same reason the hostname is already left out, and this report
+# is meant to be pasted into a public issue. The fix names the *source* of
+# the detection (which file/heuristic found it), not its result.
+
+
+def test_collect_services_notes_the_file_detection_source():
+    with patch.object(supportinfo, "_detect_player_user", return_value=("realname", "from /etc/hifiberry.user")), \
+         patch.object(supportinfo, "_current_user", return_value="root"), \
+         patch("subprocess.run", side_effect=_systemctl_side_effect(
+             units_stdout="", files_stdout="",
+             user_units_stdout="mpd.service loaded active running",
+             user_files_stdout="mpd.service enabled enabled",
+         )):
+        result = supportinfo.collect_services()
+    assert "(user scope: from /etc/hifiberry.user)" in result
+    assert "realname" not in result
+
+
+def test_collect_services_notes_the_linger_detection_source():
+    with patch.object(supportinfo, "_detect_player_user", return_value=("realname", "from linger (single account)")), \
+         patch.object(supportinfo, "_current_user", return_value="root"), \
+         patch("subprocess.run", side_effect=_systemctl_side_effect(
+             units_stdout="", files_stdout="",
+             user_units_stdout="mpd.service loaded active running",
+             user_files_stdout="mpd.service enabled enabled",
+         )):
+        result = supportinfo.collect_services()
+    assert "(user scope: from linger (single account))" in result
+    assert "realname" not in result
+
+
+def test_collect_services_notes_the_ambiguous_detection_failure():
+    with patch.object(
+        supportinfo, "_detect_player_user",
+        return_value=(None, "ambiguous player user: 2 lingering users found, none chosen"),
+    ), patch("subprocess.run", side_effect=_systemctl_side_effect(units_stdout="", files_stdout="")):
+        result = supportinfo.collect_services()
+    assert "(user services unavailable: ambiguous player user:" in result
+    assert "none chosen" in result
+
+
+def test_collect_services_notes_the_no_user_found_detection_failure():
+    with patch.object(
+        supportinfo, "_detect_player_user",
+        return_value=(None, "no player user found (/etc/hifiberry.user missing and no lingering user in /var/lib/systemd/linger/)"),
+    ), patch("subprocess.run", side_effect=_systemctl_side_effect(units_stdout="", files_stdout="")):
+        result = supportinfo.collect_services()
+    assert "(user services unavailable: no player user found" in result
+
+
+def test_collect_services_never_prints_the_player_username():
+    # The property the coordinator asked to depend on, exercised across a
+    # realistic run: the account is found (via the file), used to build a
+    # --machine target, and successfully queried -- the only place a real
+    # username could leak into the report.
+    with patch.object(supportinfo, "_detect_player_user", return_value=("mrsmith", "from /etc/hifiberry.user")), \
+         patch.object(supportinfo, "_current_user", return_value="root"), \
+         patch("subprocess.run", side_effect=_systemctl_side_effect(
+             units_stdout="config-server.service loaded active running",
+             files_stdout="config-server.service enabled enabled",
+             user_units_stdout="mpd.service loaded active running",
+             user_files_stdout="mpd.service enabled enabled",
+         )):
+        result = supportinfo.collect_services()
+    assert "mrsmith" not in result
+    assert "config-server.service" in result and "mpd.service" in result
+
+
+def test_collect_services_scrubs_the_username_from_a_machine_connection_failure():
+    # systemctl's own failure text for --machine=<user>@.host routinely
+    # echoes the machine spec back (e.g. "Failed to connect to machine
+    # mrsmith@.host: Host is down") -- that text flows straight into a
+    # "(command failed: ...)" note via _run(), which is not otherwise
+    # redacted (redact_secrets targets credentials, not usernames). The
+    # username must not survive into the rendered report through that path
+    # either.
+    with patch.object(supportinfo, "_detect_player_user", return_value=("mrsmith", "from /etc/hifiberry.user")), \
+         patch.object(supportinfo, "_current_user", return_value="root"), \
+         patch("subprocess.run", side_effect=_systemctl_side_effect(
+             units_stdout="config-server.service loaded active running",
+             files_stdout="config-server.service enabled enabled",
+             user_units_result=_failed("Failed to connect to machine mrsmith@.host: Host is down"),
+             user_files_result=_failed("Failed to connect to machine mrsmith@.host: Host is down"),
+         )):
+        result = supportinfo.collect_services()
+    assert "mrsmith" not in result
+    assert "Host is down" in result  # the rest of the failure reason survives
+    assert "user running state unavailable" in result

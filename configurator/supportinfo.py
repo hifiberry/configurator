@@ -353,8 +353,12 @@ _NO_VALUE = "-"
 # header/footer. Left in place it becomes the first whitespace-split token,
 # which shifts every following field over by one and corrupts the unit name
 # used as this row's dict key. Stripped unconditionally before parsing; a
-# normal line has nothing here to strip.
-_LEADING_GLYPH = re.compile(r"^[^\w\s]+\s+")
+# normal line has nothing here to strip. The `\s*` allows for leading
+# indentation ahead of the glyph itself -- real hardware puts the glyph at
+# column 0, but nothing about the format guarantees that, and the
+# unanchored version silently mis-parsed an indented glyph the same way
+# the unstripped glyph itself once did.
+_LEADING_GLYPH = re.compile(r"^\s*[^\w\s]+\s+")
 
 
 def _parse_list_units(raw: str) -> dict:
@@ -509,14 +513,32 @@ def _service_rows_for_scope(scope: str, units_raw: str, files_raw: str) -> tuple
 # and actively playing.
 
 
+# Conservative: a valid Linux username, nothing else. Anything that does
+# not match -- a comment, a blank line, an accidental sentence -- must
+# fall through to the linger-directory fallback rather than being used
+# verbatim as a --machine=<name>@.host target.
+_PLAYER_USERNAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+
+
 def _read_hifiberry_user_file() -> str:
     """Indirection so tests can replace the filesystem lookup.
 
     /etc/hifiberry.user is a single line holding the player username, when
-    present. Root-owned, world-readable.
+    present. Root-owned, world-readable. Blank lines and "#"-prefixed
+    comments are skipped; the first remaining line is used only if it
+    looks like a real username (_PLAYER_USERNAME_RE) -- a comment-only or
+    otherwise malformed file (e.g. just "# the player user") must not
+    produce a bogus username, since that would build a broken --machine
+    target and report the user scope unavailable instead of correctly
+    falling through to the linger directory.
     """
     with open("/etc/hifiberry.user") as f:
-        return f.readline().strip()
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            return line if _PLAYER_USERNAME_RE.match(line) else ""
+    return ""
 
 
 def _list_linger_users() -> list:
@@ -533,23 +555,31 @@ def _list_linger_users() -> list:
 def _detect_player_user() -> tuple:
     """Find the username the player daemons' systemd --user instance runs as.
 
-    /etc/hifiberry.user is the primary source. Older images may not carry
-    it, so the fallback is whoever has systemd linger enabled: the player
-    user must have it (its user services could not otherwise survive a
-    reboot without an interactive login), and on a HiFiBerryOS install it
-    is normally the only lingering user. If neither source resolves to
+    /etc/hifiberry.user is the primary source and wins unconditionally when
+    it resolves to a valid name -- the linger fallback below is never even
+    consulted in that case. Older images may not carry the file (or it may
+    be empty/comment-only/malformed, see _read_hifiberry_user_file), so the
+    fallback is whoever has systemd linger enabled: the player user must
+    have it (its user services could not otherwise survive a reboot
+    without an interactive login), and on a HiFiBerryOS install it is
+    normally the only lingering user. If neither source resolves to
     exactly one name, no username is guessed -- the caller reports the
     user scope as unavailable, with the reason returned here, rather than
     silently querying the wrong account or none at all.
 
-    Returns (username, None) on success, or (None, reason) on failure.
+    Returns (username, source) on success -- source names *how* the user
+    was found (e.g. "from /etc/hifiberry.user"), not the username itself,
+    so a maintainer can audit the detection in a public bug report without
+    the report ever containing what is, on every device seen so far, a
+    person's real login name. Returns (None, reason) on failure, reason
+    being a human-readable explanation.
     """
     try:
         name = _read_hifiberry_user_file()
     except OSError:
         name = ""
     if name:
-        return name, None
+        return name, "from /etc/hifiberry.user"
 
     try:
         entries = [u for u in _list_linger_users() if not u.startswith(".")]
@@ -557,15 +587,15 @@ def _detect_player_user() -> tuple:
         entries = []
 
     if len(entries) == 1:
-        return entries[0], None
+        return entries[0], "from linger (single account)"
     if not entries:
         return None, (
             "no player user found (/etc/hifiberry.user missing and no "
             "lingering user in /var/lib/systemd/linger/)"
         )
     return None, (
-        "ambiguous player user: multiple lingering users ("
-        + ", ".join(entries) + ")"
+        f"ambiguous player user: {len(entries)} lingering users found, "
+        "none chosen"
     )
 
 
@@ -575,6 +605,27 @@ def _current_user() -> str:
         return getpass.getuser()
     except OSError:
         return ""
+
+
+def _scrub_username(text: str, player_user: str) -> str:
+    """Strip the player username back out of raw systemctl output.
+
+    `--machine=<player_user>@.host` is passed on the command line, and a
+    connection failure (unreachable machine, no such user, ...) routinely
+    echoes it straight back in stderr -- which _run() then folds into a
+    "(command failed: ...)" note. That note reaches the rendered report
+    unredacted (redact_secrets targets credentials, not usernames), so
+    without this the same real login name _detect_player_user's source
+    string was deliberately built to avoid printing could still leak
+    through a failure message. Applied to both list-units and
+    list-unit-files output for the user scope, successful or not; a
+    literal username never legitimately appears in either.
+    """
+    if not player_user:
+        return text
+    return text.replace(f"{player_user}@.host", "<player>@.host").replace(
+        player_user, "<player>"
+    )
 
 
 def _collect_user_service_rows() -> tuple:
@@ -592,27 +643,42 @@ def _collect_user_service_rows() -> tuple:
     and one explanatory note rather than raising: a report with an
     "unavailable" line and an otherwise complete system-scope section is
     far more useful than one that aborts before it can print anything.
+
+    A successful detection is also noted, naming *how* the user was found
+    (_detect_player_user's source string) rather than the username itself
+    -- so a maintainer can tell a file-based detection from a linger guess
+    and spot a wrong one, without the report ever containing what is, on
+    every device seen so far, a person's real login name.
     """
-    player_user, reason = _detect_player_user()
+    player_user, source = _detect_player_user()
     if player_user is None:
-        return [], [f"(user services unavailable: {reason})"]
+        return [], [f"(user services unavailable: {source})"]
+
+    notes = [f"(user scope: {source})"]
 
     machine = (
         [] if _current_user() == player_user
         else [f"--machine={player_user}@.host"]
     )
 
-    units_raw = _run(
-        ["systemctl", "--user"] + machine
-        + ["list-units", "--all", "--no-legend", "--no-pager"]
-        + SERVICE_PATTERNS
+    units_raw = _scrub_username(
+        _run(
+            ["systemctl", "--user"] + machine
+            + ["list-units", "--all", "--no-legend", "--no-pager"]
+            + SERVICE_PATTERNS
+        ),
+        player_user,
     )
-    files_raw = _run(
-        ["systemctl", "--user"] + machine
-        + ["list-unit-files", "--no-legend", "--no-pager"]
-        + SERVICE_PATTERNS
+    files_raw = _scrub_username(
+        _run(
+            ["systemctl", "--user"] + machine
+            + ["list-unit-files", "--no-legend", "--no-pager"]
+            + SERVICE_PATTERNS
+        ),
+        player_user,
     )
-    return _service_rows_for_scope("user", units_raw, files_raw)
+    rows, scope_notes = _service_rows_for_scope("user", units_raw, files_raw)
+    return rows, notes + scope_notes
 
 
 def collect_services() -> str:
