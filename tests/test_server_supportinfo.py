@@ -48,19 +48,22 @@ def test_supportinfo_failure_returns_500_without_leaking_details(client):
     assert "secret-path" not in body
 
 
-def test_supportinfo_endpoint_silences_collector_logging_during_collection(client):
+def test_supportinfo_endpoint_silences_collector_logging_during_collection(client, caplog):
     """setup_logging() is what keeps the CLI quiet; the endpoint does not
     call it (it must not permanently touch config-server's own logging --
     see the next test), so it needs its own, scoped way to silence the
     collectors' WARNING/ERROR noise for just this request. Simulates a
-    collector emitting a WARNING mid-collection and asserts the root
-    logger's effective level was raised enough to suppress it at the point
-    of the call.
+    collector emitting a WARNING mid-collection and asserts it never
+    reaches a handler at all.
+
+    quiet_collectors() is thread-scoped (see
+    tests/test_supportinfo_quiet_collectors_concurrency.py for the
+    dedicated concurrency coverage); this test just confirms the endpoint
+    actually invokes it around collection.
     """
-    seen_level = {}
+    caplog.set_level(logging.WARNING)
 
     def fake_build_report(*_a, **_kw):
-        seen_level["effective"] = logging.getLogger().getEffectiveLevel()
         logging.getLogger("configurator.systeminfo").warning(
             "collector noise that must not reach config-server's journal"
         )
@@ -71,7 +74,7 @@ def test_supportinfo_endpoint_silences_collector_logging_during_collection(clien
         response = client.get("/api/v1/supportinfo")
 
     assert response.status_code == 200
-    assert seen_level["effective"] >= logging.CRITICAL
+    assert "collector noise that must not reach config-server's journal" not in caplog.text
 
 
 def test_supportinfo_request_does_not_permanently_silence_other_routes(server, client, caplog):
@@ -80,7 +83,8 @@ def test_supportinfo_request_does_not_permanently_silence_other_routes(server, c
     every route that runs after it. Exercises supportinfo once (with a
     collector that logs, same as above), then hits a neighbouring route
     (systeminfo) that fails and logs its own error, and asserts that error
-    is still captured -- proving the root logger's level was restored.
+    is still captured -- proving the suppression did not outlive the
+    request that triggered it.
     """
     def fake_build_report(*_a, **_kw):
         logging.getLogger("configurator.systeminfo").warning("noise during supportinfo")

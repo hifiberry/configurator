@@ -275,8 +275,8 @@ class ConfigAPIServer:
             try:
                 # The CLI silences the collectors' own WARNING/ERROR logging
                 # via setup_logging(); this route needs the same quiet, but
-                # scoped to this one request instead of config-server's whole
-                # process -- see quiet_collectors().
+                # scoped to this one request's thread instead of
+                # config-server's whole process -- see quiet_collectors().
                 with supportinfo.quiet_collectors():
                     text = supportinfo.render_text(supportinfo.build_report())
             except Exception as e:
