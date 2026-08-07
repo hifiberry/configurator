@@ -332,12 +332,122 @@ def collect_packages() -> str:
     return "\n".join(kept)
 
 
+# Marker _run() puts at the start of every failure string it returns,
+# whatever the underlying reason. Used here to tell "the command ran and
+# told us this unit doesn't exist" apart from "we don't know, the command
+# didn't run" -- the two must not be treated the same when deciding what to
+# suppress (see _merge_service_states).
+_COMMAND_FAILED_PREFIX = "(command failed:"
+
+
+def _parse_list_units(raw: str) -> dict:
+    """Parse `systemctl list-units` output into {unit: "load active sub"}.
+
+    Each line is "UNIT LOAD ACTIVE SUB DESCRIPTION"; DESCRIPTION may itself
+    contain spaces (or be absent, e.g. for a "not-found" row), so only the
+    first four fields are taken. A line with fewer than four fields is not
+    a unit row -- it is skipped rather than raising, since a failed command
+    is handled by the caller before this is ever called on its output.
+    """
+    states = {}
+    for line in raw.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 4:
+            continue
+        unit, load, active, sub = parts[:4]
+        states[unit] = f"{load} {active} {sub}"
+    return states
+
+
+def _parse_list_unit_files(raw: str) -> dict:
+    """Parse `systemctl list-unit-files` output into {unit: enable_state}.
+
+    Each line is "UNIT FILE STATE", optionally followed by a VENDOR PRESET
+    column on newer systemd -- only the first two fields are read, so both
+    shapes work.
+    """
+    states = {}
+    for line in raw.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        unit, state = parts[0], parts[1]
+        states[unit] = state
+    return states
+
+
+def _merge_service_states(units_raw: str, files_raw: str) -> str:
+    """Combine running state and enabled state into one row per unit.
+
+    `systemctl list-units` answers "is it running now"; `list-unit-files`
+    answers "will it start on the next boot". A report that only carries
+    the former is exactly the gap this exists to close -- "player works
+    until I reboot, then it doesn't" is settled by the enabled state, not
+    by whatever happens to be running at the moment someone runs
+    config-supportinfo. The two are merged into one row per unit, not two
+    separate sections, so a maintainer reading the report never has to
+    cross-reference a unit name between them to answer both questions.
+
+    Units that are neither installed nor enabled are dropped. SERVICE_PATTERNS
+    matches every player this project supports, and most systems have only
+    one or two of them installed; a "not-found"/"not-found" row for each of
+    the rest would bury the units that actually matter under noise nobody
+    reads. This suppression only fires when *both* commands succeeded and
+    *both* agree the unit is absent -- a command failure must never be
+    read as "not installed", so a unit is kept (with "unknown" in place of
+    whichever half failed) whenever either query could not run.
+    """
+    units_failed = units_raw.startswith(_COMMAND_FAILED_PREFIX)
+    files_failed = files_raw.startswith(_COMMAND_FAILED_PREFIX)
+
+    running = {} if units_failed else _parse_list_units(units_raw)
+    enabled = {} if files_failed else _parse_list_unit_files(files_raw)
+
+    rows = []
+    for unit in sorted(set(running) | set(enabled)):
+        run_state = running.get(unit)
+        if run_state is None:
+            run_state = "unknown" if units_failed else "not-found"
+        enable_state = enabled.get(unit)
+        if enable_state is None:
+            enable_state = "unknown" if files_failed else "not-found"
+
+        if not units_failed and not files_failed:
+            load_state = run_state.split(" ", 1)[0]
+            if load_state == "not-found" and enable_state == "not-found":
+                continue
+
+        rows.append(f"{unit} {run_state} [enabled: {enable_state}]")
+
+    lines = []
+    if units_failed:
+        lines.append(f"(running state unavailable: {units_raw})")
+    if files_failed:
+        lines.append(f"(enabled state unavailable: {files_raw})")
+    if rows:
+        lines.append("UNIT LOAD ACTIVE SUB ENABLED")
+        lines.extend(rows)
+    return "\n".join(lines)
+
+
 def collect_services() -> str:
-    """State of the audio-related systemd units."""
-    return _run(
+    """Running and enabled state of the audio-related systemd units.
+
+    Two systemctl calls are needed because they report different things --
+    see _merge_service_states for why they are combined into one row per
+    unit rather than kept as separate sections. Each call goes through
+    _run independently, so one failing (e.g. systemctl missing entirely)
+    still leaves the other half of the picture intact.
+    """
+    units_raw = _run(
         ["systemctl", "list-units", "--all", "--no-legend", "--no-pager"]
         + SERVICE_PATTERNS
     )
+    files_raw = _run(
+        ["systemctl", "list-unit-files", "--no-legend", "--no-pager"]
+        + SERVICE_PATTERNS
+    )
+    return _merge_service_states(units_raw, files_raw)
 
 
 # journalctl's default output starts every line with a timestamp

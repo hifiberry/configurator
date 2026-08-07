@@ -175,3 +175,170 @@ def test_service_patterns_cover_the_units_missing_from_the_original_list():
         "sambamount*",
     ):
         assert pattern in supportinfo.SERVICE_PATTERNS
+
+
+# --- Enabled state (systemctl list-unit-files) --------------------------
+#
+# collect_services() used to report only whether a unit was running right
+# now (systemctl list-units). It did not say whether the unit would start
+# again after a reboot -- the "player works until I reboot, then it
+# doesn't" report is settled by the enabled state, not by what happens to
+# be running at the moment someone runs config-supportinfo. These tests
+# cover the merged output: both systemctl calls fire with the right
+# arguments, running and enabled state land in the same row, an
+# enabled-but-not-running unit and a running-but-disabled unit are both
+# shown (they are real, distinct diagnostic situations), noise from units
+# that are neither installed nor enabled is dropped, and a failing
+# list-unit-files call leaves the running-state half of the report intact.
+
+
+def _systemctl_side_effect(units_stdout=None, units_result=None,
+                            files_stdout=None, files_result=None):
+    """subprocess.run side_effect that tells list-units and list-unit-files apart."""
+
+    def run(cmd, **kwargs):
+        if cmd[1] == "list-units":
+            if units_result is not None:
+                return units_result
+            return _completed(units_stdout or "")
+        assert cmd[1] == "list-unit-files"
+        if files_result is not None:
+            return files_result
+        return _completed(files_stdout or "")
+
+    return run
+
+
+def test_collect_services_queries_both_list_units_and_list_unit_files():
+    with patch(
+        "subprocess.run", side_effect=_systemctl_side_effect()
+    ) as run:
+        supportinfo.collect_services()
+    assert run.call_count == 2
+    commands = [call.args[0] for call in run.call_args_list]
+
+    units_cmd = next(c for c in commands if c[1] == "list-units")
+    assert units_cmd[0] == "systemctl"
+    assert "--all" in units_cmd
+    assert "--no-legend" in units_cmd
+    assert "--no-pager" in units_cmd
+    assert "mpd*" in units_cmd
+
+    files_cmd = next(c for c in commands if c[1] == "list-unit-files")
+    assert files_cmd[0] == "systemctl"
+    assert "--no-legend" in files_cmd
+    assert "--no-pager" in files_cmd
+    assert "mpd*" in files_cmd
+    # list-unit-files has no running units to enumerate, so it takes no --all
+    assert "--all" not in files_cmd
+
+
+def test_collect_services_merges_running_and_enabled_state_in_one_row():
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_stdout="mpd.service loaded active running Music Player Daemon",
+            files_stdout="mpd.service enabled enabled",
+        ),
+    ):
+        result = supportinfo.collect_services()
+    lines = [l for l in result.splitlines() if l.startswith("mpd.service")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "loaded" in line and "active" in line and "running" in line
+    assert "enabled" in line
+
+
+def test_collect_services_shows_an_enabled_but_not_running_unit():
+    # Real diagnostic situation: the unit will start on the next boot but
+    # is not running right now (crashed, never started this session, ...).
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_stdout="shairport-sync.service loaded inactive dead",
+            files_stdout="shairport-sync.service enabled enabled",
+        ),
+    ):
+        result = supportinfo.collect_services()
+    line = next(l for l in result.splitlines() if l.startswith("shairport-sync.service"))
+    assert "inactive" in line
+    assert "enabled: enabled" in line
+
+
+def test_collect_services_shows_a_running_but_disabled_unit():
+    # Real diagnostic situation: works today, will not come back after a
+    # reboot -- exactly the report this feature exists to settle.
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_stdout="mpd.service loaded active running",
+            files_stdout="mpd.service disabled disabled",
+        ),
+    ):
+        result = supportinfo.collect_services()
+    line = next(l for l in result.splitlines() if l.startswith("mpd.service"))
+    assert "active" in line and "running" in line
+    assert "enabled: disabled" in line
+
+
+def test_collect_services_drops_units_neither_installed_nor_enabled():
+    # squeezelite is a SERVICE_PATTERNS entry but is not installed on most
+    # systems -- systemctl reports it "not-found" in both calls, and that
+    # combination must not survive into the report as noise.
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_stdout=(
+                "mpd.service loaded active running\n"
+                "squeezelite.service not-found inactive dead"
+            ),
+            files_stdout="mpd.service enabled enabled",
+        ),
+    ):
+        result = supportinfo.collect_services()
+    assert "squeezelite" not in result
+    assert "mpd.service" in result
+
+
+def test_collect_services_keeps_running_state_when_list_unit_files_fails():
+    # _run() reports failures as strings rather than raising; a missing or
+    # failing systemctl on one call must not blank out the other half of
+    # the report.
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_stdout="mpd.service loaded active running",
+            files_result=_failed("systemctl: command not found"),
+        ),
+    ):
+        result = supportinfo.collect_services()
+    assert "mpd.service" in result
+    assert "active" in result and "running" in result
+    assert "enabled: unknown" in result
+    assert "enabled state unavailable" in result
+
+
+def test_collect_services_keeps_enabled_state_when_list_units_fails():
+    with patch(
+        "subprocess.run",
+        side_effect=_systemctl_side_effect(
+            units_result=_failed("Failed to list units: access denied"),
+            files_stdout="mpd.service enabled enabled",
+        ),
+    ):
+        result = supportinfo.collect_services()
+    assert "mpd.service" in result
+    assert "enabled: enabled" in result
+    assert "unknown" in result
+    assert "running state unavailable" in result
+
+
+def test_merge_service_states_never_treats_a_failure_as_not_found():
+    # Direct check on the merge function: even if both calls fail, no unit
+    # can be reported as "not-found" from that -- there is simply no data.
+    result = supportinfo._merge_service_states(
+        "(command failed: no systemctl)", "(command failed: no systemctl)"
+    )
+    assert "not-found" not in result
+    assert "running state unavailable" in result
+    assert "enabled state unavailable" in result
