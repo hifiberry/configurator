@@ -1,3 +1,21 @@
+hifiberry-configurator (2.15.8) stable; urgency=medium
+
+  * config-supportinfo: move the "Recent errors" repeat-count marker
+    ("(xN)") from the end of a deduplicated journal line to the start.
+    This is a readability fix -- markers are right-aligned to a common
+    width and unrepeated lines are indented to match, so timestamps stay
+    in one column instead of going ragged -- but it also fixes a real
+    loss of information: redact_secrets()'s Authorization-header pattern
+    is deliberately greedy from the auth scheme to end of line (a
+    credential can contain almost any character), so a trailing count on
+    a redacted auth-failure line used to fall inside the redacted span
+    and disappear, silently turning "this failed 37 times" back into
+    "this failed" for exactly the lines where the repeat count matters
+    most. A leading marker sits ahead of anything redaction touches, so
+    it survives structurally.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 16:00:00 +0200
+
 hifiberry-configurator (2.15.7) stable; urgency=medium
 
   * config-supportinfo: review fixes for the player-user Services query
