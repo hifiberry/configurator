@@ -238,6 +238,76 @@ def test_truncated_block_does_not_reach_into_a_later_block():
     assert "Kernel: 6.6.31" in result
 
 
+def test_truncated_pem_block_with_short_log_prefix_is_redacted():
+    # Round 5: a prefix with only two fields before the colon (classic
+    # syslog, "host sshd: ") used to leave the payload unrecognised, so the
+    # walk stopped at the first body line of a truncated block and emitted
+    # the whole key verbatim.
+    report = (
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        "host sshd: MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz\n"
+        "host sshd: MIIEpAIBAAKCAQEA0987654321zyxwvutsrqponmlkjihgfedcbaAB\n"
+        "Kernel: 6.6.31"
+    )
+    result = redact_secrets(report)
+    assert "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz" not in result
+    assert "MIIEpAIBAAKCAQEA0987654321zyxwvutsrqponmlkjihgfedcbaAB" not in result
+    assert result.count(REDACTED) == 2
+    assert "Kernel: 6.6.31" in result
+
+
+def test_truncated_pem_block_with_short_iso_journal_prefix_is_redacted():
+    # Round 5: "journalctl -o short-iso --no-hostname" drops the hostname,
+    # leaving two fields before the colon.
+    prefix = "2026-08-07T10:00:01+0200 sshd[123]: "
+    report = "\n".join(
+        [
+            prefix + "-----BEGIN OPENSSH PRIVATE KEY-----",
+            prefix + "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAA",
+            prefix + "c2gtZWQyNTUxOQAAACDkZXlkZWFkYmVlZmRlYWRiZWVmZGVhZGJlZWZkZWFk",
+            "Sound Card: DAC2 HD",
+        ]
+    )
+    result = redact_secrets(report)
+    assert "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAA" not in result
+    assert "c2gtZWQyNTUxOQAAACDkZXlkZWFkYmVlZmRlYWRiZWVmZGVhZGJlZWZkZWFk" not in result
+    assert prefix + REDACTED in result
+    assert result.endswith("Sound Card: DAC2 HD")
+
+
+def test_line_count_is_never_changed():
+    # The invariant the whole PEM design rests on: one input line produces
+    # exactly one output line, so redaction can never delete report content.
+    reports = [
+        "Sound Card: DAC2 HD\nKernel: 6.6.31\nUptime: 3 days",
+        (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnop\n"
+            "-----END RSA PRIVATE KEY-----\n"
+            "Kernel: 6.6.31"
+        ),
+        (
+            "host sshd: -----BEGIN RSA PRIVATE KEY-----\n"
+            "host sshd: MIIEpAIBAAKCAQEA1234567890abcdefghijklmnop\n"
+            "host sshd: MIIEpAIBAAKCAQEA0987654321zyxwvutsrqponmlk\n"
+            "\n"
+            "Sound Card: DAC2 HD\n"
+            "password=hunter2"
+        ),
+        (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            "Proc-Type: 4,ENCRYPTED\n"
+            "\n"
+            "MIIEpAIBAAKCAQEA1234567890abcdefghijklmnop\n"
+            "-----END RSA PRIVATE KEY-----\n"
+            "\n"
+            "Uptime: 3 days\n"
+        ),
+    ]
+    for report in reports:
+        assert len(redact_secrets(report).split("\n")) == len(report.split("\n"))
+
+
 def test_encrypted_pem_headers_do_not_end_the_block():
     # An encrypted PEM key carries RFC 1421 headers and a blank line before
     # the base64 body; neither may be mistaken for the end of the block.

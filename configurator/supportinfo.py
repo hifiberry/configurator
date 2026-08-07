@@ -45,10 +45,14 @@ _PEM_BEGIN = re.compile(r"(?i)-----BEGIN [^\n-]*PRIVATE KEY-----")
 _PEM_END = re.compile(r"(?i)-----END [^\n-]*PRIVATE KEY-----")
 
 # Leading noise on a line that cannot itself be key material: indentation
-# and/or a journalctl prefix. Demanding at least three whitespace-separated
-# fields before the colon keeps ordinary report lines ("Sound Card: DAC2
-# HD", "Uptime: 3 days") from being mistaken for prefixed lines.
-_LINE_PREFIX = re.compile(r"[ \t]*(?:(?:\S+[ \t]+){2,}\S*:[ \t]+)?")
+# and/or a log prefix. A prefix is simply "everything up to the last ': '",
+# with no assumption about how many fields it holds -- journalctl writes
+# anything from "sshd[123]: " to "Aug 07 10:00:01 host sshd[123]: "
+# depending on its output format and flags, and counting fields silently
+# missed the shorter ones. Base64 never contains a colon, so this can never
+# cut into key material; what it leaves is classified on its own merits
+# below.
+_LINE_PREFIX = re.compile(r"[ \t]*(?:.*:[ \t]+)?")
 
 # A PEM body line: base64 with padding only at the very end. Excluding "="
 # from the middle is what keeps "password=hunter2" from looking like key
@@ -72,20 +76,23 @@ def _redact_payload(line: str) -> str:
     return prefix + REDACTED if payload else line
 
 
-def _is_key_body(payload: str, seen_body: bool) -> bool:
-    """Does this payload still look like part of a PEM body?
+def _is_key_body(line: str, payload: str, seen_body: bool) -> bool:
+    """Does this line still look like part of a PEM body?
 
     Only consulted for a block with no END marker, where the body's extent
     has to be guessed. The guess errs towards stopping early for anything
     that does not look like key material, because the alternative is
     swallowing report content.
     """
+    # Searched in the whole line, not in the payload: a header's own colon
+    # is what _LINE_PREFIX strips off, and the header may itself be behind
+    # a log prefix.
+    if _PEM_HEADER.search(line):
+        return True
     if not payload:
         # The blank line separating encrypted-key headers from the body;
         # once the base64 body has started, a blank line ends the block.
         return not seen_body
-    if _PEM_HEADER.match(payload):
-        return True
     return _BASE64_LINE.fullmatch(payload) is not None
 
 
@@ -144,10 +151,10 @@ def _redact_pem_keys(text: str) -> str:
                 i += 1
                 break
             _, payload = _split_line(line)
-            if not terminated and not _is_key_body(payload, seen_body):
+            if not terminated and not _is_key_body(line, payload, seen_body):
                 break
             out.append(_redact_payload(line))
-            if payload and not _PEM_HEADER.match(payload):
+            if payload and not _PEM_HEADER.search(line):
                 seen_body = True
             i += 1
 
