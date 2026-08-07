@@ -1,3 +1,10 @@
+hifiberry-configurator (2.15.0) stable; urgency=medium
+
+  * Add config-supportinfo, which collects a redacted diagnostic report
+    for bug reports on GitHub.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 07 Aug 2026 12:00:00 +0200
+
 hifiberry-configurator (2.14.6) stable; urgency=medium
 
   * Player settings: add a 'number' type with min/max/step and range

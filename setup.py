@@ -53,7 +53,8 @@ setup(
             'man/config-volume.1',
             'man/config-wifi.1',
             'man/config-server.1',
-            'man/config-pipewire.1'
+            'man/config-pipewire.1',
+            'man/config-supportinfo.1'
         ]),
         ('/usr/share/man/man7', [
             'man/hifiberry-configurator.7',
@@ -81,6 +82,7 @@ setup(
             "config-server=configurator.server:main",
             "config-pipewire=configurator.pipewire:main",
             "config-ble-provision=configurator.ble_provisioning:main",
+            "config-supportinfo=configurator.supportinfo:main",
         ],
     },
     classifiers=[
