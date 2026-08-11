@@ -1,3 +1,21 @@
+hifiberry-configurator (2.15.12) stable; urgency=medium
+
+  * systemd: enable and disable user services in the system scope. The
+    packages enable their user units in /etc/systemd/user/*.wants, which
+    belongs to root, while these operations ran as the audio user through
+    'systemctl --user' -- that only manages the links below the user's home
+    directory. Disabling a player therefore reported success and stopped it,
+    but left it enabled, so it came back on the next reboot. Now handled with
+    'systemctl --global'; disabling also clears a leftover per-user link from
+    earlier versions. start/stop/status keep running as the user.
+  * config reset: also reset what lives outside the configuration database.
+    Every service the API may switch on and off is enabled again, undoing
+    players the user turned off, and the PipeWire module settings (speaker
+    EQ, volume limit, input processor) are reset through pipewire-api's new
+    /api/v1/settings/reset. Both best effort - neither can fail the reset.
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 11 Aug 2026 12:00:00 +0000
+
 hifiberry-configurator (2.15.11) stable; urgency=medium
 
   * server: fix a critical regression in the previous release's

@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.13.20**
+**Version 2.15.12**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -38,7 +38,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.13.20",
+  "version": "2.15.12",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -242,6 +242,47 @@ Delete a configuration key and its value.
 {
   "status": "success",
   "message": "Configuration key \"volume\" deleted successfully"
+}
+```
+
+#### `POST /api/v1/config/reset`
+
+Reset the system to factory defaults.
+
+Clears the configuration database. Because they survive a reboot on their own,
+the settings kept outside the database are reset as well:
+
+- every service at the `all` permission level is enabled again, undoing players
+  the user switched off (they start on the next boot);
+- the PipeWire module settings - speaker EQ, volume limit, input processor - are
+  set back to their defaults and their state file is removed, via
+  `POST /api/v1/settings/reset` on pipewire-api.
+
+Both are best effort: a service that fails to enable, or a device without
+pipewire-api, is reported in the response but does not fail the reset.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Configuration database cleared",
+  "data": {
+    "services": {
+      "status": "success",
+      "enabled": ["librespot", "mpd", "raat", "shairport", "squeezelite"],
+      "not_installed": [],
+      "failed": {}
+    },
+    "pipewire": {
+      "status": "success",
+      "response": {
+        "success": true,
+        "message": "Reset 1 module(s) to defaults",
+        "modules_reset": ["speakereq"],
+        "settings_removed": true
+      }
+    }
+  }
 }
 ```
 
@@ -2450,4 +2491,4 @@ Restore the previously stored headphone volume setting.
 
 ---
 
-*HiFiBerry Configuration API v2.13.20*
+*HiFiBerry Configuration API v2.15.12*

@@ -236,42 +236,76 @@ class SystemdServiceManager:
         cmd = [self.systemctl_cmd] + args
         return self._run_command(cmd)
     
+    def _run_global_cmd(self, args: List[str]) -> Tuple[bool, str, str]:
+        """Run a systemctl --global command as root.
+
+        User units are enabled system-wide, in /etc/systemd/user/*.wants, by the
+        packages that ship them. That directory belongs to root, while
+        'systemctl --user' running as the audio user only ever touches
+        ~/.config/systemd/user - it would report success and leave the unit
+        enabled at boot. Enabling and disabling therefore has to happen here.
+        """
+        cmd = [self.systemctl_cmd, "--global"] + args
+        return self._run_command(cmd)
+
+    def _reload_user_daemon(self, service_name: str) -> None:
+        """Make the running user manager pick up changed enablement links."""
+        success, _, stderr = self._run_service_cmd(["daemon-reload"], service_name)
+        if not success:
+            logger.debug(f"User daemon-reload after enablement change failed: {stderr}")
+
     def enable(self, service_name: str) -> Tuple[bool, str]:
         """
         Enable a systemd service
-        
+
         Args:
             service_name: Name of the service to enable
-            
+
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_service_cmd(["enable", service_name], service_name)
-        
+        if self._get_service_environment(service_name) == 'user':
+            success, stdout, stderr = self._run_global_cmd(["enable", service_name])
+            if success:
+                self._reload_user_daemon(service_name)
+        else:
+            success, stdout, stderr = self._run_service_cmd(["enable", service_name], service_name)
+
         if success:
             return True, f"Service '{service_name}' enabled successfully"
         else:
             error_msg = stderr if stderr else stdout
             return False, f"Failed to enable service '{service_name}': {error_msg}"
-    
+
     def disable(self, service_name: str) -> Tuple[bool, str]:
         """
         Disable a systemd service
-        
+
         Args:
             service_name: Name of the service to disable
-            
+
         Returns:
             Tuple of (success, message)
         """
-        success, stdout, stderr = self._run_service_cmd(["disable", service_name], service_name)
-        
+        if self._get_service_environment(service_name) == 'user':
+            success, stdout, stderr = self._run_global_cmd(["disable", service_name])
+            # Clear a per-user link too: earlier versions enabled user services
+            # through the user manager, which left one behind in the home
+            # directory. It would re-enable the unit on its own.
+            user_ok, _, user_err = self._run_service_cmd(["disable", service_name], service_name)
+            if not user_ok:
+                logger.debug(f"User-scope disable of '{service_name}' failed: {user_err}")
+            if success:
+                self._reload_user_daemon(service_name)
+        else:
+            success, stdout, stderr = self._run_service_cmd(["disable", service_name], service_name)
+
         if success:
             return True, f"Service '{service_name}' disabled successfully"
         else:
             error_msg = stderr if stderr else stdout
             return False, f"Failed to disable service '{service_name}': {error_msg}"
-    
+
     def enable_now(self, service_name: str) -> Tuple[bool, str]:
         """
         Enable and start a systemd service (equivalent to systemctl enable --now)

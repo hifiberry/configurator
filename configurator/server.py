@@ -31,6 +31,36 @@ from .settings_manager import SettingsManager
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# pipewire-api keeps the speaker EQ settings (including the volume limit) in its
+# own state file, reached directly to bypass the nginx auth gateway
+PIPEWIRE_API_URL = "http://127.0.0.1:2716"
+
+
+def reset_pipewire_settings(timeout: int = 10) -> Dict[str, Any]:
+    """Reset the PipeWire modules to defaults and drop their saved settings.
+
+    Part of the factory reset: pipewire-api restores its state file on every
+    start, so clearing the config database alone would leave the speaker EQ,
+    volume limit and input processor settings in place. Best effort - a device
+    without pipewire-api must not fail the reset.
+    """
+    url = f"{PIPEWIRE_API_URL}/api/v1/settings/reset"
+    try:
+        response = requests.post(url, timeout=timeout)
+        if response.status_code == 200:
+            logger.info("PipeWire settings reset to defaults")
+            return {'status': 'success', 'response': response.json()}
+
+        logger.warning(f"PipeWire settings reset returned HTTP {response.status_code}")
+        return {
+            'status': 'error',
+            'message': f'pipewire-api returned HTTP {response.status_code}'
+        }
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Could not reset PipeWire settings: {e}")
+        return {'status': 'unavailable', 'message': str(e)}
+
+
 class ConfigAPIServer:
     """REST API server for HiFiBerry configuration services"""
     
@@ -319,13 +349,25 @@ class ConfigAPIServer:
 
         @self.app.route('/api/v1/config/reset', methods=['POST'])
         def reset_config():
-            """Clear all keys from the configuration database"""
+            """Reset the system to factory defaults
+
+            Clears the configuration database and, since those survive a reboot
+            on their own, also the settings kept outside of it: which players
+            are enabled, and the PipeWire module settings (speaker EQ, volume
+            limit, input processor).
+            """
             try:
                 success = self.configdb.clear_all()
                 if success:
+                    services = self.systemd_handler.reset_managed_services()
+                    pipewire = reset_pipewire_settings()
                     return jsonify({
                         'status': 'success',
-                        'message': 'Configuration database cleared'
+                        'message': 'Configuration database cleared',
+                        'data': {
+                            'services': services,
+                            'pipewire': pipewire
+                        }
                     })
                 else:
                     return jsonify({
