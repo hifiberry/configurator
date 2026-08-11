@@ -130,6 +130,47 @@ class SystemdHandler:
             logger.error(f"Error executing systemctl {operation} {service}: {e}")
             return 1, "", str(e)
     
+    def reset_managed_services(self) -> Dict[str, Any]:
+        """Re-enable every service this API is allowed to switch on and off.
+
+        Part of the factory reset. Whether a player is enabled lives in systemd,
+        not in the configuration database, so clearing the database would leave
+        a player the user switched off switched off. The services at the 'all'
+        permission level are exactly those the web UI can toggle, and the images
+        ship them enabled.
+
+        The services are only enabled, not started - they come up on the next
+        boot, and the UI reports enablement rather than whether they run.
+        """
+        systemd_config = get_config_section('systemd', {})
+        services = sorted(s for s, perm in systemd_config.items() if perm == 'all')
+
+        enabled = []
+        skipped = []
+        failed = {}
+
+        for service in services:
+            if not self._service_exists(service):
+                skipped.append(service)
+                continue
+
+            success, message = self.service_manager.enable(service)
+            if success:
+                enabled.append(service)
+            else:
+                failed[service] = message
+                logger.warning(f"Reset: failed to enable '{service}': {message}")
+
+        logger.info(f"Reset: enabled {len(enabled)} service(s), "
+                    f"{len(skipped)} not installed, {len(failed)} failed")
+
+        return {
+            'status': 'success' if not failed else 'partial',
+            'enabled': enabled,
+            'not_installed': skipped,
+            'failed': failed
+        }
+
     def handle_systemd_operation(self, service: str, operation: str):
         """Flask handler: Execute systemd operation on a service"""
         try:
