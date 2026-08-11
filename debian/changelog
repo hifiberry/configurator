@@ -1,4 +1,4 @@
-hifiberry-configurator (2.15.12) stable; urgency=medium
+hifiberry-configurator (2.16.0) stable; urgency=medium
 
   * systemd: enable and disable user services in the system scope. The
     packages enable their user units in /etc/systemd/user/*.wants, which
