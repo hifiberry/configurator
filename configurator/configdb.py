@@ -151,25 +151,34 @@ class ConfigDB:
             True if successful, False otherwise
         """
         try:
-            if secure:
-                value = self.encrypt_value(value)
-
-            # First check if the current value matches the new value
+            # Compare in plaintext space, before encrypting. Comparing a
+            # decrypted stored value against a freshly encrypted one never
+            # matches, so the skip-unchanged branch used to be dead for secure
+            # values.
             current_value = self.get(key, secure=secure)
             if current_value == value:
-                logging.debug(f"Value for {key} is already '{value}', skipping update")
+                if secure:
+                    logging.debug(f"Value for {key} is unchanged, skipping update")
+                else:
+                    logging.debug(f"Value for {key} is already '{value}', skipping update")
                 return True
+
+            stored_value = self.encrypt_value(value) if secure else value
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO config (key, value, modified_at) 
+                INSERT OR REPLACE INTO config (key, value, modified_at)
                 VALUES (?, ?, CURRENT_TIMESTAMP)
-            ''', (key, value))
+            ''', (key, stored_value))
             conn.commit()
             conn.close()
 
-            if current_value is not None:
+            # Never log a secure value or its previous version: config-server
+            # runs with --verbose, so debug output is live in production.
+            if secure:
+                logging.debug(f"Stored secure value for key {key}")
+            elif current_value is not None:
                 logging.debug(f"Updated key {key} from '{current_value}' to '{value}'")
             else:
                 logging.debug(f"Created new key {key} with value '{value}'")
