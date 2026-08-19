@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.16.0**
+**Version 2.16.1**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -38,7 +38,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.16.0",
+  "version": "2.16.1",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -2509,4 +2509,4 @@ Restore the previously stored headphone volume setting.
 
 ---
 
-*HiFiBerry Configuration API v2.16.0*
+*HiFiBerry Configuration API v2.16.1*
