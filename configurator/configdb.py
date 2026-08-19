@@ -366,15 +366,16 @@ class ConfigDB:
                 value = str(value)
             
             success = self.set(key, value, secure)
-            
+
             if success:
+                # Echoing a secure value back would put the credential into
+                # request logs and any support bundle that captures them. The
+                # caller already has it; it does not need to come back.
+                data = {'key': key} if secure else {'key': key, 'value': value}
                 return jsonify({
                     'status': 'success',
                     'message': f'Configuration key "{key}" set successfully',
-                    'data': {
-                        'key': key,
-                        'value': value
-                    }
+                    'data': data
                 })
             else:
                 return jsonify({

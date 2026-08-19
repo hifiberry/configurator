@@ -1,4 +1,7 @@
+import json
 import logging
+
+import flask
 
 import configurator.configdb as configdb_module
 from configurator.configdb import ConfigDB
@@ -62,3 +65,37 @@ def test_plain_value_logging_is_unchanged(tmp_path, monkeypatch, caplog):
     combined = "\n".join(record.getMessage() for record in caplog.records)
     # Non-secure values are ordinary configuration and stay loggable.
     assert "new-plain" in combined
+
+
+def _flask_post(db, key, payload):
+    """Invoke handle_set_config_value inside a request context."""
+    app = flask.Flask(__name__)
+    with app.test_request_context(
+        f"/key/{key}",
+        method="POST",
+        data=json.dumps(payload),
+        content_type="application/json",
+    ):
+        response = db.handle_set_config_value(key)
+    # Handlers return either a Response or a (Response, status) tuple.
+    if isinstance(response, tuple):
+        response = response[0]
+    return json.loads(response.get_data(as_text=True))
+
+
+def test_set_handler_does_not_echo_a_secure_value(tmp_path, monkeypatch):
+    db = _db(tmp_path, monkeypatch)
+    body = _flask_post(db, "player.soloist.api_key",
+                       {"value": "s3cret-value", "secure": True})
+    assert body["status"] == "success"
+    assert body["data"]["key"] == "player.soloist.api_key"
+    assert "value" not in body["data"]
+    assert "s3cret-value" not in json.dumps(body)
+    # ...but it was actually stored
+    assert db.get("player.soloist.api_key", secure=True) == "s3cret-value"
+
+
+def test_set_handler_still_echoes_a_plain_value(tmp_path, monkeypatch):
+    db = _db(tmp_path, monkeypatch)
+    body = _flask_post(db, "some.key", {"value": "plain"})
+    assert body["data"]["value"] == "plain"
