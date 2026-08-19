@@ -2,7 +2,6 @@ import json
 import logging
 
 import pytest
-flask = pytest.importorskip("flask", reason="Flask is absent in the build chroot")
 
 import configurator.configdb as configdb_module
 from configurator.configdb import ConfigDB
@@ -70,6 +69,7 @@ def test_plain_value_logging_is_unchanged(tmp_path, monkeypatch, caplog):
 
 def _flask_post(db, key, payload):
     """Invoke handle_set_config_value inside a request context."""
+    flask = pytest.importorskip("flask", reason="Flask is absent in the build chroot")
     app = flask.Flask(__name__)
     with app.test_request_context(
         f"/key/{key}",
