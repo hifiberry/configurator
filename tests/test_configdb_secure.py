@@ -1,7 +1,8 @@
 import json
 import logging
 
-import flask
+import pytest
+flask = pytest.importorskip("flask", reason="Flask is absent in the build chroot")
 
 import configurator.configdb as configdb_module
 from configurator.configdb import ConfigDB
