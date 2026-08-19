@@ -95,6 +95,36 @@ def test_non_string_secret_is_rejected(tmp_path, monkeypatch):
     assert configdb.get("player.soloist.api_key") is None
 
 
+def test_secret_store_failure_is_not_reported_as_applied(tmp_path, monkeypatch):
+    """A failed encrypted write must not be reported as saved.
+
+    ConfigDB.set() returns False on any failure (unreadable key file,
+    disk full, sqlite locked, encrypt failure). If the handler ignores
+    that and appends the key to `applied` regardless, the UI tells the
+    user the credential was saved when it was not.
+    """
+    handler, configdb = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(configdb, "set", lambda *a, **kw: False)
+
+    applied, errors = handler.set_player_settings("soloist", {"api_key": "abc123"})
+
+    assert applied == []
+    assert any("api_key" in e for e in errors)
+    assert configdb.get("player.soloist.api_key") is None
+
+
+def test_secret_delete_failure_is_not_reported_as_applied(tmp_path, monkeypatch):
+    """A failed delete (clearing a secret) must not be reported as saved."""
+    handler, configdb = _setup(tmp_path, monkeypatch)
+    handler.set_player_settings("soloist", {"api_key": "abc123"})
+    monkeypatch.setattr(configdb, "delete", lambda *a, **kw: False)
+
+    applied, errors = handler.set_player_settings("soloist", {"api_key": ""})
+
+    assert applied == []
+    assert any("api_key" in e for e in errors)
+
+
 def test_secret_declaration_survives_sanitize(tmp_path, monkeypatch):
     """A secret with the four required fields must not be dropped."""
     from configurator.handlers.player_registry_handler import sanitize_settings

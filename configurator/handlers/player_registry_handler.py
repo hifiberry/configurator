@@ -337,9 +337,13 @@ class PlayerRegistryHandler:
                     # Empty means "clear": deleting beats storing a blank
                     # secret, so is_set stays honest and the UI's remove
                     # action has a path.
-                    self.configdb.delete(config_key)
+                    if not self.configdb.delete(config_key):
+                        errors.append(f"{key}: failed to store")
+                        continue
                 else:
-                    self.configdb.set(config_key, text, secure=True)
+                    if not self.configdb.set(config_key, text, secure=True):
+                        errors.append(f"{key}: failed to store")
+                        continue
                 applied.append(key)
                 continue
             self.configdb.set(
