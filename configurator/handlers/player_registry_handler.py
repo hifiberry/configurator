@@ -31,7 +31,7 @@ SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 REQUIRED_FIELDS = ("name", "provided_by", "systemd_service", "icon")
 
-SETTING_TYPES = ("toggle", "select", "number")
+SETTING_TYPES = ("toggle", "select", "number", "secret")
 _SETTING_REQUIRED = ("key", "type", "label", "default")
 
 # A select may source its options from a plugin's own API instead of listing
@@ -64,6 +64,11 @@ def coerce_setting_value(setting_type, raw):
             return None
         # Keep whole numbers integral so the UI shows "10", not "10.0".
         return int(number) if number.is_integer() else number
+    if setting_type == "secret":
+        # Secrets are always text, and pasted values pick up whitespace.
+        if isinstance(raw, bool) or not isinstance(raw, str):
+            return None
+        return raw.strip()
     return str(raw)
 
 
@@ -228,6 +233,17 @@ class PlayerRegistryHandler:
         service = descriptor["systemd_service"]
         out = []
         for setting in sanitize_settings(descriptor):
+            if setting["type"] == "secret":
+                # Existence is checked without decrypting: a non-secure read
+                # returns the ciphertext, which is enough to know it is there
+                # and must never be put in the response.
+                raw = None
+                if self.configdb is not None:
+                    raw = self.configdb.get(setting_value_key(service, setting["key"]),
+                                            default=None)
+                out.append({**setting, "is_set": raw is not None})
+                continue
+
             value = None
             if self.configdb is not None:
                 raw = self.configdb.get(setting_value_key(service, setting["key"]), default=None)
@@ -311,6 +327,21 @@ class PlayerRegistryHandler:
                         f"{key}: out of range ({setting['min']}..{setting['max']})")
                     continue
                 value = number
+            if setting["type"] == "secret":
+                text = coerce_setting_value("secret", value)
+                if text is None:
+                    errors.append(f"{key}: must be a string")
+                    continue
+                config_key = setting_value_key(systemd_service, key)
+                if text == "":
+                    # Empty means "clear": deleting beats storing a blank
+                    # secret, so is_set stays honest and the UI's remove
+                    # action has a path.
+                    self.configdb.delete(config_key)
+                else:
+                    self.configdb.set(config_key, text, secure=True)
+                applied.append(key)
+                continue
             self.configdb.set(
                 setting_value_key(systemd_service, key),
                 serialize_setting_value(setting["type"], coerce_setting_value(setting["type"], value)),

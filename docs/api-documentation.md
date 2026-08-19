@@ -1557,13 +1557,31 @@ List registered external players.
 - **widget**: Optional presentation hint, e.g. `slider` for a `number`
 
 **Notes:**
-- `type` is one of `toggle`, `select`, `number`
+- `type` is one of `toggle`, `select`, `number`, `secret`
 - A `select` whose options come from `options_url` is fetched while building this
   response. Only loopback URLs are accepted, with a short timeout. If the source
   is unreachable, the currently stored value is returned as the sole option so
   the user's choice is not blanked out
 - Settings entries that fail validation are omitted; the rest of the player is
   still returned
+
+#### Setting type: `secret`
+
+For credentials. Declared like any other setting:
+
+```json
+{ "key": "api_key", "type": "secret", "label": "Soloist API key", "default": "" }
+```
+
+Stored encrypted in ConfigDB (`secure=True`, Fernet, per-device key at
+`/etc/configdb.key`). **There is no read-back path.** The players listing
+reports the setting with `"is_set": true|false` and no `value` field, and the
+value never appears in a response body or a log line.
+
+Writing an empty or whitespace-only string deletes the stored value — this is
+how a "remove credential" action is implemented. Values are stripped before
+storage, so a pasted trailing newline does not become part of the credential. A
+non-string value is rejected.
 
 ### `GET /api/v1/players/icon/<name>`
 
