@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.16.1**
+**Version 2.17.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -38,7 +38,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.16.1",
+  "version": "2.17.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -1570,7 +1570,7 @@ List registered external players.
 For credentials. Declared like any other setting:
 
 ```json
-{ "key": "api_key", "type": "secret", "label": "Soloist API key", "default": "" }
+{ "key": "api_key", "type": "secret", "label": "Streaming service API key", "default": "" }
 ```
 
 Stored encrypted in ConfigDB (`secure=True`, Fernet, per-device key at
@@ -2509,4 +2509,4 @@ Restore the previously stored headphone volume setting.
 
 ---
 
-*HiFiBerry Configuration API v2.16.1*
+*HiFiBerry Configuration API v2.17.0*
