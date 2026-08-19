@@ -1,3 +1,13 @@
+hifiberry-configurator (2.16.1) stable; urgency=medium
+
+  * Player settings: add a 'secret' type for plugin credentials (API keys,
+    tokens). Values are write-only after set -- reads report is_set instead
+    of echoing the value -- and ConfigDB stores them encrypted (secure=True)
+    without ever logging the plaintext. Setting an empty or whitespace-only
+    value clears the stored secret.
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 19 Aug 2026 15:22:15 +0000
+
 hifiberry-configurator (2.16.0) stable; urgency=medium
 
   * systemd: enable and disable user services in the system scope. The
