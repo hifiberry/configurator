@@ -5,6 +5,21 @@ from unittest.mock import patch
 import pytest
 flask = pytest.importorskip("flask", reason="Flask is absent in the build chroot")
 
+# configurator.server imports every API handler, so it needs each handler's
+# own dependencies too -- python3-netifaces via smb_handler, for one. Skipping
+# on flask alone left those to fail as a hard collection ERROR, which pytest
+# treats as fatal: it aborts collection for the WHOLE suite, silently taking
+# ~380 unrelated tests with it. Degrade to a skip instead, and name the
+# module that is actually missing.
+from configurator.handlers import MISSING_DEPENDENCY
+
+if MISSING_DEPENDENCY:
+    pytest.skip(
+        f"configurator.handlers could not import {MISSING_DEPENDENCY!r}; "
+        f"install it to run the server tests",
+        allow_module_level=True,
+    )
+
 from configurator.server import ConfigAPIServer
 
 

@@ -1,3 +1,23 @@
+hifiberry-configurator (2.17.2) stable; urgency=medium
+
+  * handlers: name the dependency that failed to import. The package
+    caught every ImportError and blamed Flask, so a missing
+    python3-netifaces (reached via smb_handler -> sambaclient) emptied
+    __all__ and resurfaced two files away as "cannot import name
+    'SMBHandler'" -- pointing at a handler that was fine and never
+    mentioning netifaces. It now records and logs the real module name.
+  * tests: a missing handler dependency no longer aborts the whole suite.
+    test_server_supportinfo.py guarded on flask alone, so any other
+    missing import was a hard collection error, and pytest treats that as
+    fatal: `pytest tests/` reported "Interrupted: 1 error during
+    collection" and ran none of the other ~380 tests. It now degrades to a
+    skip, as the flask path already did.
+  * tests: stop the resilience meta-test misreading coloured pytest output.
+    It parsed the summary line for its pass count, so escape codes made
+    int() raise ValueError -- a green suite reported as a broken test.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 10:00:00 +0000
+
 hifiberry-configurator (2.17.1) stable; urgency=medium
 
   * Player registry: expose a player's conflicts_with list through
