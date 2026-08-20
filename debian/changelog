@@ -1,3 +1,17 @@
+hifiberry-configurator (2.17.4) stable; urgency=medium
+
+  * Player settings: accept an optional help_url, so a setting can point at
+    the vendor's documentation for obtaining its value -- where to generate
+    an API key, for instance. Unlike options_url, which config-server
+    fetches itself and is confined to loopback, this one is put in front of
+    the user as a link, so the check that matters is the scheme: anything
+    that is not http(s) is dropped, since a descriptor carrying javascript:
+    or data: would otherwise become script running in the user's session on
+    the device's own origin. The setting itself is kept either way -- a bad
+    help link is no reason to make a player unconfigurable.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 17:30:00 +0000
+
 hifiberry-configurator (2.17.3) stable; urgency=medium
 
   * Player registry: expose a player's optional `setup` block through

@@ -172,3 +172,30 @@ def test_malformed_setup_does_not_break_the_listing(tmp_path):
     players = {p["name"]: p for p in _handler(tmp_path, players_d)._build_players()}
     assert players["Bad"]["setup"] is None
     assert players["Good"]["setup"] == {"base_url": "/api/g"}
+
+
+def test_help_url_is_passed_through(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "x.json", {
+        "name": "X", "provided_by": "x", "systemd_service": "x", "icon": "x",
+        "settings": [{"key": "api_key", "type": "secret", "label": "Key",
+                      "default": "", "help_url": "https://example.invalid/docs"}]})
+    s = _handler(tmp_path, players_d)._build_players()[0]["settings"][0]
+    assert s["help_url"] == "https://example.invalid/docs"
+
+
+def test_dangerous_help_url_is_dropped_but_setting_kept(tmp_path):
+    """A bad link must not make the player unconfigurable -- and must never
+    become script running on the device's own origin."""
+    players_d = tmp_path / "players.d"
+    for i, bad in enumerate(["javascript:alert(1)", "data:text/html,x", "ftp://h/x",
+                             "not a url", "", 42, "https://"]):
+        _write_descriptor(str(players_d), f"b{i}.json", {
+            "name": f"B{i}", "provided_by": "b", "systemd_service": f"b{i}", "icon": "b",
+            "settings": [{"key": "k", "type": "secret", "label": "K",
+                          "default": "", "help_url": bad}]})
+    players = _handler(tmp_path, players_d)._build_players()
+    assert len(players) == 7, "every setting must survive"
+    for p in players:
+        assert p["settings"], "the setting itself must be kept"
+        assert "help_url" not in p["settings"][0]

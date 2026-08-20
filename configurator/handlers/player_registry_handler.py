@@ -107,8 +107,31 @@ def sanitize_settings(descriptor):
             if bounds is None:
                 continue
             entry = {**entry, **bounds}
+        if "help_url" in entry and not _safe_help_url(entry.get("help_url")):
+            # Drop the link but keep the setting: a bad help link is no reason
+            # to make a player unconfigurable.
+            entry = {k: v for k, v in entry.items() if k != "help_url"}
         clean.append(entry)
     return clean
+
+
+def _safe_help_url(url):
+    """True for an ordinary web link.
+
+    Unlike options_url, which config-server fetches itself and so is confined
+    to loopback, this one is put in front of the user as an <a href> and is
+    meant to point at the vendor's own documentation. The check that matters
+    is therefore the scheme: a descriptor carrying javascript: or data: would
+    otherwise become script running in the user's session on the device's
+    origin.
+    """
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.hostname)
 
 
 def _valid_options_url(url):
