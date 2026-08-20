@@ -107,7 +107,7 @@ def sanitize_settings(descriptor):
             if bounds is None:
                 continue
             entry = {**entry, **bounds}
-        if "help_url" in entry and not _safe_help_url(entry.get("help_url")):
+        if "help_url" in entry and not safe_link_url(entry.get("help_url")):
             # Drop the link but keep the setting: a bad help link is no reason
             # to make a player unconfigurable.
             entry = {k: v for k, v in entry.items() if k != "help_url"}
@@ -115,15 +115,19 @@ def sanitize_settings(descriptor):
     return clean
 
 
-def _safe_help_url(url):
-    """True for an ordinary web link.
+def safe_link_url(url):
+    """True for a plain https:// link with a host.
 
-    Unlike options_url, which config-server fetches itself and so is confined
-    to loopback, this one is put in front of the user as an <a href> and is
-    meant to point at the vendor's own documentation. The check that matters
-    is therefore the scheme: a descriptor carrying javascript: or data: would
-    otherwise become script running in the user's session on the device's
-    origin.
+    Applies to every descriptor value the WebUI renders as an <a href>:
+    help_url and maintainer_url. Unlike options_url, which config-server
+    fetches itself and is therefore confined to loopback, these are handed to
+    the user's browser, so the danger runs the other way -- a descriptor
+    carrying javascript: or data: would become script executing in the user's
+    session on the device's own origin.
+
+    https only, deliberately. An allow-list of exactly one scheme cannot be
+    talked into anything else, and these links point at public vendor
+    documentation, which has no business being fetched in the clear.
     """
     if not isinstance(url, str) or not url:
         return False
@@ -131,7 +135,7 @@ def _safe_help_url(url):
         parsed = urlparse(url)
     except ValueError:
         return False
-    return parsed.scheme in ("http", "https") and bool(parsed.hostname)
+    return parsed.scheme == "https" and bool(parsed.hostname)
 
 
 def _valid_options_url(url):
@@ -347,7 +351,14 @@ class PlayerRegistryHandler:
                 # knowing the player by name.
                 "setup": self._setup(descriptor),
                 "maintainer_name": descriptor.get("maintainer_name", ""),
-                "maintainer_url": descriptor.get("maintainer_url", ""),
+                # Same gate as help_url: this is rendered as a link, so an
+                # unvalidated descriptor value would be a javascript: URL one
+                # typo (or one bad package) away.
+                "maintainer_url": (
+                    descriptor.get("maintainer_url", "")
+                    if safe_link_url(descriptor.get("maintainer_url"))
+                    else ""
+                ),
                 "settings": self._settings_with_values(descriptor),
             })
         return players

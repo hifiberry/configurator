@@ -186,16 +186,41 @@ def test_help_url_is_passed_through(tmp_path):
 
 def test_dangerous_help_url_is_dropped_but_setting_kept(tmp_path):
     """A bad link must not make the player unconfigurable -- and must never
-    become script running on the device's own origin."""
+    become script running on the device's own origin. http is rejected too:
+    the allow-list is exactly https."""
     players_d = tmp_path / "players.d"
     for i, bad in enumerate(["javascript:alert(1)", "data:text/html,x", "ftp://h/x",
-                             "not a url", "", 42, "https://"]):
+                             "not a url", "", 42, "https://",
+                             "http://example.invalid/docs",
+                             "JavaScript:alert(1)", " javascript:alert(1)"]):
         _write_descriptor(str(players_d), f"b{i}.json", {
             "name": f"B{i}", "provided_by": "b", "systemd_service": f"b{i}", "icon": "b",
             "settings": [{"key": "k", "type": "secret", "label": "K",
                           "default": "", "help_url": bad}]})
     players = _handler(tmp_path, players_d)._build_players()
-    assert len(players) == 7, "every setting must survive"
+    assert len(players) == 10, "every setting must survive"
     for p in players:
         assert p["settings"], "the setting itself must be kept"
         assert "help_url" not in p["settings"][0]
+
+
+def test_maintainer_url_is_gated_the_same_way(tmp_path):
+    """maintainer_url is rendered as a link too, and was previously passed
+    through untouched."""
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "ok.json", {
+        "name": "OK", "provided_by": "o", "systemd_service": "o", "icon": "o",
+        "maintainer_name": "Wanted",
+        "maintainer_url": "https://example.invalid/wanted"})
+    _write_descriptor(str(players_d), "bad.json", {
+        "name": "Bad", "provided_by": "b", "systemd_service": "b", "icon": "b",
+        "maintainer_name": "Wanted", "maintainer_url": "javascript:alert(1)"})
+    _write_descriptor(str(players_d), "http.json", {
+        "name": "Http", "provided_by": "h", "systemd_service": "h", "icon": "h",
+        "maintainer_name": "Wanted", "maintainer_url": "http://example.invalid/x"})
+    players = {p["name"]: p for p in _handler(tmp_path, players_d)._build_players()}
+    assert players["OK"]["maintainer_url"] == "https://example.invalid/wanted"
+    assert players["Bad"]["maintainer_url"] == ""
+    assert players["Http"]["maintainer_url"] == ""
+    # the name still shows, so the player is not silently stripped of context
+    assert players["Bad"]["maintainer_name"] == "Wanted"

@@ -1,3 +1,17 @@
+hifiberry-configurator (2.17.5) stable; urgency=medium
+
+  * Descriptor links: accept https only. help_url previously allowed http
+    as well; an allow-list of exactly one scheme cannot be talked into
+    anything else, and these links point at public vendor documentation,
+    which has no business being fetched in the clear.
+  * Apply the same gate to maintainer_url, which the web interface has
+    always rendered as a link and which was passed through from the
+    descriptor untouched -- so a javascript: URL there was one bad package
+    away from running in the user's session on the device's own origin.
+    An unsafe value drops the link only; the maintainer's name still shows.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 18:00:00 +0000
+
 hifiberry-configurator (2.17.4) stable; urgency=medium
 
   * Player settings: accept an optional help_url, so a setting can point at
