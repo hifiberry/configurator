@@ -113,3 +113,62 @@ def test_malformed_conflicts_with_does_not_break_the_listing(tmp_path):
     players = {p["name"]: p for p in handler._build_players()}
     assert players["Broken"]["conflicts_with"] == []
     assert players["Fine"]["conflicts_with"] == ["librespot"]
+
+
+def _handler(tmp_path, players_d):
+    return PlayerRegistryHandler(
+        configdb=ConfigDB(db_path=str(tmp_path / "config.sqlite")),
+        players_d_dir=str(players_d))
+
+
+def test_setup_block_is_exposed(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "soloist.json", {
+        "name": "Spotify (Soloist)", "provided_by": "soloist-wrapper",
+        "systemd_service": "soloist", "icon": "soloist",
+        "setup": {"base_url": "/api/soloist"},
+    })
+    assert _handler(tmp_path, players_d)._build_players()[0]["setup"] == {
+        "base_url": "/api/soloist"}
+
+
+def test_setup_defaults_to_none(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "mpd.json", {
+        "name": "MPD", "provided_by": "mpd", "systemd_service": "mpd", "icon": "mpd"})
+    assert _handler(tmp_path, players_d)._build_players()[0]["setup"] is None
+
+
+def test_setup_trailing_slash_is_normalised(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "x.json", {
+        "name": "X", "provided_by": "x", "systemd_service": "x", "icon": "x",
+        "setup": {"base_url": "/api/x/"}})
+    assert _handler(tmp_path, players_d)._build_players()[0]["setup"]["base_url"] == "/api/x"
+
+
+def test_setup_rejects_a_non_local_base_url(tmp_path):
+    """A descriptor is trusted, but pointing a browser that holds the user's
+    session at another origin must not be one typo away."""
+    players_d = tmp_path / "players.d"
+    for i, bad in enumerate(["https://evil.example/api", "//evil.example/api",
+                             "api/x", "", 42, {"nested": True}]):
+        _write_descriptor(str(players_d), f"bad{i}.json", {
+            "name": f"Bad{i}", "provided_by": "b", "systemd_service": f"b{i}",
+            "icon": "b", "setup": {"base_url": bad}})
+    players = _handler(tmp_path, players_d)._build_players()
+    assert players, "descriptors must still load"
+    assert all(p["setup"] is None for p in players)
+
+
+def test_malformed_setup_does_not_break_the_listing(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "bad.json", {
+        "name": "Bad", "provided_by": "b", "systemd_service": "b", "icon": "b",
+        "setup": "not-an-object"})
+    _write_descriptor(str(players_d), "good.json", {
+        "name": "Good", "provided_by": "g", "systemd_service": "g", "icon": "g",
+        "setup": {"base_url": "/api/g"}})
+    players = {p["name"]: p for p in _handler(tmp_path, players_d)._build_players()}
+    assert players["Bad"]["setup"] is None
+    assert players["Good"]["setup"] == {"base_url": "/api/g"}

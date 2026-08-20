@@ -1,3 +1,16 @@
+hifiberry-configurator (2.17.3) stable; urgency=medium
+
+  * Player registry: expose a player's optional `setup` block through
+    /api/v1/players, so a player that owns a one-time installation step can
+    say where to drive it from instead of the web interface knowing that
+    player by name. base_url must be an absolute path on this device: a
+    descriptor is root-installed and therefore trusted, but pointing a
+    browser holding the user's session at another origin should not be one
+    typo away. Anything malformed is logged and ignored rather than failing
+    the listing.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 16:30:00 +0000
+
 hifiberry-configurator (2.17.2) stable; urgency=medium
 
   * handlers: name the dependency that failed to import. The package

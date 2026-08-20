@@ -257,6 +257,33 @@ class PlayerRegistryHandler:
         return out
 
     @staticmethod
+    def _setup(descriptor):
+        """Normalise the descriptor's setup block, or None.
+
+        base_url must be an absolute path on this device. A descriptor is
+        root-installed by a package, so it is trusted -- but it is still
+        config, and pointing the WebUI at "https://elsewhere/" would send a
+        browser holding the user's session somewhere the device does not
+        control. Rejecting anything that is not a local path keeps the blast
+        radius of a typo, or of a badly built package, inside the box.
+        """
+        raw = descriptor.get("setup")
+        if raw is None:
+            return None
+        if not isinstance(raw, dict):
+            logger.warning(
+                f"Ignoring setup in {descriptor.get('name')!r}: expected an "
+                f"object, got {type(raw).__name__}")
+            return None
+        base = raw.get("base_url")
+        if not isinstance(base, str) or not base.startswith("/") or base.startswith("//"):
+            logger.warning(
+                f"Ignoring setup in {descriptor.get('name')!r}: base_url must "
+                f"be an absolute path on this device, got {base!r}")
+            return None
+        return {"base_url": base.rstrip("/")}
+
+    @staticmethod
     def _conflicts_with(descriptor):
         """Normalise the descriptor's conflict list.
 
@@ -289,6 +316,13 @@ class PlayerRegistryHandler:
                 # descriptor generally ships from a package that has never
                 # heard of this one.
                 "conflicts_with": self._conflicts_with(descriptor),
+                # Optional one-time setup step the player owns, served by the
+                # package itself rather than by config-server. Soloist is the
+                # case that forced it: Spotify's binary may not be
+                # redistributed, so the device has to fetch it on request, and
+                # the WebUI needs somewhere to send that request without
+                # knowing the player by name.
+                "setup": self._setup(descriptor),
                 "maintainer_name": descriptor.get("maintainer_name", ""),
                 "maintainer_url": descriptor.get("maintainer_url", ""),
                 "settings": self._settings_with_values(descriptor),
