@@ -24,6 +24,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 PLAYERS_D_DIR = "/etc/hifiberry/players.d"
+# Package-shipped descriptors. See _descriptor_files().
+VENDOR_PLAYERS_D_DIR = "/usr/share/hifiberry/players.d"
 ICONS_DIR = os.path.join(PLAYERS_D_DIR, "icons")
 
 # Only allow safe characters in icon names
@@ -174,20 +176,40 @@ def _number_bounds(entry):
 class PlayerRegistryHandler:
     """Handler for external player discovery and icon serving"""
 
-    def __init__(self, configdb=None, players_d_dir=PLAYERS_D_DIR):
+    def __init__(self, configdb=None, players_d_dir=PLAYERS_D_DIR,
+                 vendor_players_d_dir=VENDOR_PLAYERS_D_DIR):
         self.configdb = configdb
+        # Package-shipped descriptors live under /usr/share; /etc holds only
+        # what an administrator has deliberately put there, and wins.
+        self.vendor_players_d_dir = vendor_players_d_dir
         self.players_d_dir = players_d_dir
         self.icons_dir = os.path.join(players_d_dir, "icons")
+        self.vendor_icons_dir = os.path.join(vendor_players_d_dir, "icons")
+
+    def _descriptor_files(self):
+        """Descriptor paths by filename, /etc shadowing /usr/share.
+
+        Packages ship into /usr/share because a descriptor is package data,
+        not configuration: shipping it as a conffile in /etc meant dpkg
+        treated any pre-existing file as a local edit and preserved it for
+        ever, so a device that had one placed by hand never received a single
+        packaged update to it. /etc still works, for an administrator who
+        genuinely wants to override or add a player.
+        """
+        found = {}
+        for directory in (self.vendor_players_d_dir, self.players_d_dir):
+            if not directory or not os.path.isdir(directory):
+                continue
+            for filename in sorted(os.listdir(directory)):
+                if not filename.endswith(".json"):
+                    continue
+                found[filename] = os.path.join(directory, filename)
+        return [found[name] for name in sorted(found)]
 
     def _load_descriptors(self):
-        """Load valid descriptor dicts from the players.d directory."""
+        """Load valid descriptor dicts from the players.d directories."""
         descriptors = []
-        if not os.path.isdir(self.players_d_dir):
-            return descriptors
-        for filename in sorted(os.listdir(self.players_d_dir)):
-            if not filename.endswith(".json"):
-                continue
-            path = os.path.join(self.players_d_dir, filename)
+        for path in self._descriptor_files():
             try:
                 with open(path, "r") as f:
                     descriptor = json.load(f)
@@ -372,8 +394,15 @@ class PlayerRegistryHandler:
         if not SAFE_NAME_RE.match(name):
             return jsonify({"status": "error", "message": "Invalid icon name"}), 400
 
-        icon_path = os.path.join(self.icons_dir, f"{name}.svg")
-        if not os.path.isfile(icon_path):
+        # Same precedence as descriptors: an override in /etc wins, otherwise
+        # the package's own icon under /usr/share.
+        icon_path = None
+        for directory in (self.icons_dir, self.vendor_icons_dir):
+            candidate = os.path.join(directory, f"{name}.svg")
+            if os.path.isfile(candidate):
+                icon_path = candidate
+                break
+        if icon_path is None:
             return jsonify({"status": "error", "message": "Icon not found"}), 404
 
         try:

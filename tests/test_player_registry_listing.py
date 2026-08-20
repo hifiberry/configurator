@@ -224,3 +224,55 @@ def test_maintainer_url_is_gated_the_same_way(tmp_path):
     assert players["Http"]["maintainer_url"] == ""
     # the name still shows, so the player is not silently stripped of context
     assert players["Bad"]["maintainer_name"] == "Wanted"
+
+
+def _vendor_handler(tmp_path, vendor=None, etc=None):
+    return PlayerRegistryHandler(
+        configdb=ConfigDB(db_path=str(tmp_path / "config.sqlite")),
+        players_d_dir=str(etc) if etc else str(tmp_path / "missing-etc"),
+        vendor_players_d_dir=str(vendor) if vendor else str(tmp_path / "missing-usr"))
+
+
+def test_descriptors_are_read_from_the_vendor_directory(tmp_path):
+    vendor = tmp_path / "usr"
+    _write_descriptor(str(vendor), "shairport.json", {
+        "name": "Airplay", "provided_by": "shairport-sync",
+        "systemd_service": "shairport", "icon": "shairport"})
+    players = _vendor_handler(tmp_path, vendor=vendor)._build_players()
+    assert [p["name"] for p in players] == ["Airplay"]
+
+
+def test_etc_overrides_the_vendor_copy(tmp_path):
+    """An administrator's file in /etc still wins -- that is what /etc is for."""
+    vendor = tmp_path / "usr"
+    etc = tmp_path / "etc"
+    _write_descriptor(str(vendor), "shairport.json", {
+        "name": "Airplay", "provided_by": "shairport-sync",
+        "systemd_service": "shairport", "icon": "shairport"})
+    _write_descriptor(str(etc), "shairport.json", {
+        "name": "Airplay (local)", "provided_by": "shairport-sync",
+        "systemd_service": "shairport", "icon": "shairport"})
+    players = _vendor_handler(tmp_path, vendor=vendor, etc=etc)._build_players()
+    assert [p["name"] for p in players] == ["Airplay (local)"]
+    assert len(players) == 1, "the override must replace, not duplicate"
+
+
+def test_the_two_directories_are_merged(tmp_path):
+    vendor = tmp_path / "usr"
+    etc = tmp_path / "etc"
+    _write_descriptor(str(vendor), "a.json", {
+        "name": "A", "provided_by": "a", "systemd_service": "a", "icon": "a"})
+    _write_descriptor(str(etc), "b.json", {
+        "name": "B", "provided_by": "b", "systemd_service": "b", "icon": "b"})
+    players = _vendor_handler(tmp_path, vendor=vendor, etc=etc)._build_players()
+    assert sorted(p["name"] for p in players) == ["A", "B"]
+
+
+def test_a_missing_directory_is_not_an_error(tmp_path):
+    vendor = tmp_path / "usr"
+    _write_descriptor(str(vendor), "a.json", {
+        "name": "A", "provided_by": "a", "systemd_service": "a", "icon": "a"})
+    # /etc absent entirely -- the common case on a clean install
+    assert len(_vendor_handler(tmp_path, vendor=vendor)._build_players()) == 1
+    # and neither present
+    assert _vendor_handler(tmp_path)._build_players() == []

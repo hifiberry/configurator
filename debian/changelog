@@ -1,3 +1,15 @@
+hifiberry-configurator (2.17.6) stable; urgency=medium
+
+  * Player registry: read descriptors and icons from
+    /usr/share/hifiberry/players.d as well as /etc, with /etc taking
+    precedence. Packages ship there from now on, because a descriptor is
+    package data rather than configuration: as a conffile under /etc, dpkg
+    treated any pre-existing file as a local edit and preserved it for ever,
+    so a device that had one placed by hand never received a packaged update
+    to it. /etc keeps working for genuine local overrides.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 20:00:00 +0000
+
 hifiberry-configurator (2.17.5) stable; urgency=medium
 
   * Descriptor links: accept https only. help_url previously allowed http
