@@ -1,3 +1,19 @@
+hifiberry-configurator (2.17.0) stable; urgency=medium
+
+  * Player settings: add a 'secret' type for plugin credentials (API keys,
+    tokens). Values are write-only after set -- reads report is_set instead
+    of echoing the value -- and ConfigDB stores them encrypted (secure=True)
+    without ever logging the plaintext. Setting an empty or whitespace-only
+    value clears the stored secret.
+  * Security fix: ConfigDB.set() no longer decrypts and logs the previous
+    value of a secure=True key at debug level. config-server runs with
+    --verbose, so every update to an existing secure value -- previously
+    only the SMB mount password (sambamount.py) -- wrote its old plaintext
+    value to the journal. Existing devices may still have that value in
+    their journal history; this fix only stops new occurrences.
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 19 Aug 2026 15:22:15 +0000
+
 hifiberry-configurator (2.16.0) stable; urgency=medium
 
   * systemd: enable and disable user services in the system scope. The
