@@ -1,3 +1,15 @@
+hifiberry-configurator (2.17.1) stable; urgency=medium
+
+  * Player registry: expose a player's conflicts_with list through
+    /api/v1/players. Two players that cannot run at the same time (two
+    Spotify Connect endpoints, say) had no way to say so, and _build_players
+    drops any descriptor field it does not name explicitly, so the WebUI
+    presented them as independent toggles and let both be enabled. A
+    malformed value is logged and ignored rather than failing the listing,
+    since every player on the device is served by this one endpoint.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 20 Aug 2026 09:30:00 +0000
+
 hifiberry-configurator (2.17.0) stable; urgency=medium
 
   * Player settings: add a 'secret' type for plugin credentials (API keys,

@@ -61,3 +61,55 @@ def test_build_players_no_settings_key_yields_empty_list(tmp_path):
     configdb = ConfigDB(db_path=str(tmp_path / "config.sqlite"))
     handler = PlayerRegistryHandler(configdb=configdb, players_d_dir=str(players_d))
     assert handler._build_players()[0]["settings"] == []
+
+
+def test_build_players_exposes_conflicts_with(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "soloist.json", {
+        "name": "Spotify (Soloist)",
+        "provided_by": "soloist-wrapper",
+        "systemd_service": "soloist",
+        "icon": "soloist",
+        "conflicts_with": ["librespot"],
+    })
+    handler = PlayerRegistryHandler(
+        configdb=ConfigDB(db_path=str(tmp_path / "config.sqlite")),
+        players_d_dir=str(players_d))
+
+    assert handler._build_players()[0]["conflicts_with"] == ["librespot"]
+
+
+def test_build_players_defaults_conflicts_to_empty(tmp_path):
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "analog.json", {
+        "name": "Analog Input",
+        "provided_by": "analog-recognition",
+        "systemd_service": "analog-recognition",
+        "icon": "analog",
+    })
+    handler = PlayerRegistryHandler(
+        configdb=ConfigDB(db_path=str(tmp_path / "config.sqlite")),
+        players_d_dir=str(players_d))
+
+    assert handler._build_players()[0]["conflicts_with"] == []
+
+
+def test_malformed_conflicts_with_does_not_break_the_listing(tmp_path):
+    """Every player on the device comes through this one endpoint, so a bad
+    value in one descriptor must not take the others down with it."""
+    players_d = tmp_path / "players.d"
+    _write_descriptor(str(players_d), "bad.json", {
+        "name": "Broken", "provided_by": "b", "systemd_service": "b",
+        "icon": "b", "conflicts_with": {"not": "a list"},
+    })
+    _write_descriptor(str(players_d), "good.json", {
+        "name": "Fine", "provided_by": "g", "systemd_service": "g",
+        "icon": "g", "conflicts_with": "librespot",  # bare string is accepted
+    })
+    handler = PlayerRegistryHandler(
+        configdb=ConfigDB(db_path=str(tmp_path / "config.sqlite")),
+        players_d_dir=str(players_d))
+
+    players = {p["name"]: p for p in handler._build_players()}
+    assert players["Broken"]["conflicts_with"] == []
+    assert players["Fine"]["conflicts_with"] == ["librespot"]

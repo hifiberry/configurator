@@ -256,6 +256,23 @@ class PlayerRegistryHandler:
             out.append(enriched)
         return out
 
+    @staticmethod
+    def _conflicts_with(descriptor):
+        """Normalise the descriptor's conflict list.
+
+        A malformed value must not take the whole player list down with it:
+        every player on the device is served by this one endpoint.
+        """
+        raw = descriptor.get("conflicts_with", [])
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            logger.warning(
+                f"Ignoring conflicts_with in {descriptor.get('name')!r}: "
+                f"expected a list of service names, got {type(raw).__name__}")
+            return []
+        return [str(x) for x in raw if isinstance(x, str) and x]
+
     def _build_players(self):
         players = []
         for descriptor in self._load_descriptors():
@@ -265,6 +282,13 @@ class PlayerRegistryHandler:
                 "systemd_service": descriptor["systemd_service"],
                 "icon_url": f"/api/v1/players/icon/{descriptor['icon']}",
                 "allow_change": descriptor.get("allow_change", True),
+                # systemd_service names this player cannot run alongside, e.g.
+                # two Spotify Connect endpoints advertising at once. Declared
+                # by whichever package knows about the clash; consumers must
+                # treat the relation as SYMMETRIC, since the other player's
+                # descriptor generally ships from a package that has never
+                # heard of this one.
+                "conflicts_with": self._conflicts_with(descriptor),
                 "maintainer_name": descriptor.get("maintainer_name", ""),
                 "maintainer_url": descriptor.get("maintainer_url", ""),
                 "settings": self._settings_with_values(descriptor),
