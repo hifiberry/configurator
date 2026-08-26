@@ -230,6 +230,18 @@ def test_package_patterns_cover_units_that_are_also_in_service_patterns():
     assert "nowplaying-sdl" in supportinfo.PACKAGE_PATTERNS
 
 
+def test_patterns_cover_the_bluetooth_audio_stack():
+    # hifiberry-os#641/#642: two Bluetooth reports arrived where the support
+    # info could not settle whether the A2DP stack was even installed --
+    # neither list mentioned bluez, wireplumber or the SPA plugin, so their
+    # absence from a report meant nothing. Both scopes matter here:
+    # bluetooth.service is a system unit, wireplumber.service a user one.
+    for pattern in ("bluez", "wireplumber", "libspa-0.2-*"):
+        assert pattern in supportinfo.PACKAGE_PATTERNS
+    for pattern in ("bluetooth*", "wireplumber*"):
+        assert pattern in supportinfo.SERVICE_PATTERNS
+
+
 def test_service_patterns_cover_the_units_missing_from_the_original_list():
     for pattern in (
         "nqptp*",

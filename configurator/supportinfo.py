@@ -259,6 +259,16 @@ PACKAGE_PATTERNS = [
     "hifiberry-*",
     "hbos-*",
     "pipewire",
+    # Bluetooth audio needs three separate pieces present, and a report that
+    # names none of them cannot be triaged: bluez (bluetoothd itself),
+    # wireplumber (the session manager that registers the A2DP endpoints),
+    # and libspa-0.2-bluetooth (the PipeWire plugin without which no A2DP
+    # endpoint exists at all). The last one shipped only with hbos-full for a
+    # while, so a minimal install paired fine and then had nothing to stream
+    # to -- invisible here until now. See hifiberry/hifiberry-os#641.
+    "bluez",
+    "wireplumber",
+    "libspa-0.2-*",
     "mpd",
     "librespot",
     "shairport-sync",
@@ -272,6 +282,11 @@ SERVICE_PATTERNS = [
     "hifiberry*",
     "config-server*",
     "pipewire*",
+    # bluetooth.service is system scope, wireplumber.service is user scope;
+    # both halves of collect_services() get this list, so each is picked up
+    # in the scope it actually runs in.
+    "bluetooth*",
+    "wireplumber*",
     "mpd*",
     "librespot*",
     "shairport*",
