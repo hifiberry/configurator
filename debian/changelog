@@ -1,3 +1,16 @@
+hifiberry-configurator (2.17.7) stable; urgency=medium
+
+  * config-supportinfo: report the Bluetooth audio stack. PACKAGE_PATTERNS
+    gains bluez, wireplumber and libspa-0.2-*, SERVICE_PATTERNS gains
+    bluetooth* and wireplumber*. Bluetooth audio needs all three pieces
+    present, and until now a bug report named none of them, so their
+    absence from the output said nothing about whether the stack was
+    installed -- the tool had never looked. This blocked triage on
+    hifiberry/hifiberry-os#641 and #642, where the root cause turned out to
+    be a missing libspa-0.2-bluetooth.
+
+ -- HiFiBerry <support@hifiberry.com>  Wed, 26 Aug 2026 20:00:00 +0000
+
 hifiberry-configurator (2.17.6) stable; urgency=medium
 
   * Player registry: read descriptors and icons from
