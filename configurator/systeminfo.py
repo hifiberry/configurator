@@ -260,6 +260,30 @@ class SystemInfo:
                 'fixedInConfigTxt': False
             }
     
+    def _get_bluetooth_info(self) -> Dict[str, Any]:
+        """Bluetooth adapter and audio readiness, never fatal.
+
+        A device with no bluez installed is a normal configuration, not an
+        error, so a failure here degrades to available=False rather than
+        taking the whole system-info payload down with it.
+
+        The bluetooth module is imported here rather than at module scope on
+        purpose: it needs python3-dbus, and system info must stay collectable
+        on a system that lacks it.
+        """
+        try:
+            from .bluetooth import get_bluetooth_status
+            return get_bluetooth_status()
+        except Exception as e:
+            self.logger.error(f"Failed to collect bluetooth info: {e}")
+            return {
+                "available": False,
+                "audio_ready": False,
+                "adapter": None,
+                "devices": [],
+                "issues": [f"Bluetooth status unavailable: {e}"],
+            }
+
     def get_system_info_dict(self) -> Dict[str, Any]:
         """Get all system information as a structured dictionary"""
         try:
@@ -283,6 +307,7 @@ class SystemInfo:
                     'vendor_card': self.get_hat_vendor_card()
                 },
                 'soundcard': soundcard_info,
+                'bluetooth': self._get_bluetooth_info(),
                 'system': {
                     'uuid': system_uuid,
                     'hostname': hostname,
@@ -318,6 +343,13 @@ class SystemInfo:
                     'hat_name': None,
                     'supports_dsp': False,
                     'card_type': []
+                },
+                'bluetooth': {
+                    'available': False,
+                    'audio_ready': False,
+                    'adapter': None,
+                    'devices': [],
+                    'issues': []
                 },
                 'system': {
                     'uuid': None,
