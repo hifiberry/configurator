@@ -1,0 +1,26 @@
+effort = "max"
+
+instructions = """
+The configurator runs as root on customer devices and writes the files that
+decide whether the device boots, has sound, or is reachable on the network. A
+device that a bad write bricks has no console and no way back. Alongside the
+usual defects, report these:
+
+- `subprocess` with `shell=True`, or any command built by interpolating a
+  value that came from the REST API, the config database, or a device
+  descriptor. This is command injection as root.
+- A write to `/boot/config.txt`, an ALSA config, a NetworkManager connection,
+  an fstab entry, a Samba mount or a systemd unit that is not atomic (write a
+  temp file, then rename), or that rewrites a file wholesale and can lose
+  sections it did not mean to touch. An interrupted write must leave the old
+  file intact.
+- A new or changed REST endpoint that is reachable without going through the
+  auth policy, or that widens what an unauthenticated caller can read or
+  change.
+- Secrets from the config database, or credentials of any kind, appearing in
+  `supportinfo` output, log lines, or API responses. Supportinfo is sent to
+  us by customers, so anything in it is effectively published.
+- A behaviour change with no version bump and no changelog entry, where the
+  package version is what tells a device it has an update.
+- New behaviour with no test under `tests/`.
+"""
