@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler, MemoryHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -103,6 +103,7 @@ class ConfigAPIServer:
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
         self.player_registry_handler = PlayerRegistryHandler(self.configdb)
+        self.memory_handler = MemoryHandler()
         self.ble_handler = BLEProvisioningHandler()
         # Extensions: pass the systemd handler's service manager so a freshly
         # installed extension's units and permissions are picked up without a
@@ -154,6 +155,7 @@ class ConfigAPIServer:
                 'endpoints': {
                     'version': '/version',
                     'systeminfo': '/api/v1/systeminfo',
+                    'memory': '/api/v1/memory',
                     'keys': '/api/v1/keys',
                     'key': '/api/v1/key/<key>',
                     'systemd_services': '/api/v1/systemd/services',
@@ -628,6 +630,12 @@ class ConfigAPIServer:
         def set_player_settings(systemd_service):
             """Persist settings for an external player plugin"""
             return self.player_registry_handler.handle_set_player_settings(systemd_service)
+
+        # Memory usage report
+        @self.app.route('/api/v1/memory', methods=['GET'])
+        def get_memory_usage():
+            """Per-feature memory usage report"""
+            return self.memory_handler.handle_get_memory()
 
         # BLE provisioning endpoints
         @self.app.route('/api/v1/ble/provisioning/status', methods=['GET'])

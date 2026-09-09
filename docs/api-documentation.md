@@ -1348,6 +1348,90 @@ Server error:
 - The system will log the operation before executing it
 - Maximum delay is 5 minutes (300 seconds) for safety
 
+## Memory Usage
+
+### `GET /api/v1/memory`
+
+Reports memory usage grouped by feature, so an owner can see which features
+are worth turning off. Read-only.
+
+**Query parameters:**
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `processes` | `1`, `true`, `yes` | Include a per-PID breakdown in each feature's `process_list`. Omitted by default. |
+
+**Why not RES.** RSS counts every shared page in full, once per process using
+it. Several Python services sharing an interpreter each report the interpreter's
+pages as their own, so summing RES across features yields far more than the
+machine has, and overstates what stopping any one of them returns. `pss_kb`
+divides each shared page among its users and therefore sums correctly.
+
+**Why `reclaimable` is a range.** No exact figure exists. Pages shared between a
+feature's own processes are not counted in `min_kb`, and pages it shares with
+the rest of the system will not be freed by stopping it. `min_kb` (private plus
+swapped-out private) is the floor; `estimate_kb` (PSS plus swapped-out PSS) is
+the working estimate.
+
+**Dispositions.** `required` features are shown but offer no action — they
+cannot be turned off without breaking playback. `disable` is `systemctl
+disable`; `uninstall` goes through the extensions page; `reconfigure` means the
+feature is turned off somewhere other than systemd. `none` marks the kernel,
+system and user-session buckets.
+
+Only features with running processes appear. An installed but stopped extension
+uses no memory and is not listed.
+
+**Response:**
+
+```json
+{
+  "system": {
+    "total_kb": 2027104,
+    "free_kb": 400000,
+    "available_kb": 812340,
+    "used_kb": 1214764,
+    "cached_kb": 210400,
+    "buffers_kb": 18200,
+    "swap_total_kb": 102396,
+    "swap_used_kb": 4096,
+    "process_pss_kb": 900000,
+    "unaccounted_kb": 12000
+  },
+  "features": [
+    {
+      "id": "mpd",
+      "name": "Music Player Daemon",
+      "category": "player",
+      "icon": "music",
+      "package": "hifiberry-mpd",
+      "units": ["mpd.service"],
+      "state": "active",
+      "processes": 1,
+      "disposition": "disable",
+      "partial": false,
+      "memory": {
+        "rss_kb": 123702,
+        "pss_kb": 118400,
+        "private_kb": 114900,
+        "shared_kb": 8802,
+        "swap_kb": 0,
+        "swap_pss_kb": 0,
+        "reclaimable": { "min_kb": 114900, "estimate_kb": 118400 }
+      }
+    }
+  ]
+}
+```
+
+`unaccounted_kb` is `total_kb - process_pss_kb - cached_kb - buffers_kb -
+free_kb`, reported so the rows visibly reconcile with the machine's RAM. Shared
+memory is counted both in `cached_kb` and in process PSS, so it is clamped at
+zero rather than going negative.
+
+**Errors:** `503` with `{"status": "error", "message": "..."}` when `/proc`
+cannot be read.
+
 ## Network Configuration
 
 ### `GET /api/v1/network`
