@@ -10,13 +10,20 @@ import os
 import glob
 import json
 import logging
-from typing import Dict, Any, Optional
+import time
+from typing import Dict, Any, Optional, Tuple
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "/etc/configserver/configserver.json"
 CONFIG_DROP_IN_DIR = "/etc/configserver/conf.d"
+
+# How long a read that failed for a reason outside the file itself is trusted
+# before it is tried again. Long enough that a permanently broken system logs
+# twice a minute rather than once per permission lookup, short enough that a
+# device recovers on its own. See _cache_result.
+TRANSIENT_RETRY_SECONDS = 30
 
 class ConfigParser:
     """Parser for the HiFiBerry Configuration Server config file"""
@@ -29,7 +36,10 @@ class ConfigParser:
             config_file: Path to config file (defaults to /etc/configserver/configserver.json)
         """
         self.config_file = config_file or CONFIG_FILE
-        self._config = None
+        # (fingerprint, config, retry_at) as one tuple so it is replaced
+        # atomically: two threads loading at once can then only lose a load,
+        # never pair a fresh fingerprint with a stale config (see _fingerprint).
+        self._cache: Optional[Tuple[Any, Dict[str, Any], Optional[float]]] = None
     
     @staticmethod
     def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -42,9 +52,62 @@ class ConfigParser:
                 base[key] = value
         return base
 
+    def _drop_in_dir(self) -> str:
+        """The conf.d directory that sits next to the main config file."""
+        return os.path.join(os.path.dirname(self.config_file), "conf.d")
+
+    def _fingerprint(self) -> Any:
+        """Cheap identity of everything get_config() reads.
+
+        A drop-in dropped into conf.d underneath a *running* config-server has
+        to be seen without a restart: it is how an extension package grants the
+        Web UI permission to start and stop its service, and until it is read
+        the permission lookup falls back to "status", leaving the player's
+        controls inert with no error to show for it. Only the extension
+        installer used to refresh this, so a shell "apt install" -- or an edit
+        to a permission level -- went unnoticed.
+
+        stat rather than content: get_config() is called on every permission
+        lookup, so this runs constantly and must stay cheap. The file list
+        catches an added or removed drop-in whatever the timestamps do; size
+        and mtime catch an edit to one.
+        """
+        paths = [self.config_file]
+        paths += sorted(glob.glob(os.path.join(self._drop_in_dir(), "*.json")))
+
+        stamps = []
+        for path in paths:
+            try:
+                st = os.stat(path)
+                stamps.append((path, st.st_mtime_ns, st.st_size))
+            except OSError:
+                stamps.append((path, None, None))
+        return tuple(stamps)
+
+    def _cache_result(self, fingerprint: Any, config: Dict[str, Any],
+                      retry_at: Optional[float] = None) -> Dict[str, Any]:
+        """Cache a read, including one that failed.
+
+        An empty result is cached like any other: a missing or unparseable
+        config file logs at error level, and get_config() runs on every
+        permission lookup, so re-reading per call would do nothing but fill the
+        journal. Keyed on the fingerprint, so a file that is later created or
+        repaired -- both of which change its mtime and size -- is picked up.
+
+        retry_at additionally expires the cache at a point in time, for a read
+        that failed for a reason outside the file's own contents: an I/O error,
+        fd exhaustion, an EACCES window while permissions are being fixed. Those
+        clear without the file being written, so the fingerprint alone would
+        never re-read, and every permission lookup would stay on its "status"
+        fallback for the life of the process -- the exact symptom conf.d change
+        detection exists to prevent.
+        """
+        self._cache = (fingerprint, config, retry_at)
+        return config
+
     def _load_drop_ins(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Load and merge drop-in config files from conf.d/ directory."""
-        drop_in_dir = os.path.join(os.path.dirname(self.config_file), "conf.d")
+        drop_in_dir = self._drop_in_dir()
         if not os.path.isdir(drop_in_dir):
             return config
 
@@ -72,11 +135,16 @@ class ConfigParser:
         Returns:
             Dictionary containing the merged configuration data
         """
+        # Taken before reading, not after: a drop-in written while the read is
+        # in progress then leaves the cache looking stale rather than current,
+        # so the next call re-reads instead of latching a half-seen state.
+        fingerprint = self._fingerprint()
+
         try:
             # Load the config file (should be created by debian postinstall)
             if not os.path.exists(self.config_file):
                 logger.error(f"Config file {self.config_file} not found. Please ensure package is properly installed.")
-                return {}
+                return self._cache_result(fingerprint, {})
 
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
@@ -86,15 +154,15 @@ class ConfigParser:
             # Merge drop-in configs
             config = self._load_drop_ins(config)
 
-            self._config = config
-            return config
+            return self._cache_result(fingerprint, config)
 
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config file {self.config_file}: {e}")
-            return {}
+            return self._cache_result(fingerprint, {})
         except Exception as e:
             logger.error(f"Error loading config file {self.config_file}: {e}")
-            return {}
+            return self._cache_result(fingerprint, {},
+                                      time.monotonic() + TRANSIENT_RETRY_SECONDS)
     
     def get_config(self) -> Dict[str, Any]:
         """
@@ -103,9 +171,15 @@ class ConfigParser:
         Returns:
             Dictionary containing the configuration data
         """
-        if self._config is None:
-            self._config = self.load_config()
-        return self._config
+        cache = self._cache
+        if cache is None or cache[0] != self._fingerprint():
+            return self.load_config()
+
+        retry_at = cache[2]
+        if retry_at is not None and time.monotonic() >= retry_at:
+            return self.load_config()
+
+        return cache[1]
     
     def get_section(self, section: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -128,7 +202,7 @@ class ConfigParser:
         Returns:
             Dictionary containing the configuration data
         """
-        self._config = None
+        self._cache = None
         return self.load_config()
     
     def has_section(self, section: str) -> bool:
