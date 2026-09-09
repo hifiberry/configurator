@@ -116,3 +116,60 @@ def test_processes_are_included_on_request(tmp_path):
 def test_unit_state_comes_from_the_state_resolver(tmp_path):
     result = _fixture(tmp_path).collect()
     assert all(f["state"] in ("running", None) for f in result["features"])
+
+
+# --- The statm fallback, end to end. A kernel thread has no mm, so it has no
+# smaps_rollup at all and the reader falls back to statm, which only reports
+# RSS -- and for a kernel thread that is zero too. This is the path that
+# produces the "Kernel" row, and until now only the reader saw it: nothing
+# drove it through collect() to see what the aggregate actually looks like.
+
+def _mkproc_without_rollup(root, pid, comm, ppid=0, resident_pages=0):
+    """A process the way the kernel presents a kernel thread: cgroup root, no
+    smaps_rollup, statm present."""
+    d = os.path.join(str(root), str(pid))
+    os.makedirs(d, exist_ok=True)
+    for name, content in (("comm", comm + "\n"),
+                          ("cgroup", "0::/\n"),
+                          ("cmdline", ""),
+                          ("stat", "%d (%s) S %d 0 0 0\n" % (pid, comm, ppid)),
+                          ("statm", "0 %d 0 0 0 0 0\n" % resident_pages)):
+        with open(os.path.join(d, name), "w") as f:
+            f.write(content)
+
+
+def _kernel_thread_fixture(tmp_path):
+    proc = tmp_path / "proc"
+    meminfo = tmp_path / "meminfo"
+    with open(str(meminfo), "w") as f:
+        f.write(MEMINFO)
+    _mkproc(proc, 10, "mpd", "mpd.service")
+    _mkproc_without_rollup(proc, 2, "kthreadd")
+    _mkproc_without_rollup(proc, 3, "ksoftirqd/0", ppid=2)
+    return MemoryInfo(
+        proc_root=str(proc),
+        features_d_dirs=[],
+        players_d_dirs=[],
+        package_resolver=lambda units: {},
+        state_resolver=lambda units: {},
+        meminfo_path=str(meminfo),
+    )
+
+
+def _kernel_row(tmp_path):
+    result = _kernel_thread_fixture(tmp_path).collect()
+    return [f for f in result["features"] if f["id"] == "kernel"][0]
+
+
+def test_a_process_without_smaps_rollup_flags_its_feature_partial(tmp_path):
+    assert _kernel_row(tmp_path)["partial"] is True
+
+
+def test_pss_of_processes_without_smaps_rollup_aggregates_to_zero(tmp_path):
+    """pss_kb is None for every member, so the sum is 0 -- not a missing
+    figure but a real one: PSS of a kernel thread is zero by definition."""
+    row = _kernel_row(tmp_path)
+    assert row["processes"] == 2
+    assert row["memory"]["pss_kb"] == 0
+    assert row["memory"]["rss_kb"] == 0
+    assert row["memory"]["reclaimable"] == {"min_kb": 0, "estimate_kb": 0}
