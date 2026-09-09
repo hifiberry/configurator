@@ -397,3 +397,154 @@ class FeatureResolver:
         for pid, feature_id in assigned.items():
             groups.setdefault(feature_id, []).append(by_pid[pid])
         return groups
+
+
+def parse_meminfo(text: str) -> dict:
+    values = {}
+    for line in text.splitlines():
+        key, _, rest = line.partition(':')
+        fields = rest.split()
+        if not fields:
+            continue
+        try:
+            values[key.strip()] = int(fields[0])
+        except ValueError:
+            continue
+    return values
+
+
+def systemd_state_resolver(units: List[str]) -> dict:
+    """Map unit -> ActiveState via the existing manager, system and user units alike."""
+    if not units:
+        return {}
+    try:
+        from .systemd_service import SystemdServiceManager
+        manager = SystemdServiceManager()
+    except Exception as e:
+        logger.warning("Cannot query unit state: %s", e)
+        return {}
+
+    # list_services() returns every unit in one pass, system and user alike.
+    # status() would cost three subprocess calls per unit.
+    try:
+        ok, services = manager.list_services()
+    except Exception as e:
+        logger.warning("Cannot list units: %s", e)
+        return {}
+
+    active = {s['name']: s.get('active') for s in services} if ok else {}
+    return {unit: active.get(unit) for unit in units}
+
+
+class MemoryInfo:
+    """Collects a full memory report: system totals plus per-feature usage."""
+
+    def __init__(self, proc_root: str = "/proc",
+                 features_d_dirs: Optional[List[str]] = None,
+                 players_d_dirs: Optional[List[str]] = None,
+                 package_resolver=None, state_resolver=None,
+                 meminfo_path: str = "/proc/meminfo"):
+        self.proc_root = proc_root
+        self.features_d_dirs = FEATURES_D_DIRS if features_d_dirs is None else features_d_dirs
+        self.players_d_dirs = PLAYERS_D_DIRS if players_d_dirs is None else players_d_dirs
+        self.package_resolver = package_resolver or dpkg_package_resolver
+        self.state_resolver = state_resolver or systemd_state_resolver
+        self.meminfo_path = meminfo_path
+
+    def _descriptors(self) -> List[FeatureDescriptor]:
+        # players.d first so an explicit features.d entry can override a player.
+        descriptors = {d.id: d for d in descriptors_from_players(self.players_d_dirs)}
+        for descriptor in load_descriptors(self.features_d_dirs):
+            descriptors[descriptor.id] = descriptor
+        return list(descriptors.values())
+
+    def _system(self, meminfo: dict, total_pss_kb: int) -> dict:
+        total = meminfo.get('MemTotal', 0)
+        free = meminfo.get('MemFree', 0)
+        cached = meminfo.get('Cached', 0)
+        buffers = meminfo.get('Buffers', 0)
+        swap_total = meminfo.get('SwapTotal', 0)
+        swap_free = meminfo.get('SwapFree', 0)
+
+        # Shared memory is counted both in Cached and in process PSS, so this
+        # can go slightly negative on a busy device. Report the floor.
+        unaccounted = total - total_pss_kb - cached - buffers - free
+
+        return {
+            'total_kb': total,
+            'free_kb': free,
+            'available_kb': meminfo.get('MemAvailable', 0),
+            'used_kb': total - meminfo.get('MemAvailable', 0),
+            'cached_kb': cached,
+            'buffers_kb': buffers,
+            'swap_total_kb': swap_total,
+            'swap_used_kb': swap_total - swap_free,
+            'process_pss_kb': total_pss_kb,
+            'unaccounted_kb': max(unaccounted, 0),
+        }
+
+    def collect(self, include_processes: bool = False) -> dict:
+        processes = ProcMemoryReader(self.proc_root).read_all()
+        resolver = FeatureResolver(self._descriptors(), package_resolver=self.package_resolver)
+        groups = resolver.resolve(processes)
+
+        units = sorted({u for feature_id in groups
+                        for u in resolver.describe(feature_id).units})
+        states = self.state_resolver(units)
+
+        features = []
+        total_pss = 0
+        for feature_id, members in groups.items():
+            descriptor = resolver.describe(feature_id)
+            rss = sum(p.rss_kb for p in members)
+            pss = sum((p.pss_kb or 0) for p in members)
+            private = sum(p.private_kb for p in members)
+            shared = sum(p.shared_kb for p in members)
+            swap = sum(p.swap_kb for p in members)
+            swap_pss = sum(p.swap_pss_kb for p in members)
+            total_pss += pss
+
+            row = {
+                'id': feature_id,
+                'name': descriptor.name,
+                'category': descriptor.category,
+                'icon': descriptor.icon,
+                'package': descriptor.provided_by,
+                'units': descriptor.units,
+                'state': next((states.get(u) for u in descriptor.units
+                               if states.get(u)), None),
+                'processes': len(members),
+                'disposition': descriptor.disposition,
+                'partial': any(p.partial for p in members),
+                'memory': {
+                    'rss_kb': rss,
+                    'pss_kb': pss,
+                    'private_kb': private,
+                    'shared_kb': shared,
+                    'swap_kb': swap,
+                    'swap_pss_kb': swap_pss,
+                    'reclaimable': {
+                        'min_kb': private + swap_pss,
+                        'estimate_kb': pss + swap_pss,
+                    },
+                },
+            }
+            if include_processes:
+                row['process_list'] = [
+                    {'pid': p.pid, 'comm': p.comm, 'rss_kb': p.rss_kb,
+                     'pss_kb': p.pss_kb, 'private_kb': p.private_kb,
+                     'swap_pss_kb': p.swap_pss_kb}
+                    for p in sorted(members, key=lambda x: x.rss_kb, reverse=True)
+                ]
+            features.append(row)
+
+        features.sort(key=lambda f: f['memory']['reclaimable']['estimate_kb'], reverse=True)
+
+        try:
+            with open(self.meminfo_path, 'r') as f:
+                meminfo = parse_meminfo(f.read())
+        except OSError as e:
+            logger.error("Cannot read %s: %s", self.meminfo_path, e)
+            meminfo = {}
+
+        return {'system': self._system(meminfo, total_pss), 'features': features}
