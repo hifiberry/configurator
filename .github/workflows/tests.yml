@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # HiFiBerryOS is Debian trixie, which ships Python 3.13. Testing on
+          # the version the package actually runs under is worth more than
+          # testing on the newest one.
+          python-version: '3.13'
+
+      - name: Install test dependencies
+        # requirements.txt is deliberately not used here. It is a record of
+        # what the package needs on a device, not a pip manifest: it names
+        # Debian packages (python3-pyalsaaudio, hateeprom) and a `dbus` that
+        # is not the dbus-python on PyPI, so `pip install -r` fails outright.
+        #
+        # This is the minimal set the suite actually imports. netifaces and
+        # dbus are left out on purpose. configurator.handlers degrades when an
+        # optional runtime dependency is missing -- see the comment in
+        # handlers/__init__.py -- and two tests skip themselves with a reason
+        # when it does. That is the designed behaviour and keeps this run
+        # deterministic; installing netifaces instead surfaces an unrelated,
+        # order-dependent failure in test_pytest_collection_resilience.py that
+        # has nothing to say about the code under test.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest flask cryptography requests
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
