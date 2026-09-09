@@ -62,6 +62,17 @@ setup(
         ('/etc/avahi/services', [
             'avahi-services/hifiberry.service',
         ]),
+        ('/usr/share/hifiberry/features.d', [
+            'features.d/audiocontrol.json',
+            'features.d/mpd.json',
+            'features.d/pipewire.json',
+            'features.d/bluetooth.json',
+            'features.d/raat.json',
+            'features.d/configurator.json',
+            'features.d/webui.json',
+            'features.d/dsp.json',
+            'features.d/display.json',
+        ]),
     ],
     entry_points={
         "console_scripts": [

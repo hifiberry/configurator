@@ -1348,6 +1348,105 @@ Server error:
 - The system will log the operation before executing it
 - Maximum delay is 5 minutes (300 seconds) for safety
 
+## Memory Usage
+
+### `GET /api/v1/memory`
+
+Reports memory usage grouped by feature, so an owner can see which features
+are worth turning off. Read-only.
+
+**Query parameters:**
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `processes` | `1`, `true`, `yes` | Include a per-PID breakdown in each feature's `process_list`. Omitted by default. |
+
+**Why not RES.** RSS counts every shared page in full, once per process using
+it. Several Python services sharing an interpreter each report the interpreter's
+pages as their own, so summing RES across features yields far more than the
+machine has, and overstates what stopping any one of them returns. `pss_kb`
+divides each shared page among its users and therefore sums correctly.
+
+**Why `reclaimable` is a range.** No exact figure exists. Pages shared between a
+feature's own processes are not counted in `min_kb`, and pages it shares with
+the rest of the system will not be freed by stopping it. `min_kb` (private) is
+the floor; `estimate_kb` (PSS) is the working estimate. Both are RAM-only.
+
+**Why swap is reported separately, not added in.** `reclaimable` also carries
+`swap_pss_kb`, the feature's PSS-weighted share of swap — but it is not folded
+into `min_kb` or `estimate_kb`. Stopping a feature does return both its RAM and
+its swap, but they are different resources: swap is disk, already reclaimed
+from RAM, and freeing it does nothing for memory pressure. A feature can hold
+little RAM and a lot of swap — on one device the local display held 56 MB of
+RAM and 141 MB of swap — and a figure that adds them together reports 197 MB
+"freed" when only 56 MB of RAM actually is, which misleads an owner watching
+memory pressure and skews any ranking built on it. `swap_pss_kb` lets a caller
+see the swap figure without that distortion.
+
+**Dispositions.** `required` features are shown but offer no action — they
+cannot be turned off without breaking playback. `disable` is `systemctl
+disable`; `uninstall` goes through the extensions page; `reconfigure` means the
+feature is turned off somewhere other than systemd. `none` means reported, no
+action offered: the kernel, system and user-session buckets, and every unit
+found on the device that no descriptor claims — most of those are core
+plumbing (`dbus`, `systemd-journald`, `systemd-udevd`, `polkit`, `ssh`), and
+suggesting they be reduced would be worse than suggesting nothing.
+
+Only features with running processes appear. An installed but stopped extension
+uses no memory and is not listed.
+
+**Response:**
+
+```json
+{
+  "system": {
+    "total_kb": 2027104,
+    "free_kb": 400000,
+    "available_kb": 812340,
+    "used_kb": 1214764,
+    "cached_kb": 210400,
+    "buffers_kb": 18200,
+    "swap_total_kb": 102396,
+    "swap_used_kb": 4096,
+    "process_pss_kb": 900000,
+    "unaccounted_kb": 12000
+  },
+  "features": [
+    {
+      "id": "mpd",
+      "name": "Music Player Daemon",
+      "category": "player",
+      "icon": "music",
+      "package": "hifiberry-mpd",
+      "units": ["mpd.service"],
+      "state": "active",
+      "processes": 1,
+      "disposition": "disable",
+      "partial": false,
+      "memory": {
+        "rss_kb": 123702,
+        "pss_kb": 118400,
+        "private_kb": 114900,
+        "shared_kb": 8802,
+        "swap_kb": 2048,
+        "swap_pss_kb": 1800,
+        "reclaimable": { "min_kb": 114900, "estimate_kb": 118400, "swap_pss_kb": 1800 }
+      }
+    }
+  ]
+}
+```
+
+`unaccounted_kb` is `total_kb - process_pss_kb - cached_kb - buffers_kb -
+free_kb`, reported so the rows visibly reconcile with the machine's RAM. Shared
+memory is counted both in `cached_kb` and in process PSS, so it is clamped at
+zero rather than going negative.
+
+**Errors:** `503` with `{"status": "error", "message": "failed to collect memory
+report"}` when `/proc` cannot be read. The response carries a generic
+message; the underlying exception is logged server-side rather than returned,
+so a collection failure does not hand a caller internal filesystem paths.
+
 ## Network Configuration
 
 ### `GET /api/v1/network`

@@ -1,0 +1,8 @@
+{
+  "name": "Audio engine",
+  "provided_by": "pipewire",
+  "systemd_services": ["pipewire.service", "pipewire-pulse.service", "wireplumber.service", "filter-chain.service"],
+  "icon": "waveform",
+  "category": "core",
+  "disposition": "required"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Configuration server",
+  "provided_by": "hifiberry-configurator",
+  "systemd_services": ["config-server.service", "hifiberry-auth.service"],
+  "icon": "settings",
+  "category": "core",
+  "disposition": "required"
+}

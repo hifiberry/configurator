@@ -1,0 +1,8 @@
+{
+  "name": "DSP toolkit",
+  "provided_by": "hifiberry-dsp",
+  "systemd_services": ["sigmatcpserver.service", "roomeq-server.service"],
+  "icon": "equalizer",
+  "category": "dsp",
+  "disposition": "disable"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Audio control",
+  "provided_by": "hifiberry-audiocontrol",
+  "systemd_services": ["audiocontrol.service", "audiocontrol-metadata.service"],
+  "icon": "adjustments",
+  "category": "core",
+  "disposition": "required"
+}

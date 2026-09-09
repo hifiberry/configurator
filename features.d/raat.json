@@ -1,0 +1,8 @@
+{
+  "name": "Roon (RAAT)",
+  "provided_by": "hifiberry-raat",
+  "systemd_services": ["raat.service"],
+  "icon": "roon",
+  "category": "player",
+  "disposition": "disable"
+}
