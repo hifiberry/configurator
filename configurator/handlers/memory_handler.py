@@ -31,7 +31,7 @@ class MemoryHandler:
             return self.memory_info.collect(include_processes=include_processes), 200
         except Exception as e:
             logger.error("Failed to collect memory report: %s", e)
-            return {'status': 'error', 'message': str(e)}, 503
+            return {'status': 'error', 'message': 'failed to collect memory report'}, 503
 
     def handle_get_memory(self):
         include_processes = request.args.get('processes', '0') in ('1', 'true', 'yes')

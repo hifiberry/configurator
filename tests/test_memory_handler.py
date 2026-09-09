@@ -32,3 +32,4 @@ def test_handler_reports_collection_failure_as_503():
     payload, status = MemoryHandler(memory_info=Broken()).get_report(include_processes=False)
     assert status == 503
     assert payload["status"] == "error"
+    assert "no /proc" not in payload["message"]

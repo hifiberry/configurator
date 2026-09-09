@@ -1429,8 +1429,10 @@ free_kb`, reported so the rows visibly reconcile with the machine's RAM. Shared
 memory is counted both in `cached_kb` and in process PSS, so it is clamped at
 zero rather than going negative.
 
-**Errors:** `503` with `{"status": "error", "message": "..."}` when `/proc`
-cannot be read.
+**Errors:** `503` with `{"status": "error", "message": "failed to collect memory
+report"}` when `/proc` cannot be read. The response carries a generic
+message; the underlying exception is logged server-side rather than returned,
+so a collection failure does not hand a caller internal filesystem paths.
 
 ## Network Configuration
 
