@@ -1,0 +1,8 @@
+{
+  "name": "Bluetooth",
+  "provided_by": "hifiberry-bluetooth",
+  "systemd_services": ["bluetooth.service", "hifiberry-bluetooth.service"],
+  "icon": "bluetooth",
+  "category": "player",
+  "disposition": "disable"
+}

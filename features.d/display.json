@@ -1,0 +1,9 @@
+{
+  "name": "Local display",
+  "provided_by": "hifiberry-webui",
+  "systemd_services": ["nowplaying-sdl.service", "lightdm.service"],
+  "processes": ["cage", "cog"],
+  "icon": "device-tv",
+  "category": "display",
+  "disposition": "reconfigure"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Music Player Daemon",
+  "provided_by": "hifiberry-mpd",
+  "systemd_services": ["mpd.service"],
+  "icon": "music",
+  "category": "player",
+  "disposition": "disable"
+}

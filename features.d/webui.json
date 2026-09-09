@@ -1,0 +1,8 @@
+{
+  "name": "Web interface",
+  "provided_by": "hifiberry-webui",
+  "systemd_services": ["nginx.service"],
+  "icon": "browser",
+  "category": "core",
+  "disposition": "required"
+}
