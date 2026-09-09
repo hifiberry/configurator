@@ -26,3 +26,12 @@ def test_display_claims_the_browser_by_process():
     by_id = {d.id: d for d in load_descriptors([FEATURES_D])}
     assert "cog" in by_id["display"].processes
     assert "cage" in by_id["display"].processes
+
+
+def test_audiocontrol_claims_its_metadata_service_too():
+    # audiocontrol.service and audiocontrol-metadata.service are separate
+    # systemd units but one feature -- the metadata half shouldn't derive
+    # into its own "none" disposition row.
+    by_id = {d.id: d for d in load_descriptors([FEATURES_D])}
+    assert "audiocontrol.service" in by_id["audiocontrol"].units
+    assert "audiocontrol-metadata.service" in by_id["audiocontrol"].units
