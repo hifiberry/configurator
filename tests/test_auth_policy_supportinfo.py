@@ -112,3 +112,28 @@ def test_matcher_recognizes_patterns_that_would_expose_supportinfo(pattern):
 def test_matcher_does_not_fire_on_an_unrelated_ok_pattern():
     assert not _path_matches("/systeminfo", SUPPORTINFO_REMAINDER)
     assert not _path_matches("/systeminfo", SUPPORTINFO_ROUTE)
+
+
+# --- /memory: the per-feature memory report. Read-only, and the System
+# Information page that renders it is reachable before a password is set, so
+# it has to be tier ok like every sibling card's endpoint on that page. If it
+# falls through to the catch-all risky rule the card 401s on a stock device
+# while /systeminfo, /network and the rest render fine -- a failure mode
+# nothing else in the suite would catch.
+MEMORY_REMAINDER = "/memory"
+
+
+def _ok_get_paths():
+    return [
+        path
+        for rule in _policy()["rules"]
+        if rule.get("tier") == "ok" and "GET" in rule.get("methods", [])
+        for path in rule.get("paths", [])
+    ]
+
+
+def test_memory_report_is_reachable_without_authentication():
+    assert any(_path_matches(pattern, MEMORY_REMAINDER) for pattern in _ok_get_paths()), (
+        "GET /memory must be tier ok: it is a read-only report rendered on the "
+        "System Information page, which is reachable before a password is set"
+    )
