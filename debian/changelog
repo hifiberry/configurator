@@ -1,3 +1,30 @@
+hifiberry-configurator (2.17.9) stable; urgency=medium
+
+  * conf.d is re-read when it changes, so a drop-in installed under a running
+    config-server is seen without a restart. ConfigParser cached the merged
+    config for the life of the process; an extension package's
+    /etc/configserver/conf.d/<ext>.json -- which is what grants the Web UI
+    permission to start and stop its service -- therefore went unread, the
+    permission lookup fell back to its "status" default, and the player showed
+    up in the UI with start and stop controls that did nothing, silently. The
+    extension installer already reloaded the config after apt, so installs
+    driven from the Web UI were unaffected; a shell "apt install", or an edit
+    to a permission level in an existing drop-in, was not. get_config() now
+    compares a stat-based fingerprint of the files it reads and re-reads when
+    it changes.
+  * A config file that cannot be read caches its empty result rather than
+    being re-read on every call. Each failed read logs at error level and
+    get_config() runs on every permission lookup, so with the change above it
+    would otherwise fill the journal. A missing or unparseable file is repaired
+    by writing it, which the fingerprint sees; a read that failed for a reason
+    outside the file's contents -- an I/O error, fd exhaustion, an EACCES
+    window while permissions are being fixed -- clears without the file being
+    written, so that case expires after 30 seconds instead. Otherwise a
+    momentary failure would pin every permission lookup to its "status"
+    fallback for the life of the process.
+
+ -- HiFiBerry <daniel@hifiberry.com>  Wed, 09 Sep 2026 08:12:40 +0000
+
 hifiberry-configurator (2.17.8) stable; urgency=medium
 
   * systeminfo: add a bluetooth section to /api/v1/systeminfo, reporting
