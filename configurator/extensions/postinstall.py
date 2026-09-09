@@ -2,13 +2,14 @@
 """Make a freshly installed extension visible to a *running* config-server.
 
 An extension deb ships /etc/configserver/conf.d/<ext>.json to grant the Web UI
-permission to control its service. ConfigParser caches the merged conf.d config
-at startup, so without this the new permission is invisible until a restart --
-the long-standing "restart config-server after installing a player" gotcha.
+permission to control its service, and the systemd service map has to take in
+the unit the deb just installed.
 
-Restarting is not an option here: it would kill the job the UI is polling. So
-we reload in place instead, which fixes the install path and the underlying
-bug at once.
+Restarting config-server is not an option here: it would kill the job the UI is
+polling. So we refresh in place instead. ConfigParser now notices a changed
+conf.d by itself, so the config reload is no longer what makes a new permission
+visible -- it just makes it visible at a defined point, before the job reports
+success, rather than on the next read.
 
 Every step is best-effort and independent: one failure must not strand the
 others, because a half-refreshed system is what produces the confusing
