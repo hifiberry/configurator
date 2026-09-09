@@ -1376,8 +1376,11 @@ the working estimate.
 **Dispositions.** `required` features are shown but offer no action — they
 cannot be turned off without breaking playback. `disable` is `systemctl
 disable`; `uninstall` goes through the extensions page; `reconfigure` means the
-feature is turned off somewhere other than systemd. `none` marks the kernel,
-system and user-session buckets.
+feature is turned off somewhere other than systemd. `none` means reported, no
+action offered: the kernel, system and user-session buckets, and every unit
+found on the device that no descriptor claims — most of those are core
+plumbing (`dbus`, `systemd-journald`, `systemd-udevd`, `polkit`, `ssh`), and
+suggesting they be reduced would be worse than suggesting nothing.
 
 Only features with running processes appear. An installed but stopped extension
 uses no memory and is not listed.

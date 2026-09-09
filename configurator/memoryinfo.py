@@ -176,7 +176,18 @@ FEATURES_D_DIRS = ["/usr/share/hifiberry/features.d", "/etc/hifiberry/features.d
 PLAYERS_D_DIRS = ["/usr/share/hifiberry/players.d", "/etc/hifiberry/players.d"]
 
 VALID_DISPOSITIONS = ("required", "disable", "uninstall", "reconfigure", "none")
+
+# What a *shipped* descriptor gets when it names units but omits the field.
+# Someone wrote that file knowing the feature, so "disable" is a fair guess.
 DEFAULT_DISPOSITION = "disable"
+
+# What a *derived* feature gets -- a unit on the device that no descriptor
+# claims. Nobody has classified it, and most of what lands here is core
+# plumbing: dbus, systemd-journald, systemd-udevd, polkit, ssh. Offering to
+# reduce those is worse than offering nothing, so they are reported without
+# an action. Deliberately a separate constant from DEFAULT_DISPOSITION: the
+# two cases look alike but mean opposite things.
+DERIVED_DISPOSITION = "none"
 
 
 @dataclass
@@ -263,8 +274,15 @@ def descriptors_from_players(dirs: List[str]) -> List[FeatureDescriptor]:
     return list(by_id.values())
 
 
-def dpkg_package_resolver(units: List[str]) -> dict:
-    """Map unit name -> owning debian package, in two batched subprocess calls."""
+DPKG_STATUS_PATH = "/var/lib/dpkg/status"
+
+
+def dpkg_package_lookup(units: List[str]) -> dict:
+    """Map unit name -> owning debian package, in two batched subprocess calls.
+
+    The uncached lookup. Callers that run repeatedly should go through
+    DpkgPackageResolver rather than calling this directly.
+    """
     if not units:
         return {}
 
@@ -307,6 +325,56 @@ def dpkg_package_resolver(units: List[str]) -> dict:
     return packages
 
 
+class DpkgPackageResolver:
+    """dpkg_package_lookup, memoised against the mtime of dpkg's status file.
+
+    GET /memory is polled every 60 s per open tab, and `dpkg -S` over ~30 unit
+    fragment paths on SD-card storage is not cheap. Nothing the answer depends
+    on changes unless a package is installed or removed, and dpkg rewrites
+    /var/lib/dpkg/status when that happens -- so its mtime is the invalidation
+    signal, and a stale answer cannot outlive the change that made it stale.
+
+    Deliberately an instance, not a module-level cache: MemoryInfo owns one
+    for the life of the process (the handler is built once at server start),
+    while every test gets a fresh one with nothing to reset.
+    """
+
+    def __init__(self, status_path: str = DPKG_STATUS_PATH, lookup=None):
+        self.status_path = status_path
+        self.lookup = lookup or dpkg_package_lookup
+        self._stamp = None
+        self._cache = {}
+
+    def _stamp_now(self):
+        try:
+            stat = os.stat(self.status_path)
+        except OSError:
+            # No dpkg on this system, or the file is unreadable. Nothing can
+            # invalidate the cache, and nothing it holds can go stale either.
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def __call__(self, units: List[str]) -> dict:
+        if not units:
+            return {}
+
+        stamp = self._stamp_now()
+        if stamp != self._stamp:
+            self._cache = {}
+            self._stamp = stamp
+
+        missing = [u for u in units if u not in self._cache]
+        if missing:
+            found = self.lookup(missing)
+            # Remember the misses as well. Most units on a device belong to no
+            # package dpkg can name -- re-asking about those on every poll is
+            # the bulk of the cost this cache exists to avoid.
+            for unit in missing:
+                self._cache[unit] = found.get(unit)
+
+        return {u: self._cache[u] for u in units if self._cache.get(u) is not None}
+
+
 _BUCKETS = {
     "kernel": ("Kernel", "none"),
     "system": ("System", "none"),
@@ -319,7 +387,10 @@ class FeatureResolver:
 
     def __init__(self, descriptors: List[FeatureDescriptor], package_resolver=None):
         self.descriptors = descriptors
-        self.package_resolver = package_resolver or dpkg_package_resolver
+        # Uncached: a FeatureResolver is built fresh for every collect(), so a
+        # per-instance cache here would never be reused. MemoryInfo passes its
+        # own long-lived DpkgPackageResolver in.
+        self.package_resolver = package_resolver or dpkg_package_lookup
         self._by_id = {d.id: d for d in descriptors}
         self._by_unit = {}
         for descriptor in descriptors:
@@ -374,7 +445,7 @@ class FeatureResolver:
                     id=feature_id, name=feature_id,
                     provided_by=packages.get(p.unit),
                     units=[p.unit], processes=[], icon=None, category=None,
-                    disposition=DEFAULT_DISPOSITION,
+                    disposition=DERIVED_DISPOSITION,
                 ))
                 assigned[p.pid] = feature_id
                 continue
@@ -447,7 +518,7 @@ class MemoryInfo:
         self.proc_root = proc_root
         self.features_d_dirs = FEATURES_D_DIRS if features_d_dirs is None else features_d_dirs
         self.players_d_dirs = PLAYERS_D_DIRS if players_d_dirs is None else players_d_dirs
-        self.package_resolver = package_resolver or dpkg_package_resolver
+        self.package_resolver = package_resolver or DpkgPackageResolver()
         self.state_resolver = state_resolver or systemd_state_resolver
         self.meminfo_path = meminfo_path
 
