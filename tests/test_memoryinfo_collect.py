@@ -86,8 +86,67 @@ def test_memory_numbers_are_summed_per_feature(tmp_path):
     assert mpd["memory"]["private_kb"] == 8000
     assert mpd["memory"]["shared_kb"] == 4000
     assert mpd["memory"]["swap_pss_kb"] == 500
-    # floor = private + swap_pss; estimate = pss + swap_pss
-    assert mpd["memory"]["reclaimable"] == {"min_kb": 8500, "estimate_kb": 8500}
+    # reclaimable is RAM-only: floor = private, estimate = pss.
+    # swap_pss_kb rides along in the same dict, but is not folded in.
+    assert mpd["memory"]["reclaimable"] == {
+        "min_kb": 8000, "estimate_kb": 8000, "swap_pss_kb": 500,
+    }
+
+
+SWAPPY_ROLLUP = """55c0-ffff ---p 0 00:00 0 [rollup]
+Rss:               57344 kB
+Pss:                57344 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:         0 kB
+Private_Dirty:      57344 kB
+Swap:              144384 kB
+SwapPss:           144384 kB
+"""
+
+
+def _mkproc_with_rollup(root, pid, comm, unit, rollup, ppid=1):
+    d = os.path.join(str(root), str(pid))
+    os.makedirs(d, exist_ok=True)
+    for name, content in (("comm", comm + "\n"),
+                          ("cgroup", "0::/system.slice/%s\n" % unit),
+                          ("cmdline", comm),
+                          ("stat", "%d (%s) S %d 0 0 0\n" % (pid, comm, ppid)),
+                          ("smaps_rollup", rollup)):
+        with open(os.path.join(d, name), "w") as f:
+            f.write(content)
+
+
+def test_reclaimable_is_ram_only_when_swap_dominates(tmp_path):
+    # The local display on a real device: ~56 MB RAM, ~141 MB swap.
+    # reclaimable must report the small RAM figure, with swap alongside
+    # it rather than folded in -- otherwise stopping the feature looks
+    # like it frees ~197 MB when it actually frees ~56 MB of RAM.
+    proc = tmp_path / "proc"
+    features_d = tmp_path / "features.d"
+    os.makedirs(str(features_d), exist_ok=True)
+    with open(os.path.join(str(features_d), "display.json"), "w") as f:
+        json.dump({"name": "Display", "provided_by": "hifiberry-display",
+                   "systemd_services": ["display.service"],
+                   "disposition": "disable"}, f)
+    meminfo = tmp_path / "meminfo"
+    with open(str(meminfo), "w") as f:
+        f.write(MEMINFO)
+    _mkproc_with_rollup(proc, 20, "display", "display.service", SWAPPY_ROLLUP)
+    result = MemoryInfo(
+        proc_root=str(proc),
+        features_d_dirs=[str(features_d)],
+        players_d_dirs=[],
+        package_resolver=lambda units: {},
+        state_resolver=lambda units: {},
+        meminfo_path=str(meminfo),
+    ).collect()
+    display = [f for f in result["features"] if f["id"] == "display"][0]
+    reclaimable = display["memory"]["reclaimable"]
+    assert reclaimable == {
+        "min_kb": 57344, "estimate_kb": 57344, "swap_pss_kb": 144384,
+    }
+    assert reclaimable["estimate_kb"] < reclaimable["swap_pss_kb"]
 
 
 def test_features_are_sorted_by_reclaimable_estimate(tmp_path):
@@ -172,4 +231,6 @@ def test_pss_of_processes_without_smaps_rollup_aggregates_to_zero(tmp_path):
     assert row["processes"] == 2
     assert row["memory"]["pss_kb"] == 0
     assert row["memory"]["rss_kb"] == 0
-    assert row["memory"]["reclaimable"] == {"min_kb": 0, "estimate_kb": 0}
+    assert row["memory"]["reclaimable"] == {
+        "min_kb": 0, "estimate_kb": 0, "swap_pss_kb": 0,
+    }

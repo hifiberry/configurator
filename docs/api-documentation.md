@@ -1369,9 +1369,19 @@ divides each shared page among its users and therefore sums correctly.
 
 **Why `reclaimable` is a range.** No exact figure exists. Pages shared between a
 feature's own processes are not counted in `min_kb`, and pages it shares with
-the rest of the system will not be freed by stopping it. `min_kb` (private plus
-swapped-out private) is the floor; `estimate_kb` (PSS plus swapped-out PSS) is
-the working estimate.
+the rest of the system will not be freed by stopping it. `min_kb` (private) is
+the floor; `estimate_kb` (PSS) is the working estimate. Both are RAM-only.
+
+**Why swap is reported separately, not added in.** `reclaimable` also carries
+`swap_pss_kb`, the feature's PSS-weighted share of swap — but it is not folded
+into `min_kb` or `estimate_kb`. Stopping a feature does return both its RAM and
+its swap, but they are different resources: swap is disk, already reclaimed
+from RAM, and freeing it does nothing for memory pressure. A feature can hold
+little RAM and a lot of swap — on one device the local display held 56 MB of
+RAM and 141 MB of swap — and a figure that adds them together reports 197 MB
+"freed" when only 56 MB of RAM actually is, which misleads an owner watching
+memory pressure and skews any ranking built on it. `swap_pss_kb` lets a caller
+see the swap figure without that distortion.
 
 **Dispositions.** `required` features are shown but offer no action — they
 cannot be turned off without breaking playback. `disable` is `systemctl
@@ -1418,9 +1428,9 @@ uses no memory and is not listed.
         "pss_kb": 118400,
         "private_kb": 114900,
         "shared_kb": 8802,
-        "swap_kb": 0,
-        "swap_pss_kb": 0,
-        "reclaimable": { "min_kb": 114900, "estimate_kb": 118400 }
+        "swap_kb": 2048,
+        "swap_pss_kb": 1800,
+        "reclaimable": { "min_kb": 114900, "estimate_kb": 118400, "swap_pss_kb": 1800 }
       }
     }
   ]

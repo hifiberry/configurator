@@ -595,8 +595,9 @@ class MemoryInfo:
                     'swap_kb': swap,
                     'swap_pss_kb': swap_pss,
                     'reclaimable': {
-                        'min_kb': private + swap_pss,
-                        'estimate_kb': pss + swap_pss,
+                        'min_kb': private,
+                        'estimate_kb': pss,
+                        'swap_pss_kb': swap_pss,
                     },
                 },
             }
