@@ -1,6 +1,10 @@
 [Unit]
 Description=Store current volume settings to configuration database
-After=sound.target network.target local-fs.target
+# Start after volume-restore. Otherwise the boot-time store, pulled in by
+# multi-user.target and by volume-store.timer's Requires=, can run first and
+# save the mixer's power-on level (full volume on pcm512x cards) over the
+# stored one, which volume-restore then restores.
+After=sound.target network.target local-fs.target volume-restore.service
 Requires=local-fs.target
 
 [Service]
