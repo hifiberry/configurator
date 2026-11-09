@@ -43,5 +43,5 @@ hifiberry-configurator (2.18.0) stable; urgency=medium
     default and returned 401 on a device with no password set, so the card
     read "not available" while every card beside it worked.
 
- -- HiFiBerry <support@hifiberry.com>  Mi., 09 Sep. 2026 10:01:52 +0000
+ -- HiFiBerry <support@hifiberry.com>  Wed, 09 Sep 2026 10:01:52 +0000
 
