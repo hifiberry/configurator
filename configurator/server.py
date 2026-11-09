@@ -102,7 +102,12 @@ class ConfigAPIServer:
         self.i2c_handler = I2CHandler()
         self.volume_handler = VolumeHandler()
         self.bluetooth_handler = BluetoothHandler()
-        self.player_registry_handler = PlayerRegistryHandler(self.configdb)
+        # The service manager lets a settings save restart the player, so the
+        # change takes effect at once rather than on the next reboot.
+        self.player_registry_handler = PlayerRegistryHandler(
+            self.configdb,
+            service_manager=getattr(self.systemd_handler, 'service_manager', None),
+        )
         self.memory_handler = MemoryHandler()
         self.ble_handler = BLEProvisioningHandler()
         # Extensions: pass the systemd handler's service manager so a freshly
