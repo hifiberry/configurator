@@ -177,8 +177,11 @@ class PlayerRegistryHandler:
     """Handler for external player discovery and icon serving"""
 
     def __init__(self, configdb=None, players_d_dir=PLAYERS_D_DIR,
-                 vendor_players_d_dir=VENDOR_PLAYERS_D_DIR):
+                 vendor_players_d_dir=VENDOR_PLAYERS_D_DIR, service_manager=None):
         self.configdb = configdb
+        # Used to restart a player after its settings change; without one,
+        # settings are stored and take effect on the player's next start.
+        self.service_manager = service_manager
         # Package-shipped descriptors live under /usr/share; /etc holds only
         # what an administrator has deliberately put there, and wins.
         self.vendor_players_d_dir = vendor_players_d_dir
@@ -420,19 +423,57 @@ class PlayerRegistryHandler:
         """Validate and persist setting values for one plugin.
 
         Returns (applied_keys, errors)."""
+        applied, _changed, errors = self._store_player_settings(systemd_service, values)
+        return applied, errors
+
+    def save_player_settings(self, systemd_service, values):
+        """Persist settings, then restart the player if that changed anything.
+
+        Players read their settings when they start, so a stored value alone
+        does nothing until the next reboot -- which looks to the user as if
+        the setting were ignored (hifiberry/hifiberry-os#672). Only a running
+        player is restarted: one switched off in the WebUI stays off, and
+        picks the new values up when it is next started.
+
+        Returns a dict with "applied", "errors" and "restarted".
+        """
+        applied, changed, errors = self._store_player_settings(systemd_service, values)
+        restarted = False
+        if changed and self.service_manager is not None:
+            try:
+                if self.service_manager.is_active(systemd_service):
+                    ok, message = self.service_manager.restart(systemd_service)
+                    if ok:
+                        restarted = True
+                        logger.info(f"Restarted {systemd_service} after settings change: {changed}")
+                    else:
+                        logger.error(message)
+                        errors.append(f"settings stored, but restart failed: {message}")
+            except Exception as e:
+                logger.error(f"Error restarting {systemd_service}: {e}")
+                errors.append(f"settings stored, but restart failed: {e}")
+        return {"applied": applied, "errors": errors, "restarted": restarted}
+
+    def _store_player_settings(self, systemd_service, values):
+        """Validate and persist setting values for one plugin.
+
+        Returns (applied_keys, changed_keys, errors). A key is changed when
+        the stored value differs from what was there before; a secret that
+        was submitted at all counts as changed, since its old value is not
+        compared."""
         descriptor = next(
             (d for d in self._load_descriptors() if d["systemd_service"] == systemd_service),
             None,
         )
         if descriptor is None:
-            return [], [f"unknown player service: {systemd_service}"]
+            return [], [], [f"unknown player service: {systemd_service}"]
 
         # Guard against non-dict bodies (list, string, number, etc.)
         if not isinstance(values, dict):
-            return [], ["invalid request body"]
+            return [], [], ["invalid request body"]
 
         allowed = {s["key"]: s for s in sanitize_settings(descriptor)}
-        applied, errors = [], []
+        applied, changed, errors = [], [], []
         for key, value in values.items():
             setting = allowed.get(key)
             if setting is None:
@@ -466,19 +507,22 @@ class PlayerRegistryHandler:
                         errors.append(f"{key}: failed to store")
                         continue
                 applied.append(key)
+                changed.append(key)
                 continue
-            self.configdb.set(
-                setting_value_key(systemd_service, key),
-                serialize_setting_value(setting["type"], coerce_setting_value(setting["type"], value)),
-            )
+            config_key = setting_value_key(systemd_service, key)
+            serialized = serialize_setting_value(
+                setting["type"], coerce_setting_value(setting["type"], value))
+            previous = self.configdb.get(config_key)
+            self.configdb.set(config_key, serialized)
             applied.append(key)
-        return applied, errors
+            if previous != serialized:
+                changed.append(key)
+        return applied, changed, errors
 
     def handle_set_player_settings(self, systemd_service):
         """Flask handler: persist submitted player settings."""
         values = request.get_json(silent=True) or {}
-        applied, errors = self.set_player_settings(systemd_service, values)
-        if not applied and errors:
-            return jsonify({"status": "error", "message": "; ".join(errors)}), 400
-        return jsonify({"status": "success",
-                        "data": {"applied": applied, "errors": errors}})
+        result = self.save_player_settings(systemd_service, values)
+        if not result["applied"] and result["errors"]:
+            return jsonify({"status": "error", "message": "; ".join(result["errors"])}), 400
+        return jsonify({"status": "success", "data": result})

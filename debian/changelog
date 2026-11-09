@@ -1,3 +1,17 @@
+hifiberry-configurator (2.18.2) stable; urgency=medium
+
+  * Saving a player's settings restarts the player when the save changed
+    anything. Players read their settings when they start, so a stored
+    value did nothing until the next reboot, which looked as if the setting
+    were ignored -- e.g. the AirPlay 1/2 switch (hifiberry/hifiberry-os#672).
+    Only a running player is restarted; one switched off stays off and
+    picks the values up when it is next started. A save that changes
+    nothing does not interrupt playback. The response reports whether the
+    player was restarted, and a failed restart is reported as an error
+    while the values stay stored.
+
+ -- HiFiBerry <support@hifiberry.com>  Mon, 09 Nov 2026 14:21:45 +0000
+
 hifiberry-configurator (2.18.1) stable; urgency=medium
 
   * volume-store.service is ordered after volume-restore.service. The
