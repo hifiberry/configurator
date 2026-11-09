@@ -1,3 +1,15 @@
+hifiberry-configurator (2.18.1) stable; urgency=medium
+
+  * volume-store.service is ordered after volume-restore.service. The
+    boot-time store, pulled in by multi-user.target and at once by
+    volume-store.timer's Requires=, had no ordering against the restore, so
+    it could snapshot the mixer's power-on level first and overwrite the
+    saved volume with it. On pcm512x cards that level is 0 dB, i.e. full
+    volume, which volume-restore then applied. Reported and fixed by
+    mattias-arrelid (#28, #29).
+
+ -- HiFiBerry <support@hifiberry.com>  Mon, 09 Nov 2026 08:54:29 +0000
+
 hifiberry-configurator (2.18.0) stable; urgency=medium
 
   * New memory report at GET /api/v1/memory, and the data behind it. The
