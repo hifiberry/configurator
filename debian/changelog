@@ -1,3 +1,16 @@
+hifiberry-configurator (2.18.3) stable; urgency=medium
+
+  * The DSP program check no longer re-labels a sound card that only hosts
+    a DSP add-on. It exists to tell a DAC+ DSP from a Beocreate 4-Channel
+    Amplifier, which share their DSP and differ only in the program it
+    runs. On a Digi2 Pro with a DSP add-on, the add-on had the DAC+ DSP
+    profile installed, so the card -- although set as a fixed sound card --
+    was reported as "DAC+ DSP" and the volume control moved to DSPVolume
+    (hifiberry/hifiberry-os#665). The check now only switches between those
+    two boards and leaves every other card alone.
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 10 Nov 2026 15:44:28 +0000
+
 hifiberry-configurator (2.18.2) stable; urgency=medium
 
   * Saving a player's settings restarts the player when the save changed
