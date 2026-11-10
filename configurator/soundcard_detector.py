@@ -31,6 +31,17 @@ KNOWN_DSP_CHECKSUM_TO_CARD = {
     "87F98DB5B1023FF6A5104F0A4ACF4C991D8EDE80": "Beocreate 4-Channel Amplifier",
 }
 
+# Cards whose DSP *is* the card: the boards can only be told apart by the
+# program their DSP runs, which is what _refine_card_by_dsp_program is for.
+# Every other card that "supports_dsp" merely hosts a DSP add-on, and the
+# add-on's program says nothing about which card it sits on -- a Digi2 Pro
+# with the DAC+ DSP profile on its add-on is still a Digi2 Pro
+# (hifiberry-os#665).  Refinement only ever moves between these.
+DSP_IS_THE_CARD = frozenset({
+    "DAC+ DSP",
+    "Beocreate 4-Channel Amplifier",
+})
+
 # Additional validation tests for sound cards
 # These functions provide extra verification beyond basic detection
 SOUND_CARD_VALIDATION_TESTS = {
@@ -59,6 +70,9 @@ def _validate_dsp_card():
         return False
 
 class SoundcardDetector:
+    #: Bundled DSP profiles, matched against the live DSP program checksum.
+    DSP_PROFILE_DIR = "/usr/share/hifiberry/dspprofiles"
+
     def __init__(self, config_file="/boot/firmware/config.txt", reboot_file="/tmp/reboot", hifiberry_log_file=None, hat_attempts=1, verbose=False, include_pcm5102=False):
         self.config = ConfigTxt(config_file)
         self.reboot_file = reboot_file
@@ -516,12 +530,20 @@ class SoundcardDetector:
         ``modelName`` is a known sound card in SOUND_CARD_DEFINITIONS,
         switch to it.
 
+        Only cards in ``DSP_IS_THE_CARD`` are refined, and only into
+        another card of that set.  For a card that hosts a DSP add-on the
+        program identifies the add-on's profile, not the card, so the DSP
+        is not even asked.  This applies to pinned cards too: it is what
+        kept a pinned "Digi2 Pro" from turning into "DAC+ DSP".
+
         The function is intentionally tolerant: REST endpoint
         unreachable, missing profiles dir, empty-input checksum (DSP
         not initialised), or any I/O error falls through silently and
         leaves detection unchanged.
         """
         if not self.detected_card:
+            return
+        if self.detected_card not in DSP_IS_THE_CARD:
             return
 
         # SHA-1 of the empty input — what sigmatcpserver returns when
@@ -556,7 +578,8 @@ class SoundcardDetector:
         # recognise but don't ship as a bundled profile XML).
         static_match = KNOWN_DSP_CHECKSUM_TO_CARD.get(live_sha1)
         if static_match and static_match != self.detected_card \
-                and static_match in SOUND_CARD_DEFINITIONS:
+                and static_match in SOUND_CARD_DEFINITIONS \
+                and static_match in DSP_IS_THE_CARD:
             logging.info(
                 f"DSP program checksum ({live_sha1}) matches known firmware: "
                 f"refining detected card '{self.detected_card}' -> '{static_match}'"
@@ -568,7 +591,7 @@ class SoundcardDetector:
             self.detected_card = static_match
             return
 
-        profile_dir = "/usr/share/hifiberry/dspprofiles"
+        profile_dir = self.DSP_PROFILE_DIR
         if not os.path.isdir(profile_dir):
             return
 
@@ -595,7 +618,8 @@ class SoundcardDetector:
                 continue
             if not model_name or model_name == self.detected_card:
                 return  # already aligned, nothing to do
-            if model_name not in SOUND_CARD_DEFINITIONS:
+            if model_name not in SOUND_CARD_DEFINITIONS \
+                    or model_name not in DSP_IS_THE_CARD:
                 logging.debug(
                     f"DSP program matches {filename} ({model_name}), but the "
                     f"name isn't in SOUND_CARD_DEFINITIONS — keeping {self.detected_card!r}"
