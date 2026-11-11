@@ -82,7 +82,7 @@ SOUND_CARD_DEFINITIONS = {
         "output_channels": 2,
         "input_channels": 0,
         "features": ["spdifnoclock", "toslink"],
-        "supports_dsp": False,
+        "supports_dsp": True,
         "card_type": ["Amp"],
         "dtoverlay": "hifiberry-amp100,automute",
         "is_pro": True,

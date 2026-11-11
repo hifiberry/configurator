@@ -16,6 +16,7 @@ import urllib.request
 
 import pytest
 
+from configurator.soundcard import SOUND_CARD_DEFINITIONS
 from configurator.soundcard_detector import (
     KNOWN_DSP_CHECKSUM_TO_CARD,
     SoundcardDetector,
@@ -65,7 +66,7 @@ def test_digi2_pro_with_dacdsp_program_on_addon_is_not_relabelled(tmp_path, monk
     assert calls == []          # not even asked: the checksum cannot apply
 
 
-@pytest.mark.parametrize("card", ["DAC2 Pro", "Amp4 Pro", "Digi+ Pro"])
+@pytest.mark.parametrize("card", ["DAC2 Pro", "Amp4 Pro", "Digi+ Pro", "Amp100"])
 def test_addon_hosts_are_never_relabelled(tmp_path, monkeypatch, card):
     _profile(tmp_path, "dacdsp-15.xml", DACDSP_15_SHA1, "DAC+ DSP")
     _serve_checksum(monkeypatch, DACDSP_15_SHA1)
@@ -105,3 +106,8 @@ def test_beocreate_running_dacdsp_profile_becomes_dacdsp(tmp_path, monkeypatch):
     det._refine_card_by_dsp_program()
 
     assert det.detected_card == "DAC+ DSP"
+
+
+def test_amp100_hosts_a_dsp_addon():
+    # The Amp100 takes the DSP add-on; it was listed as not supporting DSP.
+    assert SOUND_CARD_DEFINITIONS["Amp100"]["supports_dsp"] is True
