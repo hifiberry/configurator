@@ -62,3 +62,16 @@ def test_text_entry_with_invalid_pattern_is_dropped(tmp_path, monkeypatch):
 def test_text_entry_with_invalid_max_length_is_dropped(tmp_path, monkeypatch):
     handler, _ = _setup(tmp_path, monkeypatch, max_length=0)
     assert handler._build_players()[0]["settings"] == []
+
+
+def test_text_custom_max_length_is_enforced(tmp_path, monkeypatch):
+    handler, _ = _setup(tmp_path, monkeypatch, max_length=10, pattern=".*")
+    applied, errors = handler.set_player_settings("jellyfin", {"server_url": "a" * 11})
+    assert applied == [] and errors == ["server_url: too long (max 10)"]
+    assert handler.set_player_settings("jellyfin", {"server_url": "a" * 10}) == (["server_url"], [])
+
+
+def test_text_of_exactly_default_max_length_is_accepted(tmp_path, monkeypatch):
+    handler, configdb = _setup(tmp_path, monkeypatch, pattern=".*")
+    assert handler.set_player_settings("jellyfin", {"server_url": "a" * 256}) == (["server_url"], [])
+    assert configdb.get("player.jellyfin.server_url") == "a" * 256
