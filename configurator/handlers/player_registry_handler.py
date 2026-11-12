@@ -33,7 +33,8 @@ SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 REQUIRED_FIELDS = ("name", "provided_by", "systemd_service", "icon")
 
-SETTING_TYPES = ("toggle", "select", "number", "secret")
+SETTING_TYPES = ("toggle", "select", "number", "secret", "text")
+_TEXT_DEFAULT_MAX_LENGTH = 256
 _SETTING_REQUIRED = ("key", "type", "label", "default")
 
 # A select may source its options from a plugin's own API instead of listing
@@ -71,6 +72,11 @@ def coerce_setting_value(setting_type, raw):
         if isinstance(raw, bool) or not isinstance(raw, str):
             return None
         return raw.strip()
+    if setting_type == "text":
+        # Free text is only ever a string; a number or list is a client bug.
+        if not isinstance(raw, str):
+            return None
+        return raw.strip()
     return str(raw)
 
 
@@ -104,6 +110,9 @@ def sanitize_settings(descriptor):
             has_static = isinstance(options, list) and len(options) > 0
             if not has_static and not _valid_options_url(entry.get("options_url")):
                 continue
+        if entry["type"] == "text":
+            if not _valid_text_constraints(entry):
+                continue
         if entry["type"] == "number":
             bounds = _number_bounds(entry)
             if bounds is None:
@@ -115,6 +124,27 @@ def sanitize_settings(descriptor):
             entry = {k: v for k, v in entry.items() if k != "help_url"}
         clean.append(entry)
     return clean
+
+
+def _text_max_length(setting):
+    return setting.get("max_length", _TEXT_DEFAULT_MAX_LENGTH)
+
+
+def _valid_text_constraints(entry):
+    """True when a text entry's max_length and pattern are usable."""
+    if "max_length" in entry:
+        max_length = entry["max_length"]
+        if isinstance(max_length, bool) or not isinstance(max_length, int) or max_length <= 0:
+            return False
+    if "pattern" in entry:
+        pattern = entry["pattern"]
+        if not isinstance(pattern, str):
+            return False
+        try:
+            re.compile(pattern)
+        except re.error:
+            return False
+    return True
 
 
 def safe_link_url(url):
@@ -489,6 +519,20 @@ class PlayerRegistryHandler:
                         f"{key}: out of range ({setting['min']}..{setting['max']})")
                     continue
                 value = number
+            if setting["type"] == "text":
+                text = coerce_setting_value("text", value)
+                if text is None:
+                    errors.append(f"{key}: must be a string")
+                    continue
+                max_length = _text_max_length(setting)
+                if len(text) > max_length:
+                    errors.append(f"{key}: too long (max {max_length})")
+                    continue
+                pattern = setting.get("pattern")
+                if pattern is not None and not re.fullmatch(pattern, text):
+                    errors.append(f"{key}: invalid format")
+                    continue
+                value = text
             if setting["type"] == "secret":
                 text = coerce_setting_value("secret", value)
                 if text is None:
