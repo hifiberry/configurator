@@ -1,3 +1,14 @@
+hifiberry-configurator (2.19.0) stable; urgency=medium
+
+  * Player plugins can declare a free-text setting ("type": "text"), for
+    values such as a server address. A descriptor may limit it with
+    "max_length" (default 256) and "pattern", a regular expression the whole
+    value must match. Submitted values are trimmed and checked against both,
+    and a descriptor whose pattern does not compile is dropped like any other
+    malformed setting.
+
+ -- HiFiBerry <support@hifiberry.com>  Thu, 12 Nov 2026 09:00:00 +0000
+
 hifiberry-configurator (2.18.4) stable; urgency=medium
 
   * The Amp100 is now listed as supporting DSP. It takes the DSP add-on,

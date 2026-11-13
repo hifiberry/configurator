@@ -1653,10 +1653,11 @@ List registered external players.
 - **value**: Current value from ConfigDB, falling back to `default` when unset
 - **options** (`select` only): `[{"value": ..., "label": ...}]`. Resolved at request time when the descriptor names an `options_url`
 - **min**, **max**, **step** (`number` only): Bounds. Always present — an entry without usable bounds is dropped from the response
+- **max_length**, **pattern** (`text` only): Optional limits, see below
 - **widget**: Optional presentation hint, e.g. `slider` for a `number`
 
 **Notes:**
-- `type` is one of `toggle`, `select`, `number`, `secret`
+- `type` is one of `toggle`, `select`, `number`, `secret`, `text`
 - A `select` whose options come from `options_url` is fetched while building this
   response. Only loopback URLs are accepted, with a short timeout. If the source
   is unreachable, the currently stored value is returned as the sole option so
@@ -1681,6 +1682,29 @@ Writing an empty or whitespace-only string deletes the stored value — this is
 how a "remove credential" action is implemented. Values are stripped before
 storage, so a pasted trailing newline does not become part of the credential. A
 non-string value is rejected.
+
+#### Setting type: `text`
+
+For free text such as a server address. Declared like any other setting:
+
+```json
+{ "key": "server_url", "type": "text", "label": "Server address", "default": "", "pattern": "^(https?://.+)?$" }
+```
+
+The value is a string, stripped of leading and trailing whitespace before
+storage, and is returned in the players listing as `value` (unlike `secret`).
+
+Two optional limits are enforced on write, and a violation is rejected with a
+400 and nothing stored:
+
+- `max_length`: positive integer, default 256. Longer values fail with
+  `<key>: too long (max <n>)`
+- `pattern`: a regular expression the whole value must match (full match, not a
+  substring search). A mismatch fails with `<key>: invalid format`
+
+A non-string value fails with `<key>: must be a string`. An entry whose
+`pattern` is not a valid regular expression, or whose `max_length` is not a
+positive integer, is omitted from the listing.
 
 ### `GET /api/v1/players/icon/<name>`
 
