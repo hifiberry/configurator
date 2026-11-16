@@ -45,6 +45,7 @@ Get version information and available endpoints.
     "version": "/version",
     "systeminfo": "/api/v1/systeminfo",
     "keys": "/api/v1/keys",
+    "audio_server": "/api/v1/audio-server",
     "key": "/api/v1/key/<key>",
     "systemd_services": "/api/v1/systemd/services",
     "systemd_service": "/api/v1/systemd/service/<service>",
@@ -258,8 +259,15 @@ the settings kept outside the database are reset as well:
   set back to their defaults and their state file is removed, via
   `POST /api/v1/settings/reset` on pipewire-api.
 
-Both are best effort: a service that fails to enable, or a device without
-pipewire-api, is reported in the response but does not fail the reset.
+- aas, where installed: its saved state is removed and PipeWire is chosen for
+  the next boot (see `POST /api/v1/audio-server`).
+
+All of these are best effort: a service that fails to enable, or a device
+without pipewire-api, is reported in the response but does not fail the reset.
+When aas was running or chosen, pipewire-api is not reachable and the PipeWire
+settings cannot be reset right away; a marker file
+(`/var/lib/hifiberry/pipewire-reset-pending`) is written and the next start of
+config-server retries the reset every 5 seconds for up to 3 minutes.
 
 **Response:**
 ```json
@@ -281,10 +289,18 @@ pipewire-api, is reported in the response but does not fail the reset.
         "modules_reset": ["speakereq"],
         "settings_removed": true
       }
+    },
+    "audio_server": {
+      "status": "success",
+      "reboot_required": false
     }
   }
 }
 ```
+
+`audio_server.status` is `success`, `error` (with `message` and `errors`) or
+`unavailable` (aas is not installed). `reboot_required` is `true` when aas was
+running and the reset chose PipeWire, so the device must reboot to switch over.
 
 ### System Service Management
 
@@ -911,6 +927,58 @@ Mount all configured Samba shares by restarting the sambamount systemd service.
 }
 ```
 
+## Audio Server
+
+The device runs either PipeWire or aas. aas is only available where its package
+is installed; otherwise only PipeWire exists.
+
+### `GET /api/v1/audio-server`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "running": "pipewire",
+    "chosen": "aas",
+    "available": true
+  }
+}
+```
+
+- **running**: `aas` while `aas.service` is active, otherwise `pipewire`
+- **chosen**: the server chosen for the next boot
+- **available**: whether aas is installed
+
+### `POST /api/v1/audio-server`
+
+Choose the server for the next boot. Does not reboot.
+
+**Request:**
+```json
+{ "server": "aas" }
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "running": "pipewire",
+    "chosen": "aas",
+    "available": true,
+    "reboot_required": true,
+    "warnings": []
+  }
+}
+```
+
+`warnings` lists the lines the switch command wrote to stderr while succeeding.
+
+**Errors:** `400` when `server` is not `pipewire` or `aas`; `409` when aas is
+not installed; `500` when the switch command fails or times out. After a
+timeout the switch may be half done, so choose the server again.
+
 ## Hostname Management
 
 ### `GET /api/v1/hostname`
@@ -1391,6 +1459,10 @@ action offered: the kernel, system and user-session buckets, and every unit
 found on the device that no descriptor claims — most of those are core
 plumbing (`dbus`, `systemd-journald`, `systemd-udevd`, `polkit`, `ssh`), and
 suggesting they be reduced would be worse than suggesting nothing.
+
+A feature descriptor in `features.d` may carry an optional `audio_server` field
+(`"pipewire"` or `"aas"`); it is then listed only while that server is the
+chosen one.
 
 Only features with running processes appear. An installed but stopped extension
 uses no memory and is not listed.
