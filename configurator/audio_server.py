@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 COMMAND = "/usr/sbin/hifiberry-audio-server"
 CHOICE_PATH = "/etc/hifiberry/audio-server"
+STATE_PATH = "/var/lib/aas/state.toml"
 
 SERVERS = ("pipewire", "aas")
 
@@ -82,3 +83,57 @@ def set_server(server: str) -> Dict[str, Any]:
     data = get()
     data["reboot_required"] = data["chosen"] != data["running"]
     return data
+
+
+def _systemctl(*args: str) -> None:
+    result = subprocess.run(["systemctl", *args], capture_output=True,
+                            text=True, timeout=30)
+    if result.returncode != 0:
+        message = (result.stderr or "").strip() or (
+            f"systemctl {' '.join(args)} exited with status {result.returncode}")
+        raise AudioServerError(message)
+
+
+def _aas_active() -> bool:
+    try:
+        result = subprocess.run(["systemctl", "is-active", "--quiet", "aas.service"],
+                                capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def reset() -> Dict[str, Any]:
+    """Part of the factory reset: drop aas's saved state, choose PipeWire.
+
+    Best effort: a failing step is reported and the remaining ones still run.
+    """
+    if not available():
+        return {"status": "unavailable"}
+
+    errors = []
+    was_active = _aas_active()
+
+    def step(name, fn):
+        try:
+            fn()
+        except (OSError, subprocess.SubprocessError, AudioServerError) as e:
+            logger.warning(f"audio server reset: {name} failed: {e}")
+            errors.append(f"{name}: {e}")
+
+    def remove_state():
+        try:
+            os.remove(STATE_PATH)
+        except FileNotFoundError:
+            pass
+
+    if was_active:
+        step("stop aas.service", lambda: _systemctl("stop", "aas.service"))
+    step("remove saved state", remove_state)
+    if was_active:
+        step("start aas.service", lambda: _systemctl("start", "aas.service"))
+    step("set pipewire", lambda: set_server("pipewire"))
+
+    if errors:
+        return {"status": "error", "message": "; ".join(errors), "errors": errors}
+    return {"status": "success"}

@@ -27,6 +27,7 @@ from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHand
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
+from . import audio_server
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -362,19 +363,22 @@ class ConfigAPIServer:
             Clears the configuration database and, since those survive a reboot
             on their own, also the settings kept outside of it: which players
             are enabled, and the PipeWire module settings (speaker EQ, volume
-            limit, input processor).
+            limit, input processor). The audio server choice goes back to
+            PipeWire and aas's saved state is dropped.
             """
             try:
                 success = self.configdb.clear_all()
                 if success:
                     services = self.systemd_handler.reset_managed_services()
                     pipewire = reset_pipewire_settings()
+                    audio_server_result = audio_server.reset()
                     return jsonify({
                         'status': 'success',
                         'message': 'Configuration database cleared',
                         'data': {
                             'services': services,
-                            'pipewire': pipewire
+                            'pipewire': pipewire,
+                            'audio_server': audio_server_result
                         }
                     })
                 else:
