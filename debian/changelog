@@ -4,6 +4,9 @@ hifiberry-configurator (2.19.1) stable; urgency=medium
     Bluetooth. The Bluetooth status returns at once when there is no
     Bluetooth hardware or BlueZ is not running, instead of making D-Bus try
     to start BlueZ, and its D-Bus calls time out after 2 s.
+  * The paired-devices list and unpairing do the same: without Bluetooth the
+    list is empty and unpairing answers 400 at once, and every call to BlueZ
+    times out after 2 s.
   * Card detection run as root no longer picks a card with a different
     overlay when aplay names an overlay shared by two cards (DAC+ ADC Pro and
     DAC2 ADC Pro on a device without a HAT EEPROM). It chooses among those

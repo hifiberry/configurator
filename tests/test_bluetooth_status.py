@@ -54,6 +54,9 @@ class _FakeInterface:
         self._calls.append(("GetManagedObjects", kwargs))
         return self._managed
 
+    def RemoveDevice(self, path, **kwargs):
+        self._calls.append(("RemoveDevice", path, kwargs))
+
 
 class _FakeBus:
     def __init__(self, calls, has_owner=True):
