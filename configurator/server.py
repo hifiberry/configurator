@@ -23,7 +23,7 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler, MemoryHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler, MemoryHandler, AudioServerHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
@@ -96,6 +96,7 @@ class ConfigAPIServer:
         self.hostname_handler = HostnameHandler()
         self.soundcard_handler = SoundcardHandler()
         self.system_handler = SystemHandler()
+        self.audio_server_handler = AudioServerHandler()
         self.filesystem_handler = FilesystemHandler()
         self.script_handler = ScriptHandler()
         self.network_handler = NetworkHandler()
@@ -512,6 +513,17 @@ class ConfigAPIServer:
         def restore_headphone_volume():
             """Restore stored headphone volume"""
             return self.volume_handler.handle_restore_headphone_volume()
+
+        # Audio server endpoints
+        @self.app.route('/api/v1/audio-server', methods=['GET'])
+        def get_audio_server():
+            """Which audio server runs, and which is chosen for the next boot"""
+            return self.audio_server_handler.handle_get()
+
+        @self.app.route('/api/v1/audio-server', methods=['POST'])
+        def set_audio_server():
+            """Choose the audio server for the next boot (no reboot)"""
+            return self.audio_server_handler.handle_set()
 
         # System endpoints
         @self.app.route('/api/v1/system/reboot', methods=['POST'])

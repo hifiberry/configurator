@@ -28,8 +28,9 @@ try:
     from .ble_handler import BLEProvisioningHandler
     from .extensions_handler import ExtensionsHandler
     from .memory_handler import MemoryHandler
+    from .audio_server_handler import AudioServerHandler
 
-    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler', 'PlayerRegistryHandler', 'BLEProvisioningHandler', 'ExtensionsHandler', 'MemoryHandler']
+    __all__ = ['SystemdHandler', 'SMBHandler', 'HostnameHandler', 'SoundcardHandler', 'SystemHandler', 'FilesystemHandler', 'ScriptHandler', 'NetworkHandler', 'I2CHandler', 'VolumeHandler', 'BluetoothHandler', 'PlayerRegistryHandler', 'BLEProvisioningHandler', 'ExtensionsHandler', 'MemoryHandler', 'AudioServerHandler']
 except ImportError as exc:
     # An optional runtime dependency is missing. That is expected in a dev
     # checkout or the build chroot -- debian/rules sets PYBUILD_DISABLE=test
