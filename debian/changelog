@@ -1,3 +1,17 @@
+hifiberry-configurator (2.19.1) stable; urgency=medium
+
+  * GET /api/v1/systeminfo no longer waits 15-25 s on a device without
+    Bluetooth. The Bluetooth status returns at once when there is no
+    Bluetooth hardware or BlueZ is not running, instead of making D-Bus try
+    to start BlueZ, and its D-Bus calls time out after 2 s.
+  * Card detection run as root no longer picks a card with a different
+    overlay when aplay names an overlay shared by two cards (DAC+ ADC Pro and
+    DAC2 ADC Pro on a device without a HAT EEPROM). It chooses among those
+    cards only, using the HAT product or the detector's result when they name
+    one of them, and the first otherwise.
+
+ -- HiFiBerry <support@hifiberry.com>  Mon, 16 Nov 2026 09:00:00 +0000
+
 hifiberry-configurator (2.19.0) stable; urgency=medium
 
   * Player plugins can declare a free-text setting ("type": "text"), for
