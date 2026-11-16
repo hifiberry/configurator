@@ -15,6 +15,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from configurator import audio_server
+
 logger = logging.getLogger(__name__)
 
 # systemd puts a user manager's own tree under user@<uid>.service. That is a
@@ -228,7 +230,12 @@ def _descriptor_from_dict(feature_id: str, data: dict) -> Optional[FeatureDescri
 
 
 def load_descriptors(dirs: List[str]) -> List[FeatureDescriptor]:
-    """Load features.d descriptors. Later directories override earlier ones by id."""
+    """Load features.d descriptors. Later directories override earlier ones by id.
+
+    A descriptor with an "audio_server" field belongs to that audio server and
+    is dropped unless it is the chosen one.
+    """
+    chosen_server = audio_server.chosen()
     by_id = {}
     for directory in dirs:
         for path in sorted(glob.glob(os.path.join(directory, "*.json"))):
@@ -238,6 +245,9 @@ def load_descriptors(dirs: List[str]) -> List[FeatureDescriptor]:
                     data = json.load(f)
             except (OSError, ValueError) as e:
                 logger.warning("Ignoring invalid descriptor %s: %s", path, e)
+                continue
+            wanted = data.get("audio_server") if isinstance(data, dict) else None
+            if wanted is not None and wanted != chosen_server:
                 continue
             descriptor = _descriptor_from_dict(feature_id, data)
             if descriptor is not None:

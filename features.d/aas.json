@@ -1,0 +1,9 @@
+{
+  "name": "Audio engine",
+  "provided_by": "aas",
+  "systemd_services": ["aas.service"],
+  "icon": "waveform",
+  "category": "core",
+  "disposition": "required",
+  "audio_server": "aas"
+}
