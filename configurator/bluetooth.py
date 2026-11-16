@@ -5,6 +5,12 @@ import configparser
 from pathlib import Path
 import dbus
 
+#: Exists only when the kernel has registered a Bluetooth controller.
+BLUETOOTH_SYSFS = "/sys/class/bluetooth"
+
+#: Seconds to wait for BlueZ. A hung bluetoothd must not stall system info.
+DBUS_TIMEOUT = 2
+
 # From the user's script
 class ConfigFileManager:
     config_path = "~/.config/hifiberry/bluetooth.conf"
@@ -209,14 +215,25 @@ def get_bluetooth_status():
         "issues": [],
     }
 
+    # Without a controller bluetooth.service is skipped, so asking the bus for
+    # org.bluez would make it try to start BlueZ and wait out the D-Bus
+    # timeout (15-25 s). Check first and never trigger activation.
+    if not os.path.isdir(BLUETOOTH_SYSFS):
+        status["issues"].append("No Bluetooth hardware")
+        return status
+
     try:
         bus = dbus.SystemBus()
-        manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                                 "org.freedesktop.DBus.ObjectManager")
-        objects = manager.GetManagedObjects()
+        if not bus.name_has_owner("org.bluez"):
+            status["issues"].append("BlueZ is not running")
+            return status
+        manager = dbus.Interface(
+            bus.get_object("org.bluez", "/", introspect=False),
+            "org.freedesktop.DBus.ObjectManager")
+        objects = manager.GetManagedObjects(timeout=DBUS_TIMEOUT)
     except Exception as e:
-        # bluez absent (hbos-minimal before 0.14 shipped it), bluetoothd not
-        # running, or no system bus. All the same to a reader: no Bluetooth.
+        # bluez absent (hbos-minimal before 0.14 shipped it), bluetoothd hung,
+        # or no system bus. All the same to a reader: no Bluetooth.
         status["issues"].append(f"BlueZ is not reachable: {e}")
         return status
 
