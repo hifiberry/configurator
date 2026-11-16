@@ -137,3 +137,19 @@ def test_memory_report_is_reachable_without_authentication():
         "GET /memory must be tier ok: it is a read-only report rendered on the "
         "System Information page, which is reachable before a password is set"
     )
+
+
+# --- /audio-server: reading which server runs is ok; choosing one is risky.
+def _tier(method, path):
+    for rule in _policy()["rules"]:
+        methods = rule.get("methods", [])
+        if method not in methods and "*" not in methods:
+            continue
+        if any(_path_matches(p, path) for p in rule.get("paths", [])):
+            return rule["tier"]
+    return _policy()["default_tier"]
+
+
+def test_audio_server_get_is_ok_and_post_is_risky():
+    assert _tier("GET", "/audio-server") == "ok"
+    assert _tier("POST", "/audio-server") == "risky"

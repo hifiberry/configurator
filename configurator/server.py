@@ -176,6 +176,7 @@ class ConfigAPIServer:
                     'smb_mount_config': '/api/v1/smb/mount',
                     'smb_mount_all': '/api/v1/smb/mount-all',
                     'hostname': '/api/v1/hostname',
+                    'audio_server': '/api/v1/audio-server',
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'soundcard_detect': '/api/v1/soundcard/detect',
@@ -371,7 +372,8 @@ class ConfigAPIServer:
                 if success:
                     services = self.systemd_handler.reset_managed_services()
                     pipewire = reset_pipewire_settings()
-                    audio_server_result = audio_server.reset()
+                    audio_server_result = audio_server.reset(
+                        pipewire_reached=pipewire.get('status') == 'success')
                     return jsonify({
                         'status': 'success',
                         'message': 'Configuration database cleared',
@@ -831,6 +833,7 @@ class ConfigAPIServer:
     
     def run(self):
         """Start the API server"""
+        audio_server.start_pending_pipewire_reset(reset_pipewire_settings)
         logger.info(f"Starting HiFiBerry Configuration Server on {self.host}:{self.port}")
         try:
             if WAITRESS_AVAILABLE and not self.debug and not self.no_waitress:
