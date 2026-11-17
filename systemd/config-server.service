@@ -1,8 +1,11 @@
 [Unit]
 Description=HiFiBerry Configuration Server
 Documentation=man:config-server(1)
-Wants=network-online.target config-detect.service
-After=network-online.target systemd-modules-load.service config-detect.service create-uuid.service
+# Not after network-online.target: the server listens on 127.0.0.1 only and
+# restores nothing that needs the network at start. Waiting for it delayed
+# the server, and audiocontrol after it, by NetworkManager-wait-online.
+Wants=config-detect.service
+After=systemd-modules-load.service config-detect.service create-uuid.service
 StartLimitIntervalSec=30
 StartLimitBurst=3
 
