@@ -4,6 +4,7 @@ Documentation=man:config-volume(1)
 After=pipewire.service wireplumber-system.service sound.target
 Wants=pipewire.service wireplumber-system.service
 Requires=sound.target
+Before=aas.service
 
 [Service]
 Type=oneshot

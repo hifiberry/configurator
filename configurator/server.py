@@ -23,10 +23,11 @@ except ImportError:
 
 # Import the ConfigDB class
 from .configdb import ConfigDB
-from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler, MemoryHandler
+from .handlers import SystemdHandler, SMBHandler, HostnameHandler, SoundcardHandler, SystemHandler, FilesystemHandler, ScriptHandler, NetworkHandler, I2CHandler, VolumeHandler, BluetoothHandler, PlayerRegistryHandler, BLEProvisioningHandler, ExtensionsHandler, MemoryHandler, AudioServerHandler
 from .systeminfo import SystemInfo
 from ._version import __version__
 from .settings_manager import SettingsManager
+from . import audio_server
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ class ConfigAPIServer:
         self.hostname_handler = HostnameHandler()
         self.soundcard_handler = SoundcardHandler()
         self.system_handler = SystemHandler()
+        self.audio_server_handler = AudioServerHandler()
         self.filesystem_handler = FilesystemHandler()
         self.script_handler = ScriptHandler()
         self.network_handler = NetworkHandler()
@@ -174,6 +176,7 @@ class ConfigAPIServer:
                     'smb_mount_config': '/api/v1/smb/mount',
                     'smb_mount_all': '/api/v1/smb/mount-all',
                     'hostname': '/api/v1/hostname',
+                    'audio_server': '/api/v1/audio-server',
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'soundcard_detect': '/api/v1/soundcard/detect',
@@ -361,19 +364,23 @@ class ConfigAPIServer:
             Clears the configuration database and, since those survive a reboot
             on their own, also the settings kept outside of it: which players
             are enabled, and the PipeWire module settings (speaker EQ, volume
-            limit, input processor).
+            limit, input processor). The audio server choice goes back to
+            PipeWire and aas's saved state is dropped.
             """
             try:
                 success = self.configdb.clear_all()
                 if success:
                     services = self.systemd_handler.reset_managed_services()
                     pipewire = reset_pipewire_settings()
+                    audio_server_result = audio_server.reset(
+                        pipewire_reached=pipewire.get('status') == 'success')
                     return jsonify({
                         'status': 'success',
                         'message': 'Configuration database cleared',
                         'data': {
                             'services': services,
-                            'pipewire': pipewire
+                            'pipewire': pipewire,
+                            'audio_server': audio_server_result
                         }
                     })
                 else:
@@ -512,6 +519,17 @@ class ConfigAPIServer:
         def restore_headphone_volume():
             """Restore stored headphone volume"""
             return self.volume_handler.handle_restore_headphone_volume()
+
+        # Audio server endpoints
+        @self.app.route('/api/v1/audio-server', methods=['GET'])
+        def get_audio_server():
+            """Which audio server runs, and which is chosen for the next boot"""
+            return self.audio_server_handler.handle_get()
+
+        @self.app.route('/api/v1/audio-server', methods=['POST'])
+        def set_audio_server():
+            """Choose the audio server for the next boot (no reboot)"""
+            return self.audio_server_handler.handle_set()
 
         # System endpoints
         @self.app.route('/api/v1/system/reboot', methods=['POST'])
@@ -815,6 +833,7 @@ class ConfigAPIServer:
     
     def run(self):
         """Start the API server"""
+        audio_server.start_pending_pipewire_reset(reset_pipewire_settings)
         logger.info(f"Starting HiFiBerry Configuration Server on {self.host}:{self.port}")
         try:
             if WAITRESS_AVAILABLE and not self.debug and not self.no_waitress:

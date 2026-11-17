@@ -1,3 +1,24 @@
+hifiberry-configurator (2.20.0) stable; urgency=medium
+
+  * The audio server can be chosen: PipeWire, or aas where its package is
+    installed. GET /api/v1/audio-server reports the running and the chosen
+    server and whether aas is available; POST sets the choice for the next
+    boot and says whether a reboot is needed. Without aas installed only
+    PipeWire exists and a choice of aas is refused.
+  * A factory reset also resets aas (its stored state is removed) and
+    chooses PipeWire for the next boot. When aas was in charge and
+    pipewire-api could not be reached, PipeWire's saved settings are reset
+    by the next config server start instead; the response says whether a
+    reboot is required.
+  * config-volume no longer stores or restores the default control's Master
+    and Capture while aas is chosen, since aas does not use them; the sound
+    card's own control still is. volume-restore now runs before aas.service.
+  * The features report names the audio engine of the chosen server: aas
+    when it is chosen, PipeWire otherwise. A feature descriptor may carry
+    "audio_server" to belong to one of them.
+
+ -- HiFiBerry <support@hifiberry.com>  Mon, 16 Nov 2026 09:00:00 +0000
+
 hifiberry-configurator (2.19.1) stable; urgency=medium
 
   * GET /api/v1/systeminfo no longer waits 15-25 s on a device without

@@ -66,6 +66,7 @@ setup(
             'features.d/audiocontrol.json',
             'features.d/mpd.json',
             'features.d/pipewire.json',
+            'features.d/aas.json',
             'features.d/bluetooth.json',
             'features.d/raat.json',
             'features.d/configurator.json',

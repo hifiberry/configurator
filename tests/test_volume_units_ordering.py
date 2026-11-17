@@ -30,3 +30,8 @@ def test_volume_restore_is_not_ordered_after_volume_store():
     assert "volume-store.service" not in _unit_list(
         "volume-restore.service", "Unit", "After"
     )
+
+
+def test_volume_restore_runs_before_aas():
+    # aas reads the card's restored level when it starts.
+    assert "aas.service" in _unit_list("volume-restore.service", "Unit", "Before")

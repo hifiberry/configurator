@@ -20,6 +20,7 @@ except ImportError:
 
 from configurator.configdb import ConfigDB
 from configurator.soundcard import Soundcard
+from configurator import audio_server
 
 # Configuration keys for volume storage
 VOLUME_DB_KEY = "system.volume"
@@ -211,8 +212,12 @@ def store_volume():
         if not headphone_result:
             logging.info("No headphone volume controls available or failed to store")
         
+        # Under aas the default ctl's Master and Capture are aas's own, served
+        # only while the daemon runs; aas keeps its own state.
+        if audio_server.chosen() == "aas":
+            logging.info("aas is the chosen audio server, PipeWire controls left alone")
         # Store PipeWire virtual controls if available
-        if is_pipewire_available():
+        elif is_pipewire_available():
             db = ConfigDB()
             
             # Store Master volume
@@ -289,8 +294,12 @@ def restore_volume():
         if not headphone_result:
             logging.info("No headphone volume settings found or failed to restore")
         
+        # Under aas the daemon is not running yet at restore time, and its
+        # Master and Capture are its own: do not even open the default ctl.
+        if audio_server.chosen() == "aas":
+            logging.info("aas is the chosen audio server, PipeWire controls left alone")
         # Restore PipeWire virtual controls if available
-        if is_pipewire_available():
+        elif is_pipewire_available():
             # Restore Master volume
             master_volume = db.get(PIPEWIRE_MASTER_VOLUME_KEY)
             if master_volume is not None:
