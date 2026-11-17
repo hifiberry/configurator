@@ -13,7 +13,7 @@ ExecStart=/usr/bin/config-volume --store
 User=root
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=10
+TimeoutStartSec=60
 RemainAfterExit=no
 
 [Install]

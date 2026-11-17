@@ -35,3 +35,12 @@ def test_volume_restore_is_not_ordered_after_volume_store():
 def test_volume_restore_runs_before_aas():
     # aas reads the card's restored level when it starts.
     assert "aas.service" in _unit_list("volume-restore.service", "Unit", "Before")
+
+
+def test_volume_units_allow_a_loaded_boot():
+    # Idle, the restore takes about 6 s (2 s sleep, card lookup, restore); on
+    # a busy boot it took more than 10 s and was killed, leaving the card at
+    # its power-on level. Both are oneshots, so a longer limit costs nothing.
+    for unit in ("volume-restore.service", "volume-store.service"):
+        timeout = _unit_list(unit, "Service", "TimeoutStartSec")
+        assert timeout and int(timeout[0]) >= 60, unit
