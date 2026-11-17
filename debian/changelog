@@ -1,3 +1,11 @@
+hifiberry-configurator (2.20.3) stable; urgency=medium
+
+  * config-server no longer waits for the network to be online at boot. It
+    listens on 127.0.0.1 only and needs no network to start; the wait
+    delayed it, and audiocontrol after it, by about 9 s on a Pi 4.
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 17 Nov 2026 11:54:47 +0000
+
 hifiberry-configurator (2.20.2) stable; urgency=medium
 
   * volume-store no longer runs while volume-restore has failed. It used
