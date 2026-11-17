@@ -5,6 +5,38 @@ import configparser
 from pathlib import Path
 import dbus
 
+#: Exists only when the kernel has registered a Bluetooth controller.
+BLUETOOTH_SYSFS = "/sys/class/bluetooth"
+
+#: Seconds to wait for BlueZ. A hung bluetoothd must not stall system info.
+DBUS_TIMEOUT = 2
+
+
+class BluetoothUnavailable(Exception):
+    """No Bluetooth controller, or BlueZ is not running."""
+
+
+def _bluez():
+    """The system bus with BlueZ on it, without ever starting BlueZ.
+
+    Without a controller bluetooth.service is skipped, so asking the bus for
+    org.bluez would make D-Bus try to start BlueZ and wait out its activation
+    timeout (15-25 s). Check first, and look objects up without introspection.
+    """
+    if not os.path.isdir(BLUETOOTH_SYSFS):
+        raise BluetoothUnavailable("No Bluetooth hardware")
+    bus = dbus.SystemBus()
+    if not bus.name_has_owner("org.bluez"):
+        raise BluetoothUnavailable("BlueZ is not running")
+    return bus
+
+
+def _managed_objects(bus):
+    manager = dbus.Interface(
+        bus.get_object("org.bluez", "/", introspect=False),
+        "org.freedesktop.DBus.ObjectManager")
+    return manager.GetManagedObjects(timeout=DBUS_TIMEOUT)
+
 # From the user's script
 class ConfigFileManager:
     config_path = "~/.config/hifiberry/bluetooth.conf"
@@ -117,11 +149,11 @@ def set_bluetooth_settings(settings):
 
 
 def get_paired_devices():
-    """Returns a list of paired bluetooth devices."""
-    bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                             "org.freedesktop.DBus.ObjectManager")
-    objects = manager.GetManagedObjects()
+    """Returns a list of paired bluetooth devices; none without Bluetooth."""
+    try:
+        objects = _managed_objects(_bluez())
+    except BluetoothUnavailable:
+        return []
     devices = []
 
     for path, interfaces in objects.items():
@@ -210,13 +242,13 @@ def get_bluetooth_status():
     }
 
     try:
-        bus = dbus.SystemBus()
-        manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                                 "org.freedesktop.DBus.ObjectManager")
-        objects = manager.GetManagedObjects()
+        objects = _managed_objects(_bluez())
+    except BluetoothUnavailable as e:
+        status["issues"].append(str(e))
+        return status
     except Exception as e:
-        # bluez absent (hbos-minimal before 0.14 shipped it), bluetoothd not
-        # running, or no system bus. All the same to a reader: no Bluetooth.
+        # bluez absent (hbos-minimal before 0.14 shipped it), bluetoothd hung,
+        # or no system bus. All the same to a reader: no Bluetooth.
         status["issues"].append(f"BlueZ is not reachable: {e}")
         return status
 
@@ -289,10 +321,12 @@ def unpair_device(address):
         raise ValueError("Missing 'address' query parameter")
 
     address = address.upper()
-    bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object("org.bluez", "/"),
-                             "org.freedesktop.DBus.ObjectManager")
-    objects = manager.GetManagedObjects()
+    try:
+        bus = _bluez()
+    except BluetoothUnavailable as e:
+        # The handler answers a ValueError with 400, as for an unknown device.
+        raise ValueError(str(e))
+    objects = _managed_objects(bus)
 
     # Find the device object path and its adapter
     for path, interfaces in objects.items():
@@ -301,9 +335,10 @@ def unpair_device(address):
             if device.get("Address", "").upper() == address:
                 # Find the adapter this device belongs to
                 adapter_path = "/".join(path.split("/")[:-1])
-                adapter_obj = dbus.Interface(bus.get_object("org.bluez", adapter_path),
-                                             "org.bluez.Adapter1")
-                adapter_obj.RemoveDevice(path)
+                adapter_obj = dbus.Interface(
+                    bus.get_object("org.bluez", adapter_path, introspect=False),
+                    "org.bluez.Adapter1")
+                adapter_obj.RemoveDevice(path, timeout=DBUS_TIMEOUT)
                 return {"status": "unpaired", "address": address}
 
     raise ValueError("Device not found")

@@ -1,4 +1,7 @@
+import contextlib
+import os
 import sys
+import tempfile
 import types
 from unittest.mock import patch
 
@@ -43,34 +46,62 @@ def _objects(uuids, cod, powered=True, devices=()):
 
 
 class _FakeInterface:
-    def __init__(self, managed):
+    def __init__(self, managed, calls):
         self._managed = managed
+        self._calls = calls
 
-    def GetManagedObjects(self):
+    def GetManagedObjects(self, **kwargs):
+        self._calls.append(("GetManagedObjects", kwargs))
         return self._managed
+
+    def RemoveDevice(self, path, **kwargs):
+        self._calls.append(("RemoveDevice", path, kwargs))
 
 
 class _FakeBus:
+    def __init__(self, calls, has_owner=True):
+        self._calls = calls
+        self._has_owner = has_owner
+
+    def name_has_owner(self, name):
+        self._calls.append(("name_has_owner", name))
+        return self._has_owner
+
     def get_object(self, *args, **kwargs):
+        self._calls.append(("get_object", args, kwargs))
         return object()
 
 
 class _FakeDbus:
     """Stands in for the dbus module, serving a fixed object tree."""
 
-    def __init__(self, managed):
+    def __init__(self, managed, has_owner=True):
         self._managed = managed
+        self._has_owner = has_owner
+        self.calls = []
 
     def SystemBus(self):
-        return _FakeBus()
+        self.calls.append(("SystemBus",))
+        return _FakeBus(self.calls, self._has_owner)
 
     def Interface(self, *args, **kwargs):
-        return _FakeInterface(self._managed)
+        return _FakeInterface(self._managed, self.calls)
 
 
-def _patched(managed):
-    """Patch dbus so get_bluetooth_status() sees the given managed objects."""
-    return patch.object(bluetooth, "dbus", _FakeDbus(managed))
+@contextlib.contextmanager
+def _patched(managed, has_owner=True, hardware=True):
+    """Patch dbus so get_bluetooth_status() sees the given managed objects.
+
+    Yields the fake dbus module, whose .calls records every bus call.
+    """
+    fake = _FakeDbus(managed, has_owner)
+    with tempfile.TemporaryDirectory() as tmp:
+        sysfs = os.path.join(tmp, "bluetooth")
+        if hardware:
+            os.mkdir(sysfs)
+        with patch.object(bluetooth, "dbus", fake), \
+                patch.object(bluetooth, "BLUETOOTH_SYSFS", sysfs):
+            yield fake
 
 
 # --- The verdict --------------------------------------------------------
@@ -178,3 +209,43 @@ def test_only_paired_devices_are_listed_with_their_connection_state():
     assert only["name"] == "HiFiBerry.com"
     assert only["connected"] is True
     assert only["trusted"] is False
+
+
+# --- Answering fast where Bluetooth cannot work -------------------------
+#
+# Asking the bus for org.bluez makes D-Bus try to start BlueZ. On a device
+# without Bluetooth hardware bluetooth.service is skipped, and the activation
+# waits out the D-Bus timeout: GET /api/v1/systeminfo took 15-25 s.
+
+
+def test_no_bluetooth_hardware_answers_without_touching_dbus():
+    with _patched(_objects([A2DP_SINK], 0x006C0414), hardware=False) as fake:
+        status = bluetooth.get_bluetooth_status()
+    assert fake.calls == []
+    assert status["available"] is False
+    assert status["audio_ready"] is False
+    assert status["adapter"] is None
+    assert status["devices"] == []
+    assert status["issues"] == ["No Bluetooth hardware"]
+
+
+def test_bluez_without_owner_is_not_activated():
+    with _patched(_objects([A2DP_SINK], 0x006C0414), has_owner=False) as fake:
+        status = bluetooth.get_bluetooth_status()
+    names = [c[0] for c in fake.calls]
+    assert "name_has_owner" in names
+    assert "get_object" not in names
+    assert "GetManagedObjects" not in names
+    assert status["available"] is False
+    assert status["issues"] == ["BlueZ is not running"]
+
+
+def test_running_bluez_is_queried_with_a_short_timeout():
+    with _patched(_objects([A2DP_SINK], 0x006C0414)) as fake:
+        status = bluetooth.get_bluetooth_status()
+    get_object = next(c for c in fake.calls if c[0] == "get_object")
+    assert get_object[2].get("introspect") is False
+    managed = next(c for c in fake.calls if c[0] == "GetManagedObjects")
+    assert managed[1] == {"timeout": 2}
+    assert status["available"] is True
+    assert status["audio_ready"] is True
