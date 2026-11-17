@@ -657,6 +657,33 @@ class Soundcard:
                 # Get the card name based on the overlay, using HAT info if available
                 card_name = detector._get_card_name(detected_overlay, hat_product=hat_card, no_hat_only=not has_hat_info)
                 
+                if card_name and "/" in card_name:
+                    # Several cards use this overlay. Whatever else the
+                    # detector found may only break the tie, never name a
+                    # card with a different overlay (an I2C probe can say
+                    # "DAC+/Amp2" for a DAC+ ADC Pro).
+                    candidates = [c.strip() for c in card_name.split("/") if c.strip()]
+                    candidates = [c for c in candidates if c in SOUND_CARD_DEFINITIONS]
+                    evidence = []
+                    if hat_card:
+                        evidence.append(hat_card.strip())
+                    if detector.detected_card:
+                        evidence.append(detector.detected_card.strip())
+                    chosen = None
+                    for seen in evidence:
+                        for cand in candidates:
+                            aliases = SOUND_CARD_DEFINITIONS[cand].get("aliases", [])
+                            if seen == cand or seen in aliases:
+                                chosen = cand
+                                break
+                        if chosen:
+                            break
+                    if not chosen and candidates:
+                        chosen = candidates[0]
+                    if chosen:
+                        logging.info(f"Detected sound card (aplay priority, one of {candidates}): {chosen}")
+                        return {"name": chosen, **SOUND_CARD_DEFINITIONS[chosen]}
+
                 if card_name:
                     # Try exact match first
                     if card_name in SOUND_CARD_DEFINITIONS:
