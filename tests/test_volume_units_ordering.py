@@ -44,3 +44,15 @@ def test_volume_units_allow_a_loaded_boot():
     for unit in ("volume-restore.service", "volume-store.service"):
         timeout = _unit_list(unit, "Service", "TimeoutStartSec")
         assert timeout and int(timeout[0]) >= 60, unit
+
+
+def test_volume_store_skips_after_a_failed_restore():
+    # After= only orders: a restore that failed (timed out on a busy boot)
+    # still lets the store run, and it would save the card's power-on level
+    # over the stored volume. The store must be skipped while the restore is
+    # in the failed state; a later successful restore clears that state.
+    conditions = " ".join(
+        _unit_list("volume-store.service", "Service", "ExecCondition")
+    )
+    assert "is-failed" in conditions
+    assert "volume-restore.service" in conditions

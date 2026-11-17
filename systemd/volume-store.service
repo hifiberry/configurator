@@ -9,6 +9,10 @@ Requires=local-fs.target
 
 [Service]
 Type=oneshot
+# After= only orders. If volume-restore failed (it can time out on a busy
+# boot), the card is still at its power-on level, and storing it would
+# overwrite the saved volume. Skip until a restore succeeds.
+ExecCondition=/bin/sh -c '! systemctl is-failed --quiet volume-restore.service'
 ExecStart=/usr/bin/config-volume --store
 User=root
 StandardOutput=journal
