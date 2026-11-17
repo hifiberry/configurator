@@ -1,3 +1,12 @@
+hifiberry-configurator (2.20.2) stable; urgency=medium
+
+  * volume-store no longer runs while volume-restore has failed. It used
+    to store the card's power-on level (full volume on pcm512x cards) over
+    the saved volume after a restore that timed out. Storing resumes once a
+    restore succeeds.
+
+ -- HiFiBerry <support@hifiberry.com>  Tue, 17 Nov 2026 10:22:48 +0000
+
 hifiberry-configurator (2.20.1) stable; urgency=medium
 
   * volume-restore and volume-store may take up to 60 s instead of 10 s.
