@@ -1,3 +1,15 @@
+hifiberry-configurator (2.21.0) stable; urgency=medium
+
+  * Bluetooth settings report the adapters and take "adapter", the address
+    of the one hifiberry-bluetooth uses when there are several. Paired
+    devices and the system information show the chosen adapter. A value
+    that is not an address is answered with 400.
+  * BLE provisioning advertises on the chosen adapter instead of always on
+    hci0, which is powered off when a USB stick is chosen, and moves to
+    it when the choice changes.
+
+ -- HiFiBerry <support@hifiberry.com>  Fri, 20 Nov 2026 10:30:52 +0000
+
 hifiberry-configurator (2.20.3) stable; urgency=medium
 
   * config-server no longer waits for the network to be online at boot. It

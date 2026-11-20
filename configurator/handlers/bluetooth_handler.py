@@ -108,6 +108,12 @@ class BluetoothHandler:
                 'status': 'success',
                 'data': settings
             })
+        except ValueError as e:
+            logger.error(f"Invalid bluetooth setting: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': str(e),
+            }), 400
         except Exception as e:
             logger.error(f"Error setting bluetooth settings: {e}")
             return jsonify({

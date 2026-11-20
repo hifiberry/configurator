@@ -1,6 +1,6 @@
 # HiFiBerry Configuration API Documentation
 
-**Version 2.20.3**
+**Version 2.21.0**
 
 - [Endpoints](#endpoints)
   - [Version Information](#version-information)
@@ -38,7 +38,7 @@ Get version information and available endpoints.
 ```json
 {
   "service": "hifiberry-config-api",
-  "version": "2.20.3",
+  "version": "2.21.0",
   "api_version": "v1",
   "description": "HiFiBerry Configuration Server",
   "endpoints": {
@@ -978,6 +978,50 @@ Choose the server for the next boot. Does not reboot.
 **Errors:** `400` when `server` is not `pipewire` or `aas`; `409` when aas is
 not installed; `500` when the switch command fails or times out. After a
 timeout the switch may be half done, so choose the server again.
+
+## Bluetooth
+
+hifiberry-bluetooth applies these settings to the adapter. They are kept in
+its `bluetooth.conf`; a change takes effect within a second.
+
+### `GET /api/v1/bluetooth/settings`
+
+```json
+{
+  "status": "success",
+  "data": {
+    "capability": "NoInputNoOutput",
+    "discoverable": false,
+    "discoverableTimeout": 60,
+    "pairable": true,
+    "pairableTimeout": 0,
+    "adapter": "AA:BB:CC:DD:EE:FF",
+    "adapters": [
+      {"address": "00:11:22:33:44:55", "name": "speaker", "bus": "built-in",
+       "powered": false, "selected": false},
+      {"address": "AA:BB:CC:DD:EE:FF", "name": "HiFiBerry-speaker", "bus": "usb",
+       "powered": true, "selected": true}
+    ]
+  }
+}
+```
+
+- `adapter`: the adapter chosen by its address, `""` for none. The chosen
+  adapter is used and every other one is powered off. Without a choice, or
+  while the chosen adapter is missing, the first adapter is used and the
+  others are left alone.
+- `adapters`: every adapter BlueZ has, `selected` marking the one in use;
+  `bus` is `usb` or `built-in`. Empty without Bluetooth.
+
+With an adapter chosen, `GET /api/v1/bluetooth/paired-devices` and the
+system information list only that adapter's devices.
+
+### `POST /api/v1/bluetooth/settings`
+
+Query parameters, each optional: `capability`, `discoverable`,
+`discoverable_timeout`, `pairable`, `pairable_timeout`, `adapter`.
+`adapter` takes an address or an empty value; anything else is answered
+with 400. The response is that of the `GET`.
 
 ## Hostname Management
 
@@ -2704,4 +2748,4 @@ Restore the previously stored headphone volume setting.
 
 ---
 
-*HiFiBerry Configuration API v2.20.3*
+*HiFiBerry Configuration API v2.21.0*

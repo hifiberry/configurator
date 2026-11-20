@@ -30,6 +30,7 @@ from bless import (
 )
 
 from . import wifi, network
+from .bluetooth import chosen_adapter_name
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +296,14 @@ class BLEProvisioningServer:
         adv_name = f"HiFiBerry-{hostname}"[:29]
         logger.info(f"Starting BLE provisioning server as '{adv_name}'")
 
-        self.server = BlessServer(name=adv_name, loop=asyncio.get_event_loop())
+        # The adapter hifiberry-bluetooth uses: with a USB stick chosen, the
+        # built-in one (bless's default, hci0) is powered off. bless also
+        # gives the adapter it uses this name, which phones then show.
+        adapter = chosen_adapter_name()
+        options = {"adapter": adapter} if adapter else {}
+        if adapter:
+            logger.info(f"Using Bluetooth adapter {adapter}")
+        self.server = BlessServer(name=adv_name, loop=asyncio.get_event_loop(), **options)
         self.server.read_request_func = self._on_read
         self.server.write_request_func = self._on_write
 
