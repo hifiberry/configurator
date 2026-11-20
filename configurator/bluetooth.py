@@ -3,6 +3,7 @@ import sys
 import os
 import configparser
 import re
+import subprocess
 from pathlib import Path
 import dbus
 
@@ -72,6 +73,37 @@ def _chosen_adapter(objects, configured):
         if configured and address == configured:
             return path, True
     return adapters[0][0], False
+
+
+def chosen_adapter_name():
+    """The hciN name of the adapter hifiberry-bluetooth uses; None if unknown.
+
+    BLE provisioning advertises on it, so that it keeps working when a USB
+    stick is chosen and the built-in adapter is powered off.
+    """
+    try:
+        objects = _managed_objects(_bluez())
+    except Exception:
+        return None
+    path, _ = _chosen_adapter(objects, _configured_adapter())
+    return path.rsplit("/", 1)[-1] if path else None
+
+
+def _restart_ble_provisioning():
+    """Move BLE provisioning to a newly chosen adapter.
+
+    Three seconds later, by when hifiberry-bluetooth has powered the adapter
+    on (it applies a change half a second after the file is written). Only
+    if it runs; a failure here does not fail the setting.
+    """
+    try:
+        subprocess.run(
+            ["systemd-run", "--on-active=3", "--unit=ble-provisioning-adapter",
+             "--collect", "systemctl", "try-restart", "ble-provisioning.service"],
+            check=False, capture_output=True, timeout=5)
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "Could not schedule a restart of BLE provisioning: %s", e)
 
 
 def _adapter_bus(path):
@@ -224,6 +256,7 @@ def set_bluetooth_settings(settings):
     adapter; anything else is a ValueError.
     """
     cfm = ConfigFileManager()
+    previous_adapter = stored_adapter = cfm.adapter
     valid_keys = [
         "capability",
         "discoverable",
@@ -241,7 +274,12 @@ def set_bluetooth_settings(settings):
                 value = (value or "").strip().upper()
                 if value and not _ADDRESS.match(value):
                     raise ValueError(f"Not a Bluetooth address: {value!r}")
+                stored_adapter = value
             cfm.set_config_value("Bluetooth", key, value)
+    # Compared with the value written: set_config_value does not update
+    # cfm.adapter.
+    if "adapter" in settings and stored_adapter != previous_adapter:
+        _restart_ble_provisioning()
     return get_bluetooth_settings()
 
 

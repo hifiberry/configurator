@@ -106,9 +106,8 @@ class _Config:
         self.adapter = ""
 
     def set_config_value(self, section, key, value):
+        # Like ConfigFileManager: the attributes keep the values read.
         self.values[key] = value
-        if key == "adapter":
-            self.adapter = value
 
 
 @pytest.mark.parametrize("given,stored", [
@@ -121,7 +120,6 @@ def test_setting_the_adapter(given, stored):
             _patched(_two_adapters()):
         result = bluetooth.set_bluetooth_settings({"adapter": given})
     assert config.values["adapter"] == stored
-    assert result["adapter"] == stored
     assert len(result["adapters"]) == 2
 
 
@@ -148,3 +146,27 @@ def test_the_configured_adapter_is_read_without_creating_the_file(tmp_path):
         assert not path.exists()
         path.write_text("[Bluetooth]\nadapter = aa:bb:cc:dd:ee:ff\n")
         assert bluetooth._configured_adapter() == STICK_ADDR
+
+
+def test_ble_provisioning_is_moved_only_when_the_adapter_changes():
+    config = _Config()
+    with patch.object(bluetooth, "ConfigFileManager", lambda: config), \
+            patch.object(bluetooth, "_restart_ble_provisioning") as restart, \
+            _patched(_two_adapters()):
+        bluetooth.set_bluetooth_settings({"discoverable": "true"})
+        restart.assert_not_called()
+        bluetooth.set_bluetooth_settings({"adapter": STICK_ADDR})
+        restart.assert_called_once()
+        config.adapter = STICK_ADDR  # read back from the file next time
+        bluetooth.set_bluetooth_settings({"adapter": STICK_ADDR.lower()})
+        restart.assert_called_once()
+
+
+def test_the_chosen_adapter_is_named_for_ble_provisioning(configured):
+    with _patched(_two_adapters()):
+        assert bluetooth.chosen_adapter_name() == "hci1"
+
+
+def test_no_adapter_name_without_bluetooth():
+    with _patched({}, hardware=False):
+        assert bluetooth.chosen_adapter_name() is None
