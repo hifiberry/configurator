@@ -1,4 +1,4 @@
-hifiberry-configurator (2.20.4) stable; urgency=medium
+hifiberry-configurator (2.21.0) stable; urgency=medium
 
   * Bluetooth settings report the adapters and take "adapter", the address
     of the one hifiberry-bluetooth uses when there are several. Paired
