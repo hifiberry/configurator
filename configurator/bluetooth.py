@@ -2,6 +2,7 @@ import logging
 import sys
 import os
 import configparser
+import re
 from pathlib import Path
 import dbus
 
@@ -36,6 +37,80 @@ def _managed_objects(bus):
         bus.get_object("org.bluez", "/", introspect=False),
         "org.freedesktop.DBus.ObjectManager")
     return manager.GetManagedObjects(timeout=DBUS_TIMEOUT)
+
+
+ADAPTER_IFACE = "org.bluez.Adapter1"
+_ADDRESS = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
+
+
+def _configured_adapter():
+    """The adapter address set in bluetooth.conf, "" for none.
+
+    Read without ConfigFileManager, which creates the file: asking which
+    adapter is chosen must not write anything.
+    """
+    config = configparser.ConfigParser()
+    try:
+        config.read(ConfigFileManager.config_path)
+    except configparser.Error:
+        return ""
+    return config.get("Bluetooth", "adapter", fallback="").strip().upper()
+
+
+def _chosen_adapter(objects, configured):
+    """The adapter hifiberry-bluetooth uses, as it chooses it.
+
+    Returns (path, chosen_by_config). The configured address when it is
+    present; otherwise the first adapter, with the others left alone.
+    """
+    adapters = sorted(
+        (str(path), str(ifaces[ADAPTER_IFACE].get("Address", "")).upper())
+        for path, ifaces in objects.items() if ADAPTER_IFACE in ifaces)
+    if not adapters:
+        return None, False
+    for path, address in adapters:
+        if configured and address == configured:
+            return path, True
+    return adapters[0][0], False
+
+
+def _adapter_bus(path):
+    """"usb" for a USB adapter, "built-in" for one on the board (UART, SDIO)."""
+    name = path.rsplit("/", 1)[-1]
+    device = os.path.realpath(os.path.join(BLUETOOTH_SYSFS, name, "device"))
+    return "usb" if "/usb" in device else "built-in"
+
+
+def _adapter_list(objects, chosen):
+    return [
+        {
+            "address": str(ifaces[ADAPTER_IFACE].get("Address", "")),
+            "name": str(ifaces[ADAPTER_IFACE].get("Alias", "")),
+            "bus": _adapter_bus(str(path)),
+            "powered": bool(ifaces[ADAPTER_IFACE].get("Powered", False)),
+            "selected": str(path) == chosen,
+        }
+        for path, ifaces in sorted(objects.items()) if ADAPTER_IFACE in ifaces
+    ]
+
+
+def _paired(objects, scope):
+    """Paired devices, of the adapter at `scope` only when it is given."""
+    devices = []
+    for path, interfaces in sorted(objects.items()):
+        if "org.bluez.Device1" not in interfaces:
+            continue
+        if scope and not str(path).startswith(scope + "/"):
+            continue
+        device = interfaces["org.bluez.Device1"]
+        if device.get("Paired", False):
+            devices.append({
+                "name": str(device.get("Name", "Unknown")),
+                "address": str(device.get("Address")),
+                "connected": bool(device.get("Connected", False)),
+                "trusted": bool(device.get("Trusted", False)),
+            })
+    return devices
 
 # From the user's script
 class ConfigFileManager:
@@ -88,6 +163,7 @@ class ConfigFileManager:
 
         self.pairable = self.config.getboolean("Bluetooth", "pairable", fallback="True")
         self.pairable_timeout = self.config.getint("Bluetooth", "pairable_timeout", fallback="0")
+        self.adapter = self.config.get("Bluetooth", "adapter", fallback="").strip().upper()
 
         self.logger.info(f"Bluetooth capability: {self.capability}")
         self.logger.info(f"Discoverable: {self.discoverable}")
@@ -119,18 +195,34 @@ class ConfigFileManager:
 # New functions based on the user's Flask routes
 
 def get_bluetooth_settings():
-    """Returns bluetooth settings."""
+    """Returns bluetooth settings, and the adapters to choose from.
+
+    "adapter" is the configured address ("" for the first adapter);
+    "adapters" lists every adapter BlueZ has, the one in use marked
+    "selected". Without Bluetooth the list is empty.
+    """
     cfm = ConfigFileManager()
+    try:
+        objects = _managed_objects(_bluez())
+    except Exception:
+        objects = {}
+    chosen, _ = _chosen_adapter(objects, cfm.adapter)
     return {
         "capability": cfm.capability,
         "discoverable": cfm.discoverable,
         "discoverableTimeout": cfm.discoverable_timeout,
         "pairable": cfm.pairable,
         "pairableTimeout": cfm.pairable_timeout,
+        "adapter": cfm.adapter,
+        "adapters": _adapter_list(objects, chosen),
     }
 
 def set_bluetooth_settings(settings):
-    """Sets bluetooth settings."""
+    """Sets bluetooth settings.
+
+    "adapter" takes an address like AA:BB:CC:DD:EE:FF, or "" for the first
+    adapter; anything else is a ValueError.
+    """
     cfm = ConfigFileManager()
     valid_keys = [
         "capability",
@@ -138,35 +230,33 @@ def set_bluetooth_settings(settings):
         "discoverable_timeout",
         "pairable",
         "pairable_timeout",
+        "adapter",
     ]
     for key in valid_keys:
         if key in settings:
             value = settings.get(key)
             if key in ["discoverable_timeout", "pairable_timeout"] and value == "":
                 value = "0"
+            if key == "adapter":
+                value = (value or "").strip().upper()
+                if value and not _ADDRESS.match(value):
+                    raise ValueError(f"Not a Bluetooth address: {value!r}")
             cfm.set_config_value("Bluetooth", key, value)
     return get_bluetooth_settings()
 
 
 def get_paired_devices():
-    """Returns a list of paired bluetooth devices; none without Bluetooth."""
+    """Returns a list of paired bluetooth devices; none without Bluetooth.
+
+    With an adapter chosen in bluetooth.conf, only that adapter's devices:
+    the others are powered off, and their pairings do not reach this one.
+    """
     try:
         objects = _managed_objects(_bluez())
     except BluetoothUnavailable:
         return []
-    devices = []
-
-    for path, interfaces in objects.items():
-        if "org.bluez.Device1" in interfaces:
-            device = interfaces["org.bluez.Device1"]
-            if device.get("Paired", False):
-                devices.append({
-                    "name": str(device.get("Name", "Unknown")),
-                    "address": str(device.get("Address")),
-                    "connected": bool(device.get("Connected", False)),
-                    "trusted": bool(device.get("Trusted", False)),
-                })
-    return devices
+    chosen, by_config = _chosen_adapter(objects, _configured_adapter())
+    return _paired(objects, chosen if by_config else None)
 
 # A2DP Audio Sink. BlueZ adds this UUID to the adapter's record only once a
 # media endpoint for it has been registered -- which on our systems means
@@ -252,11 +342,8 @@ def get_bluetooth_status():
         status["issues"].append(f"BlueZ is not reachable: {e}")
         return status
 
-    adapter_props = None
-    for path, interfaces in objects.items():
-        if "org.bluez.Adapter1" in interfaces:
-            adapter_props = interfaces["org.bluez.Adapter1"]
-            break
+    chosen, by_config = _chosen_adapter(objects, _configured_adapter())
+    adapter_props = objects[chosen][ADAPTER_IFACE] if chosen else None
 
     if adapter_props is None:
         status["issues"].append("No Bluetooth adapter found")
@@ -286,16 +373,7 @@ def get_bluetooth_status():
         "a2dp_source_registered": A2DP_SOURCE_UUID in uuids,
     }
 
-    for path, interfaces in objects.items():
-        if "org.bluez.Device1" in interfaces:
-            device = interfaces["org.bluez.Device1"]
-            if device.get("Paired", False):
-                status["devices"].append({
-                    "name": str(device.get("Name", "Unknown")),
-                    "address": str(device.get("Address")),
-                    "connected": bool(device.get("Connected", False)),
-                    "trusted": bool(device.get("Trusted", False)),
-                })
+    status["devices"] = _paired(objects, chosen if by_config else None)
 
     if not status["adapter"]["powered"]:
         status["issues"].append("Adapter is not powered on")
