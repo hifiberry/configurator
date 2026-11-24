@@ -34,6 +34,8 @@ def _read_text() -> Optional[str]:
             return f.read()
     except FileNotFoundError:
         return None
+    except UnicodeDecodeError as e:
+        raise AasSettingsFileError(f"{LOCAL_PATH} is not valid UTF-8: {e}") from e
 
 
 def _parse(text: str) -> Dict[str, Any]:
@@ -76,8 +78,11 @@ def _aas_active() -> bool:
 
 
 def _restart() -> None:
-    # --no-block: answer without waiting for aas to come up.
-    subprocess.run(["systemctl", "restart", "--no-block", "aas.service"],
+    # aas-config.service (oneshot, RemainAfterExit) merges the local file into
+    # aas.toml and is not re-run by restarting aas.service alone, so restart
+    # both in one transaction. --no-block: answer without waiting for aas.
+    subprocess.run(["systemctl", "restart", "--no-block",
+                    "aas-config.service", "aas.service"],
                    capture_output=True, text=True, timeout=30, check=True)
 
 
@@ -98,6 +103,8 @@ def set_latency(latency_ms: Optional[int]) -> Dict[str, Any]:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(new_text)
+            f.flush()
+            os.fsync(f.fileno())
         if os.path.exists(LOCAL_PATH):
             os.chmod(tmp, os.stat(LOCAL_PATH).st_mode & 0o777)
         else:
@@ -112,6 +119,9 @@ def set_latency(latency_ms: Optional[int]) -> Dict[str, Any]:
 
     restarted = False
     if _aas_active():
-        _restart()
-        restarted = True
+        try:
+            _restart()
+            restarted = True
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.error(f"Restarting aas.service after the latency change failed: {e}")
     return {KEY: latency_ms, "restarted": restarted}

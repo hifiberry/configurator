@@ -131,3 +131,36 @@ def test_routes(local, restarts, client):
     local.write_text("latency_ms = = 4")
     r = client.post("/api/v1/audio-server/aas-settings", json={"latency_ms": 6})
     assert r.status_code == 409
+
+
+def test_restart_runs_config_and_aas_in_one_transaction(local, monkeypatch):
+    calls = []
+    monkeypatch.setattr(aas_settings, "_aas_active", lambda: True)
+    monkeypatch.setattr(aas_settings.subprocess, "run",
+                        lambda cmd, **kw: calls.append(cmd))
+    assert aas_settings.set_latency(6)["restarted"] is True
+    assert calls == [["systemctl", "restart", "--no-block",
+                      "aas-config.service", "aas.service"]]
+
+
+@pytest.mark.parametrize("error", [
+    aas_settings.subprocess.CalledProcessError(1, "systemctl"),
+    aas_settings.subprocess.TimeoutExpired("systemctl", 30),
+    OSError("no systemctl"),
+])
+def test_restart_failure_is_not_an_error(local, monkeypatch, error):
+    monkeypatch.setattr(aas_settings, "_aas_active", lambda: True)
+
+    def fail():
+        raise error
+    monkeypatch.setattr(aas_settings, "_restart", fail)
+    assert aas_settings.set_latency(6) == {"latency_ms": 6, "restarted": False}
+    assert tomllib.loads(local.read_text())["latency_ms"] == 6
+
+
+def test_non_utf8_file_is_a_file_error(local):
+    local.write_bytes(b"latency_ms = 4\n# \xff\xfe\n")
+    with pytest.raises(aas_settings.AasSettingsFileError):
+        aas_settings.get()
+    with pytest.raises(aas_settings.AasSettingsFileError):
+        aas_settings.set_latency(6)
