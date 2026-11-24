@@ -124,6 +124,9 @@ def client(monkeypatch):
     # configurator.bluetooth imports python3-dbus, which a plain venv cannot
     # install. Stub it, and drop any handlers package that was imported
     # without it, so the routes are exercised everywhere instead of skipped.
+    # netifaces is left out of CI on purpose (see .github/workflows/tests.yml)
+    # and is only used inside the network handlers' calls, so it is stubbed the
+    # same way.
     try:
         import dbus  # noqa: F401
     except ImportError:
@@ -131,10 +134,15 @@ def client(monkeypatch):
         stub.SystemBus = lambda: object()
         stub.Interface = lambda *a, **k: None
         monkeypatch.setitem(sys.modules, "dbus", stub)
+    try:
+        import netifaces  # noqa: F401
+    except ImportError:
+        monkeypatch.setitem(sys.modules, "netifaces", types.ModuleType("netifaces"))
     for name in list(sys.modules):
-        if name in ("configurator.server", "configurator.bluetooth") or \
+        if name in ("configurator.server", "configurator.bluetooth", "configurator.network") or \
                 name.startswith("configurator.handlers"):
             monkeypatch.delitem(sys.modules, name)
+    before = set(sys.modules)
     from configurator.handlers import MISSING_DEPENDENCY
     assert MISSING_DEPENDENCY is None, f"handlers could not import {MISSING_DEPENDENCY!r}"
     from configurator.server import ConfigAPIServer
@@ -142,6 +150,11 @@ def client(monkeypatch):
     srv.app.config["TESTING"] = True
     with srv.app.test_client() as c:
         yield c
+    # Modules imported here were built against the stubs: drop them so that
+    # no later test gets them from sys.modules.
+    for name in set(sys.modules) - before:
+        if name.startswith("configurator"):
+            del sys.modules[name]
 
 
 URL = "/api/v1/audio-server/aas-settings"
