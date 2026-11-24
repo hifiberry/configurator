@@ -6,12 +6,15 @@ comments and other settings in the file survive.
 """
 
 import logging
+import math
 import os
 import re
 import subprocess
 import tempfile
 import tomllib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+from .audio_server import _aas_active
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +48,21 @@ def _parse(text: str) -> Dict[str, Any]:
         raise AasSettingsFileError(f"{LOCAL_PATH} is not valid TOML: {e}") from e
 
 
-def get() -> Dict[str, Optional[int]]:
+def get() -> Dict[str, Union[int, float, None]]:
+    """The saved latency as aas reads it: a whole or fractional number of ms.
+
+    A fractional value is not one this module writes, but aas accepts it, so
+    it is reported as saved rather than hidden.
+    """
     text = _read_text()
     if text is None:
         return {KEY: None}
     value = _parse(text).get(KEY)
-    return {KEY: value if isinstance(value, int) and not isinstance(value, bool) else None}
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return {KEY: None}
+    if isinstance(value, float) and not math.isfinite(value):
+        return {KEY: None}
+    return {KEY: value}
 
 
 def _edit(text: str, latency_ms: Optional[int]) -> str:
@@ -66,15 +78,6 @@ def _edit(text: str, latency_ms: Optional[int]) -> str:
             top.append("")  # keep a blank line before the first table
     out = "\n".join(top + rest)
     return out + "\n" if out else ""
-
-
-def _aas_active() -> bool:
-    try:
-        result = subprocess.run(["systemctl", "is-active", "--quiet", "aas.service"],
-                                capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return result.returncode == 0
 
 
 def _restart() -> None:

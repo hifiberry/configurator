@@ -1,6 +1,8 @@
 """Reading and setting aas's card latency in aas.local.toml."""
 
+import sys
 import tomllib
+import types
 
 import pytest
 
@@ -33,6 +35,21 @@ def test_get_without_file(local):
 def test_get_reads_top_level_key(local):
     local.write_text("latency_ms = 8\n[aes67]\nlatency_ms = 3\n")
     assert aas_settings.get() == {"latency_ms": 8}
+
+
+@pytest.mark.parametrize("value", [7.5, 8.0])
+def test_get_returns_a_float_aas_accepts(local, value):
+    # aas reads a fractional latency; the UI must see it as saved, so that
+    # "Recommended" resets it, rather than as no value at all.
+    local.write_text(f"latency_ms = {value}\n")
+    assert aas_settings.get() == {"latency_ms": value}
+
+
+@pytest.mark.parametrize("text", ['latency_ms = "8"\n', "latency_ms = true\n",
+                                  "latency_ms = inf\n", "latency_ms = nan\n"])
+def test_get_ignores_what_is_not_a_number(local, text):
+    local.write_text(text)
+    assert aas_settings.get() == {"latency_ms": None}
 
 
 def test_post_writes_and_restarts(local, restarts):
@@ -102,11 +119,24 @@ def test_no_restart_when_aas_is_not_active(local, restarts):
 # --- routes -----------------------------------------------------------------
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     pytest.importorskip("flask", reason="Flask is absent in the build chroot")
+    # configurator.bluetooth imports python3-dbus, which a plain venv cannot
+    # install. Stub it, and drop any handlers package that was imported
+    # without it, so the routes are exercised everywhere instead of skipped.
+    try:
+        import dbus  # noqa: F401
+    except ImportError:
+        stub = types.ModuleType("dbus")
+        stub.SystemBus = lambda: object()
+        stub.Interface = lambda *a, **k: None
+        monkeypatch.setitem(sys.modules, "dbus", stub)
+    for name in list(sys.modules):
+        if name in ("configurator.server", "configurator.bluetooth") or \
+                name.startswith("configurator.handlers"):
+            monkeypatch.delitem(sys.modules, name)
     from configurator.handlers import MISSING_DEPENDENCY
-    if MISSING_DEPENDENCY:
-        pytest.skip(f"configurator.handlers could not import {MISSING_DEPENDENCY!r}")
+    assert MISSING_DEPENDENCY is None, f"handlers could not import {MISSING_DEPENDENCY!r}"
     from configurator.server import ConfigAPIServer
     srv = ConfigAPIServer()
     srv.app.config["TESTING"] = True
@@ -114,23 +144,39 @@ def client():
         yield c
 
 
+URL = "/api/v1/audio-server/aas-settings"
+
+
 def test_routes(local, restarts, client):
-    r = client.get("/api/v1/audio-server/aas-settings")
+    r = client.get(URL)
     assert r.status_code == 200
     assert r.get_json() == {"status": "success", "data": {"latency_ms": None}}
 
-    r = client.post("/api/v1/audio-server/aas-settings", json={"latency_ms": 9})
+    r = client.post(URL, json={"latency_ms": 9})
     assert r.status_code == 200
-    assert r.get_json()["data"] == {"latency_ms": 9, "restarted": True}
+    assert r.get_json() == {"status": "success",
+                            "data": {"latency_ms": 9, "restarted": True}}
+    r = client.get(URL)
+    assert r.get_json()["data"] == {"latency_ms": 9}
 
-    r = client.post("/api/v1/audio-server/aas-settings", json={"latency_ms": 0})
+    r = client.post(URL, json={})
     assert r.status_code == 400
-    r = client.post("/api/v1/audio-server/aas-settings", json={})
+    assert r.get_json()["status"] == "error"
+    r = client.post(URL, json={"latency_ms": 0})
     assert r.status_code == 400
+    assert r.get_json()["status"] == "error"
+
+    r = client.post(URL, json={"latency_ms": None})
+    assert r.status_code == 200
+    assert r.get_json() == {"status": "success",
+                            "data": {"latency_ms": None, "restarted": True}}
+    assert "latency_ms" not in tomllib.loads(local.read_text())
 
     local.write_text("latency_ms = = 4")
-    r = client.post("/api/v1/audio-server/aas-settings", json={"latency_ms": 6})
+    r = client.post(URL, json={"latency_ms": 6})
     assert r.status_code == 409
+    assert r.get_json()["status"] == "error"
+    assert local.read_text() == "latency_ms = = 4"
 
 
 def test_restart_runs_config_and_aas_in_one_transaction(local, monkeypatch):
@@ -164,3 +210,8 @@ def test_non_utf8_file_is_a_file_error(local):
         aas_settings.get()
     with pytest.raises(aas_settings.AasSettingsFileError):
         aas_settings.set_latency(6)
+
+
+def test_uses_the_audio_servers_is_active_check():
+    from configurator import audio_server
+    assert aas_settings._aas_active is audio_server._aas_active
