@@ -177,6 +177,7 @@ class ConfigAPIServer:
                     'smb_mount_all': '/api/v1/smb/mount-all',
                     'hostname': '/api/v1/hostname',
                     'audio_server': '/api/v1/audio-server',
+                    'audio_server_aas_settings': '/api/v1/audio-server/aas-settings',
                     'soundcards': '/api/v1/soundcards',
                     'soundcard_dtoverlay': '/api/v1/soundcard/dtoverlay',
                     'soundcard_detect': '/api/v1/soundcard/detect',
@@ -530,6 +531,16 @@ class ConfigAPIServer:
         def set_audio_server():
             """Choose the audio server for the next boot (no reboot)"""
             return self.audio_server_handler.handle_set()
+
+        @self.app.route('/api/v1/audio-server/aas-settings', methods=['GET'])
+        def get_aas_settings():
+            """aas's card latency from its local override file"""
+            return self.audio_server_handler.handle_get_aas_settings()
+
+        @self.app.route('/api/v1/audio-server/aas-settings', methods=['POST'])
+        def set_aas_settings():
+            """Set or clear aas's card latency and restart aas if it runs"""
+            return self.audio_server_handler.handle_set_aas_settings()
 
         # System endpoints
         @self.app.route('/api/v1/system/reboot', methods=['POST'])
